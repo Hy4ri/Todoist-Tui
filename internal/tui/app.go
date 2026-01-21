@@ -719,6 +719,17 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else if a.currentTab == TabLabels {
 			return a.handleNewLabel()
 		}
+	// Tab shortcuts (Shift + letter)
+	case "tab_today":
+		return a.switchToTab(TabToday)
+	case "tab_upcoming":
+		return a.switchToTab(TabUpcoming)
+	case "tab_projects":
+		return a.switchToTab(TabProjects)
+	case "tab_labels":
+		return a.switchToTab(TabLabels)
+	case "tab_calendar":
+		return a.switchToTab(TabCalendar)
 	}
 
 	return a, nil

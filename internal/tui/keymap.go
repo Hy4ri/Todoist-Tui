@@ -202,6 +202,17 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		return "calendar_view", true
 	case keymap.NewProject.Key:
 		return "new_project", true
+	// Tab navigation shortcuts
+	case "T":
+		return "tab_today", true
+	case "U":
+		return "tab_upcoming", true
+	case "P":
+		return "tab_projects", true
+	case "L":
+		return "tab_labels", true
+	case "C":
+		return "tab_calendar", true
 	}
 
 	return "", false
