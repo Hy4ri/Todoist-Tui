@@ -28,8 +28,9 @@ This document tracks which Todoist API features are available and which are impl
 - [x] Edit task content
 - [x] Edit task description
 - [ ] Edit task labels
-- [ ] Move task to project
-- [ ] Subtasks (parent tasks)
+- [ ] Move task to project (Cross-project move not implemented)
+- [x] Move task to section
+- [x] Subtasks (Inline creation)
 - [ ] Task duration
 
 ---
@@ -66,16 +67,16 @@ This document tracks which Todoist API features are available and which are impl
 | [x] GetLabels | View labels list |
 | [ ] GetLabel | - |
 | [x] CreateLabel | Create new label (n key) |
-| [ ] UpdateLabel | Edit label |
-| [ ] DeleteLabel | Delete label |
+| [x] UpdateLabel | Edit label (e key in list) |
+| [x] DeleteLabel | Delete label (dd keys in list) |
 
 ### Label Features in TUI
 
 - [x] View labels list
 - [x] View tasks by label
 - [x] Create new label
-- [ ] Edit label
-- [ ] Delete label
+- [x] Edit label
+- [x] Delete label
 - [ ] Label colors
 
 ---
@@ -85,18 +86,18 @@ This document tracks which Todoist API features are available and which are impl
 | API Function | TUI Implementation |
 |--------------|-------------------|
 | [x] GetSections | View sections in project |
-| [ ] GetSection | - |
-| [ ] CreateSection | Create new section |
-| [ ] UpdateSection | Edit section |
-| [ ] DeleteSection | Delete section |
+| [x] GetSection | (Internal) |
+| [x] CreateSection | Create new section (S -> a) |
+| [x] UpdateSection | Edit section (S -> e) |
+| [x] DeleteSection | Delete section (S -> dd) |
 
 ### Section Features in TUI
 
 - [x] View sections grouped
-- [ ] Create section
-- [ ] Edit section
-- [ ] Delete section
-- [ ] Move tasks between sections
+- [x] Create section
+- [x] Edit section
+- [x] Delete section
+- [x] Move tasks between sections (m key)
 
 ---
 
@@ -105,15 +106,15 @@ This document tracks which Todoist API features are available and which are impl
 | API Function | TUI Implementation |
 |--------------|-------------------|
 | [x] GetComments | View task comments |
-| [ ] GetComment | - |
-| [ ] CreateComment | Add comment |
+| [x] GetComment | (Internal) |
+| [x] CreateComment | Add comment (c key) |
 | [ ] UpdateComment | Edit comment |
 | [ ] DeleteComment | Delete comment |
 
 ### Comment Features in TUI
 
 - [x] View task comments
-- [ ] Add comment
+- [x] Add comment
 - [ ] Edit comment
 - [ ] Delete comment
 - [ ] File attachments
@@ -138,6 +139,11 @@ These features are implemented in the TUI but not directly API-related:
 - [x] Task priority colors
 - [x] Overdue task highlighting
 - [x] Today task highlighting
+- [x] Inline subtask creation (s key)
+- [x] Undo capability (u key)
+- [x] Split View (Task Detail Panel)
+- [x] Section ID management in tasks
+- [x] Comment overlay dialog
 
 ---
 
@@ -146,8 +152,8 @@ These features are implemented in the TUI but not directly API-related:
 | Category | Implemented | Total | Coverage |
 |----------|-------------|-------|----------|
 | Tasks | 7 | 7 | 100% |
-| Projects | 3 | 6 | 50% |
-| Labels | 2 | 5 | 40% |
-| Sections | 1 | 5 | 20% |
-| Comments | 1 | 5 | 20% |
-| **Overall** | **14** | **28** | **50%** |
+| Projects | 5 | 6 | 83% |
+| Labels | 4 | 5 | 80% |
+| Sections | 4 | 5 | 80% |
+| Comments | 2 | 5 | 40% |
+| **Overall** | **22** | **28** | **78%** |
