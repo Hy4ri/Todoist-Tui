@@ -679,6 +679,16 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.moveCursor(-10)
 	case "half_down":
 		a.moveCursor(10)
+	case "left":
+		// h key - move to sidebar in Projects tab
+		if a.currentTab == TabProjects && a.focusedPane == PaneMain {
+			a.focusedPane = PaneSidebar
+		}
+	case "right":
+		// l key - move to main pane in Projects tab
+		if a.currentTab == TabProjects && a.focusedPane == PaneSidebar {
+			a.focusedPane = PaneMain
+		}
 	case "switch_pane":
 		a.switchPane()
 	case "select":
