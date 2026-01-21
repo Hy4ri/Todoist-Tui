@@ -71,7 +71,7 @@ func NewTaskForm(projects []api.Project) *TaskForm {
 	// Find inbox project as default
 	var inboxID, inboxName string
 	for _, p := range projects {
-		if p.IsInboxProject {
+		if p.InboxProject {
 			inboxID = p.ID
 			inboxName = p.Name
 			break
@@ -432,7 +432,7 @@ func (f *TaskForm) renderProjectField() string {
 			}
 
 			name := p.Name
-			if p.IsInboxProject {
+			if p.InboxProject {
 				name = "Inbox"
 			}
 			lines = append(lines, style.Render(cursor+name))

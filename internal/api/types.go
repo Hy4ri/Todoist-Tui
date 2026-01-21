@@ -8,24 +8,32 @@ import (
 
 // Task represents a Todoist task.
 type Task struct {
-	ID           string    `json:"id"`
-	ProjectID    string    `json:"project_id"`
-	SectionID    *string   `json:"section_id"`
-	Content      string    `json:"content"`
-	Description  string    `json:"description"`
-	IsCompleted  bool      `json:"is_completed"`
-	Labels       []string  `json:"labels"`
-	ParentID     *string   `json:"parent_id"`
-	Order        int       `json:"order"`
-	Priority     int       `json:"priority"`
-	Due          *Due      `json:"due"`
-	URL          string    `json:"url"`
-	CommentCount int       `json:"comment_count"`
-	CreatedAt    string    `json:"created_at"`
-	CreatorID    string    `json:"creator_id"`
-	AssigneeID   *string   `json:"assignee_id"`
-	AssignerID   *string   `json:"assigner_id"`
-	Duration     *Duration `json:"duration"`
+	ID             string    `json:"id"`
+	UserID         string    `json:"user_id"`
+	ProjectID      string    `json:"project_id"`
+	SectionID      *string   `json:"section_id"`
+	ParentID       *string   `json:"parent_id"`
+	Content        string    `json:"content"`
+	Description    string    `json:"description"`
+	Checked        bool      `json:"checked"`
+	IsDeleted      bool      `json:"is_deleted"`
+	IsCollapsed    bool      `json:"is_collapsed"`
+	Labels         []string  `json:"labels"`
+	ChildOrder     int       `json:"child_order"`
+	DayOrder       int       `json:"day_order"`
+	Priority       int       `json:"priority"`
+	Due            *Due      `json:"due"`
+	Deadline       *Deadline `json:"deadline"`
+	URL            string    `json:"url"`
+	NoteCount      int       `json:"note_count"`
+	AddedAt        string    `json:"added_at"`
+	AddedByUID     string    `json:"added_by_uid"`
+	AssignedByUID  *string   `json:"assigned_by_uid"`
+	ResponsibleUID *string   `json:"responsible_uid"`
+	CompletedAt    *string   `json:"completed_at"`
+	CompletedByUID *string   `json:"completed_by_uid"`
+	UpdatedAt      string    `json:"updated_at"`
+	Duration       *Duration `json:"duration"`
 }
 
 // Due represents a task's due date information.
@@ -35,6 +43,13 @@ type Due struct {
 	IsRecurring bool    `json:"is_recurring"`
 	Datetime    *string `json:"datetime"`
 	Timezone    *string `json:"timezone"`
+	Lang        string  `json:"lang"`
+}
+
+// Deadline represents a task's deadline (non-recurring, date-only).
+type Deadline struct {
+	Date string `json:"date"`
+	Lang string `json:"lang"`
 }
 
 // Duration represents a task's duration.
@@ -45,26 +60,46 @@ type Duration struct {
 
 // Project represents a Todoist project.
 type Project struct {
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	Color          string  `json:"color"`
-	ParentID       *string `json:"parent_id"`
-	Order          int     `json:"order"`
-	CommentCount   int     `json:"comment_count"`
-	IsShared       bool    `json:"is_shared"`
-	IsFavorite     bool    `json:"is_favorite"`
-	IsInboxProject bool    `json:"is_inbox_project"`
-	IsTeamInbox    bool    `json:"is_team_inbox"`
-	ViewStyle      string  `json:"view_style"`
-	URL            string  `json:"url"`
+	ID                                  string  `json:"id"`
+	Name                                string  `json:"name"`
+	Description                         string  `json:"description"`
+	WorkspaceID                         *int    `json:"workspace_id"`
+	Color                               string  `json:"color"`
+	ParentID                            *string `json:"parent_id"`
+	ChildOrder                          int     `json:"child_order"`
+	IsCollapsed                         bool    `json:"is_collapsed"`
+	Shared                              bool    `json:"shared"`
+	CanAssignTasks                      bool    `json:"can_assign_tasks"`
+	IsFavorite                          bool    `json:"is_favorite"`
+	InboxProject                        bool    `json:"inbox_project"`
+	IsInviteOnly                        bool    `json:"is_invite_only"`
+	Status                              string  `json:"status"`
+	IsLinkSharingEnabled                bool    `json:"is_link_sharing_enabled"`
+	CollaboratorRoleDefault             string  `json:"collaborator_role_default"`
+	IsDeleted                           bool    `json:"is_deleted"`
+	IsArchived                          bool    `json:"is_archived"`
+	IsFrozen                            bool    `json:"is_frozen"`
+	ViewStyle                           string  `json:"view_style"`
+	Role                                string  `json:"role"`
+	FolderID                            *string `json:"folder_id"`
+	CreatedAt                           string  `json:"created_at"`
+	UpdatedAt                           string  `json:"updated_at"`
+	IsPendingDefaultCollaboratorInvites bool    `json:"is_pending_default_collaborator_invites"`
 }
 
 // Section represents a project section.
 type Section struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"project_id"`
-	Order     int    `json:"order"`
-	Name      string `json:"name"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	ProjectID    string  `json:"project_id"`
+	SectionOrder int     `json:"section_order"`
+	IsCollapsed  bool    `json:"is_collapsed"`
+	UserID       string  `json:"user_id"`
+	IsDeleted    bool    `json:"is_deleted"`
+	IsArchived   bool    `json:"is_archived"`
+	ArchivedAt   *string `json:"archived_at"`
+	AddedAt      string  `json:"added_at"`
+	UpdatedAt    string  `json:"updated_at"`
 }
 
 // Label represents a personal label.
@@ -72,26 +107,32 @@ type Label struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Color      string `json:"color"`
-	Order      int    `json:"order"`
+	ItemOrder  int    `json:"item_order"`
 	IsFavorite bool   `json:"is_favorite"`
+	IsDeleted  bool   `json:"is_deleted"`
 }
 
 // Comment represents a task or project comment.
 type Comment struct {
-	ID         string      `json:"id"`
-	TaskID     *string     `json:"task_id"`
-	ProjectID  *string     `json:"project_id"`
-	PostedAt   string      `json:"posted_at"`
-	Content    string      `json:"content"`
-	Attachment *Attachment `json:"attachment"`
+	ID             string              `json:"id"`
+	ItemID         *string             `json:"item_id"`
+	ProjectID      *string             `json:"project_id"`
+	PostedUID      string              `json:"posted_uid"`
+	PostedAt       string              `json:"posted_at"`
+	Content        string              `json:"content"`
+	FileAttachment *FileAttachment     `json:"file_attachment"`
+	UIDsToNotify   []string            `json:"uids_to_notify"`
+	IsDeleted      bool                `json:"is_deleted"`
+	Reactions      map[string][]string `json:"reactions"`
 }
 
-// Attachment represents a file attachment in a comment.
-type Attachment struct {
-	FileName     string `json:"file_name"`
-	FileType     string `json:"file_type"`
-	FileURL      string `json:"file_url"`
-	ResourceType string `json:"resource_type"`
+// FileAttachment represents a file attachment in a comment.
+type FileAttachment struct {
+	FileName    string `json:"file_name"`
+	FileType    string `json:"file_type"`
+	FileSize    int    `json:"file_size"`
+	FileURL     string `json:"file_url"`
+	UploadState string `json:"upload_state"`
 }
 
 // Collaborator represents a project collaborator.
@@ -206,7 +247,7 @@ type TaskFilter struct {
 
 // IsOverdue returns true if the task is overdue.
 func (t *Task) IsOverdue() bool {
-	if t.Due == nil || t.IsCompleted {
+	if t.Due == nil || t.Checked {
 		return false
 	}
 

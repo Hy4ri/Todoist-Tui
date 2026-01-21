@@ -1309,7 +1309,7 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 	task := &a.tasks[a.taskCursor]
 
 	// Store last action for undo
-	if task.IsCompleted {
+	if task.Checked {
 		a.lastAction = &LastAction{Type: "uncomplete", TaskID: task.ID}
 	} else {
 		a.lastAction = &LastAction{Type: "complete", TaskID: task.ID}
@@ -1319,7 +1319,7 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 
 	return a, func() tea.Msg {
 		var err error
-		if task.IsCompleted {
+		if task.Checked {
 			err = a.client.ReopenTask(task.ID)
 		} else {
 			err = a.client.CloseTask(task.ID)
@@ -1376,7 +1376,7 @@ func (a *App) handleDelete() (tea.Model, tea.Cmd) {
 		for i := range a.projects {
 			if a.projects[i].ID == item.ID {
 				// Don't allow deleting inbox
-				if a.projects[i].IsInboxProject {
+				if a.projects[i].InboxProject {
 					a.statusMsg = "Cannot delete Inbox project"
 					return a, nil
 				}
@@ -2255,7 +2255,7 @@ func (a *App) handleSearchKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.loading = true
 			return a, func() tea.Msg {
 				var err error
-				if task.IsCompleted {
+				if task.Checked {
 					err = a.client.ReopenTask(task.ID)
 				} else {
 					err = a.client.CloseTask(task.ID)
@@ -2574,7 +2574,7 @@ func (a *App) buildSidebarItems() {
 	for _, p := range a.projects {
 		if p.IsFavorite {
 			icon := "⭐"
-			if p.IsInboxProject {
+			if p.InboxProject {
 				icon = "📥"
 			}
 			a.sidebarItems = append(a.sidebarItems, SidebarItem{
@@ -2604,7 +2604,7 @@ func (a *App) buildSidebarItems() {
 	for _, p := range a.projects {
 		if !p.IsFavorite {
 			icon := "📁"
-			if p.IsInboxProject {
+			if p.InboxProject {
 				icon = "📥"
 			}
 			a.sidebarItems = append(a.sidebarItems, SidebarItem{
@@ -3665,7 +3665,7 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 
 	// Checkbox
 	checkbox := styles.CheckboxUnchecked
-	if t.IsCompleted {
+	if t.Checked {
 		checkbox = styles.CheckboxChecked
 	}
 
@@ -3711,7 +3711,7 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 	if displayPos == a.taskCursor && a.focusedPane == PaneMain {
 		style = styles.TaskSelected
 	}
-	if t.IsCompleted {
+	if t.Checked {
 		style = styles.TaskCompleted
 	}
 
@@ -3789,7 +3789,7 @@ func (a *App) renderTaskDetail() string {
 
 	// Title with checkbox status
 	checkbox := "[ ]"
-	if t.IsCompleted {
+	if t.Checked {
 		checkbox = "[x]"
 	}
 	b.WriteString(styles.Title.Render("Task Details"))
@@ -3880,10 +3880,10 @@ func (a *App) renderTaskDetail() string {
 	}
 
 	// Comment count
-	if t.CommentCount > 0 {
+	if t.NoteCount > 0 {
 		b.WriteString(styles.DetailIcon.Render("  💬"))
 		b.WriteString(styles.DetailLabel.Render("Comments"))
-		b.WriteString(styles.DetailValue.Render(fmt.Sprintf("%d", t.CommentCount)))
+		b.WriteString(styles.DetailValue.Render(fmt.Sprintf("%d", t.NoteCount)))
 		b.WriteString("\n")
 	}
 
@@ -3998,7 +3998,7 @@ func (a *App) renderSearch() string {
 			}
 
 			checkbox := styles.CheckboxUnchecked
-			if task.IsCompleted {
+			if task.Checked {
 				checkbox = styles.CheckboxChecked
 			}
 
@@ -4416,7 +4416,7 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 		for i := startIdx; i < endIdx; i++ {
 			t := dayTasks[i]
 			checkbox := styles.CheckboxUnchecked
-			if t.IsCompleted {
+			if t.Checked {
 				checkbox = styles.CheckboxChecked
 			}
 			priorityStyle := styles.GetPriorityStyle(t.Priority)
