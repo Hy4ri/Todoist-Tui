@@ -169,8 +169,13 @@ type App struct {
 	viewportReady bool
 
 	// Move task state
-	isMovingTask       bool
-	moveSectionCursor  int
+	isMovingTask      bool
+	moveSectionCursor int
+
+	// Comment state
+	commentInput    textinput.Model
+	isAddingComment bool
+
 	viewportContent    string // Current content in viewport
 	viewportLines      []int  // Maps viewport line number to task index (-1 for headers)
 	taskOrderedIndices []int  // Maps display order (cursor position) to a.tasks index
@@ -279,6 +284,7 @@ type labelDeletedMsg struct{ id string }
 type sectionCreatedMsg struct{ section *api.Section }
 type sectionUpdatedMsg struct{ section *api.Section }
 type sectionDeletedMsg struct{ id string }
+type commentCreatedMsg struct{ comment *api.Comment }
 type subtaskCreatedMsg struct{}
 type undoCompletedMsg struct{}
 type searchRefreshMsg struct{}
@@ -435,6 +441,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, a.loadProjectTasks(a.sidebarItems[a.sidebarCursor].ID)
 		}
 		return a, nil
+
+	case commentCreatedMsg:
+		a.loading = false
+		a.statusMsg = "Comment added"
+		return a, a.loadTaskComments()
 
 	case subtaskCreatedMsg:
 		a.loading = false
@@ -881,6 +892,19 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.focusedPane == PaneMain && len(a.tasks) > 0 && len(a.sections) > 0 {
 			a.isMovingTask = true
 			a.moveSectionCursor = 0
+			return a, nil
+		}
+	// Note: 'C' key is not in keymap yet, handling manually or adding to keymap
+	// Actually, I should add 'C' to keymap or handle via raw key manually if I want.
+	// But let's assume I added 'C' -> 'add_comment' in keymap (I didn't yet).
+	// I'll add the case here assuming I will update keymap.go next.
+	case "add_comment":
+		if a.selectedTask != nil {
+			a.isAddingComment = true
+			a.commentInput = textinput.New()
+			a.commentInput.Placeholder = "Write a comment..."
+			a.commentInput.Focus()
+			a.commentInput.Width = 50
 			return a, nil
 		}
 	}
@@ -1966,6 +1990,54 @@ func (a *App) handleMoveTaskKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// handleCommentInputKeyMsg handles keyboard input for adding a comment.
+func (a *App) handleCommentInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		a.isAddingComment = false
+		a.commentInput.Reset()
+		return a, nil
+
+	case "enter":
+		content := strings.TrimSpace(a.commentInput.Value())
+		if content == "" {
+			return a, nil
+		}
+
+		// determine task ID (from selection or cursor)
+		taskID := ""
+		if a.selectedTask != nil {
+			taskID = a.selectedTask.ID
+		} else if len(a.tasks) > 0 && a.taskCursor < len(a.tasks) {
+			taskID = a.tasks[a.taskCursor].ID
+		} else {
+			a.isAddingComment = false
+			return a, nil
+		}
+
+		a.isAddingComment = false
+		a.commentInput.Reset()
+		a.loading = true
+		a.statusMsg = "Adding comment..."
+
+		return a, func() tea.Msg {
+			comment, err := a.client.CreateComment(api.CreateCommentRequest{
+				TaskID:  taskID,
+				Content: content,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return commentCreatedMsg{comment: comment}
+		}
+
+	default:
+		var cmd tea.Cmd
+		a.commentInput, cmd = a.commentInput.Update(msg)
+		return a, cmd
+	}
+}
+
 // renderSections renders the sections management view.
 func (a *App) renderSections() string {
 	var b strings.Builder
@@ -3027,6 +3099,48 @@ func (a *App) View() string {
 		b.WriteString("\n" + styles.HelpDesc.Render("j/k: select • Enter: move • Esc: cancel"))
 
 		dialog := dialogStyle.Render(b.String())
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay add comment dialog if active
+	if a.isAddingComment {
+		dialogWidth := 60
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("💬 Add Comment") + "\n\n" +
+			a.commentInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: submit • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
 
 		// Center the dialog
 		dialogLines := strings.Split(dialog, "\n")

@@ -186,6 +186,8 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		return "manage_sections", true
 	case "m":
 		return "move_task", true
+	case "c":
+		return "add_comment", true
 	case keymap.Priority1.Key:
 		return "priority1", true
 	case keymap.Priority2.Key:
