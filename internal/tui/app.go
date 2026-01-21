@@ -242,6 +242,7 @@ type taskCompletedMsg struct{ id string }
 type taskCreatedMsg struct{}
 type projectCreatedMsg struct{ project *api.Project }
 type projectUpdatedMsg struct{ project *api.Project }
+type projectDeletedMsg struct{ id string }
 type labelCreatedMsg struct{ label *api.Label }
 type searchRefreshMsg struct{}
 type refreshMsg struct{}
@@ -346,6 +347,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.loading = false
 		a.statusMsg = fmt.Sprintf("Updated project: %s", msg.project.Name)
 		// Reload projects
+		return a, a.loadProjects()
+
+	case projectDeletedMsg:
+		a.loading = false
+		a.statusMsg = "Project deleted"
+		a.sidebarCursor = 0
+		// Reload projects and switch to first project
 		return a, a.loadProjects()
 
 	case labelCreatedMsg:
@@ -626,6 +634,11 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// If we're editing a project, handle project input
 	if a.isEditingProject {
 		return a.handleProjectEditKeyMsg(msg)
+	}
+
+	// If we're confirming project deletion, handle y/n
+	if a.confirmDeleteProject {
+		return a.handleDeleteConfirmKeyMsg(msg)
 	}
 
 	// If we're creating a new label, handle label input
@@ -1066,8 +1079,34 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 	}
 }
 
-// handleDelete deletes the selected task.
+// handleDelete deletes the selected task or project.
 func (a *App) handleDelete() (tea.Model, tea.Cmd) {
+	// Handle project deletion when sidebar is focused
+	if a.currentTab == TabProjects && a.focusedPane == PaneSidebar {
+		if a.sidebarCursor >= len(a.sidebarItems) {
+			return a, nil
+		}
+		item := a.sidebarItems[a.sidebarCursor]
+		if item.Type != "project" {
+			return a, nil
+		}
+		// Find the project
+		for i := range a.projects {
+			if a.projects[i].ID == item.ID {
+				// Don't allow deleting inbox
+				if a.projects[i].IsInboxProject {
+					a.statusMsg = "Cannot delete Inbox project"
+					return a, nil
+				}
+				a.editingProject = &a.projects[i]
+				a.confirmDeleteProject = true
+				return a, nil
+			}
+		}
+		return a, nil
+	}
+
+	// Handle task deletion
 	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
 		return a, nil
 	}
@@ -1077,7 +1116,16 @@ func (a *App) handleDelete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	task := &a.tasks[a.taskCursor]
+	// Use ordered indices if available
+	taskIndex := a.taskCursor
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex = a.taskOrderedIndices[a.taskCursor]
+	}
+	if taskIndex < 0 || taskIndex >= len(a.tasks) {
+		return a, nil
+	}
+
+	task := &a.tasks[taskIndex]
 	a.loading = true
 
 	return a, func() tea.Msg {
@@ -1260,6 +1308,40 @@ func (a *App) handleProjectEditKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		a.projectInput, cmd = a.projectInput.Update(msg)
 		return a, cmd
+	}
+}
+
+// handleDeleteConfirmKeyMsg handles y/n/esc during project delete confirmation.
+func (a *App) handleDeleteConfirmKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		// Confirm delete
+		if a.editingProject == nil {
+			a.confirmDeleteProject = false
+			return a, nil
+		}
+
+		projectID := a.editingProject.ID
+		a.confirmDeleteProject = false
+		a.editingProject = nil
+		a.loading = true
+
+		return a, func() tea.Msg {
+			err := a.client.DeleteProject(projectID)
+			if err != nil {
+				return errMsg{err}
+			}
+			return projectDeletedMsg{id: projectID}
+		}
+
+	case "n", "N", "esc":
+		// Cancel delete
+		a.confirmDeleteProject = false
+		a.editingProject = nil
+		return a, nil
+
+	default:
+		return a, nil
 	}
 }
 
@@ -1867,6 +1949,49 @@ func (a *App) View() string {
 		dialogContent := styles.Title.Render("✏️ Edit Project") + "\n\n" +
 			a.projectInput.View() + "\n\n" +
 			styles.HelpDesc.Render("Enter: save • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay project delete confirmation dialog if active
+	if a.confirmDeleteProject && a.editingProject != nil {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.ErrorColor).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.StatusBarError.Render("⚠️ Delete Project?") + "\n\n" +
+			fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", a.editingProject.Name) +
+			styles.HelpDesc.Render("This will delete all tasks in this project.") + "\n\n" +
+			styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
 
 		dialog := dialogStyle.Render(dialogContent)
 
