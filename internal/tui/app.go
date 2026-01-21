@@ -304,6 +304,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.tasks != nil {
 			a.tasks = msg.tasks
+			a.sortTasks()
 		}
 		if len(msg.labels) > 0 {
 			a.labels = msg.labels
@@ -949,6 +950,45 @@ func (a *App) switchPane() {
 	} else {
 		a.focusedPane = PaneSidebar
 	}
+}
+
+// sortTasks sorts tasks by due datetime (earliest first), then by priority (highest first).
+// Tasks without due dates come after those with due dates.
+func (a *App) sortTasks() {
+	sort.Slice(a.tasks, func(i, j int) bool {
+		ti, tj := a.tasks[i], a.tasks[j]
+
+		// Get due dates (tasks without due dates sort to end)
+		hasDueI := ti.Due != nil
+		hasDueJ := tj.Due != nil
+
+		if hasDueI && !hasDueJ {
+			return true // i has due date, j doesn't -> i first
+		}
+		if !hasDueI && hasDueJ {
+			return false // j has due date, i doesn't -> j first
+		}
+
+		// Both have due dates - compare by datetime/date
+		if hasDueI && hasDueJ {
+			// Use datetime if available, else use date
+			dateI := ti.Due.Date
+			dateJ := tj.Due.Date
+			if ti.Due.Datetime != nil {
+				dateI = *ti.Due.Datetime
+			}
+			if tj.Due.Datetime != nil {
+				dateJ = *tj.Due.Datetime
+			}
+
+			if dateI != dateJ {
+				return dateI < dateJ // Earlier dates first
+			}
+		}
+
+		// Same due date or both no due date - sort by priority (higher = P1 = 4)
+		return ti.Priority > tj.Priority
+	})
 }
 
 // handleSelect handles the Enter key.
