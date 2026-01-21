@@ -31,6 +31,7 @@ const (
 	ViewTaskForm
 	ViewSearch
 	ViewHelp
+	ViewSections
 )
 
 // Tab represents a top-level tab.
@@ -145,8 +146,18 @@ type App struct {
 	confirmDeleteProject bool
 
 	// New label state
-	labelInput      textinput.Model
-	isCreatingLabel bool
+	labelInput         textinput.Model
+	isCreatingLabel    bool
+	isEditingLabel     bool
+	editingLabel       *api.Label
+	confirmDeleteLabel bool
+
+	// Section state
+	sectionInput         textinput.Model
+	isCreatingSection    bool
+	isEditingSection     bool
+	editingSection       *api.Section
+	confirmDeleteSection bool
 
 	// Subtask creation state
 	subtaskInput      textinput.Model
@@ -259,6 +270,11 @@ type projectCreatedMsg struct{ project *api.Project }
 type projectUpdatedMsg struct{ project *api.Project }
 type projectDeletedMsg struct{ id string }
 type labelCreatedMsg struct{ label *api.Label }
+type labelUpdatedMsg struct{ label *api.Label }
+type labelDeletedMsg struct{ id string }
+type sectionCreatedMsg struct{ section *api.Section }
+type sectionUpdatedMsg struct{ section *api.Section }
+type sectionDeletedMsg struct{ id string }
 type subtaskCreatedMsg struct{}
 type undoCompletedMsg struct{}
 type searchRefreshMsg struct{}
@@ -379,6 +395,42 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statusMsg = fmt.Sprintf("Created label: %s", msg.label.Name)
 		// Reload labels
 		return a, a.loadLabels()
+
+	case labelUpdatedMsg:
+		a.loading = false
+		a.statusMsg = fmt.Sprintf("Updated label: %s", msg.label.Name)
+		return a, a.loadLabels()
+
+	case labelDeletedMsg:
+		a.loading = false
+		a.statusMsg = "Label deleted"
+		a.taskCursor = 0
+		return a, a.loadLabels()
+
+	case sectionCreatedMsg:
+		a.loading = false
+		a.statusMsg = fmt.Sprintf("Created section: %s", msg.section.Name)
+		// Reload current project
+		if a.sidebarCursor < len(a.sidebarItems) {
+			return a, a.loadProjectTasks(a.sidebarItems[a.sidebarCursor].ID)
+		}
+		return a, nil
+
+	case sectionUpdatedMsg:
+		a.loading = false
+		a.statusMsg = fmt.Sprintf("Updated section: %s", msg.section.Name)
+		if a.sidebarCursor < len(a.sidebarItems) {
+			return a, a.loadProjectTasks(a.sidebarItems[a.sidebarCursor].ID)
+		}
+		return a, nil
+
+	case sectionDeletedMsg:
+		a.loading = false
+		a.statusMsg = "Section deleted"
+		if a.sidebarCursor < len(a.sidebarItems) {
+			return a, a.loadProjectTasks(a.sidebarItems[a.sidebarCursor].ID)
+		}
+		return a, nil
 
 	case subtaskCreatedMsg:
 		a.loading = false
@@ -664,13 +716,13 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// If we're in form view, route to form handler
-	if a.currentView == ViewTaskForm {
+	// Route key messages based on current view
+	switch a.currentView {
+	case ViewTaskForm:
 		return a.handleFormKeyMsg(msg)
-	}
-
-	// If we're in search view, route to search handler
-	if a.currentView == ViewSearch {
+	case ViewSections:
+		return a.handleSectionsKeyMsg(msg)
+	case ViewSearch:
 		return a.handleSearchKeyMsg(msg)
 	}
 
@@ -692,6 +744,27 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// If we're creating a new label, handle label input
 	if a.isCreatingLabel {
 		return a.handleLabelInputKeyMsg(msg)
+	}
+
+	// If we're editing a label, handle label input
+	if a.isEditingLabel {
+		return a.handleLabelEditKeyMsg(msg)
+	}
+
+	// If we're confirming label deletion, handle y/n
+	if a.confirmDeleteLabel {
+		return a.handleLabelDeleteConfirmKeyMsg(msg)
+	}
+
+	// Section state handling
+	if a.isCreatingSection {
+		return a.handleSectionInputKeyMsg(msg)
+	}
+	if a.isEditingSection {
+		return a.handleSectionEditKeyMsg(msg)
+	}
+	if a.confirmDeleteSection {
+		return a.handleSectionDeleteConfirmKeyMsg(msg)
 	}
 
 	// If we're creating a subtask, handle subtask input
@@ -788,6 +861,13 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleAddSubtask()
 	case "undo":
 		return a.handleUndo()
+	case "manage_sections":
+		if a.currentTab == TabProjects && len(a.projects) > 0 {
+			a.previousView = a.currentView
+			a.currentView = ViewSections
+			a.taskCursor = 0 // use cursor for sections
+			return a, nil
+		}
 	}
 
 	return a, nil
@@ -1271,10 +1351,18 @@ func (a *App) handleDelete() (tea.Model, tea.Cmd) {
 
 	// Handle task deletion
 	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		// Handle label deletion when viewing label list
+		if a.currentTab == TabLabels && a.currentLabel == nil {
+			if a.taskCursor < len(a.labels) {
+				a.editingLabel = &a.labels[a.taskCursor]
+				a.confirmDeleteLabel = true
+				return a, nil
+			}
+		}
 		return a, nil
 	}
 
-	// Guard: Don't delete when viewing label list (no task selected)
+	// Guard: Don't delete task when viewing label list (no task selected)
 	if a.currentView == ViewLabels && a.currentLabel == nil {
 		return a, nil
 	}
@@ -1345,10 +1433,23 @@ func (a *App) handleEdit() (tea.Model, tea.Cmd) {
 
 	// Handle task editing
 	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		// Handle label editing when viewing label list
+		if a.currentTab == TabLabels && a.currentLabel == nil {
+			if a.taskCursor < len(a.labels) {
+				a.editingLabel = &a.labels[a.taskCursor]
+				a.labelInput = textinput.New()
+				a.labelInput.SetValue(a.labels[a.taskCursor].Name)
+				a.labelInput.CharLimit = 100
+				a.labelInput.Width = 40
+				a.labelInput.Focus()
+				a.isEditingLabel = true
+				return a, nil
+			}
+		}
 		return a, nil
 	}
 
-	// Guard: Don't edit when viewing label list (no task selected)
+	// Guard: Don't edit task when viewing label list (no task selected)
 	if a.currentView == ViewLabels && a.currentLabel == nil {
 		return a, nil
 	}
@@ -1559,6 +1660,281 @@ func (a *App) handleLabelInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.labelInput, cmd = a.labelInput.Update(msg)
 		return a, cmd
 	}
+}
+
+// handleLabelEditKeyMsg handles keyboard input during label editing.
+func (a *App) handleLabelEditKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		a.isEditingLabel = false
+		a.editingLabel = nil
+		a.labelInput.Reset()
+		return a, nil
+
+	case "enter":
+		name := strings.TrimSpace(a.labelInput.Value())
+		if name == "" || a.editingLabel == nil {
+			a.isEditingLabel = false
+			a.editingLabel = nil
+			a.labelInput.Reset()
+			return a, nil
+		}
+
+		labelID := a.editingLabel.ID
+		a.isEditingLabel = false
+		a.editingLabel = nil
+		a.labelInput.Reset()
+		a.loading = true
+
+		return a, func() tea.Msg {
+			label, err := a.client.UpdateLabel(labelID, api.UpdateLabelRequest{
+				Name: &name,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return labelUpdatedMsg{label: label}
+		}
+
+	default:
+		var cmd tea.Cmd
+		a.labelInput, cmd = a.labelInput.Update(msg)
+		return a, cmd
+	}
+}
+
+// handleLabelDeleteConfirmKeyMsg handles y/n/esc during label delete confirmation.
+func (a *App) handleLabelDeleteConfirmKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		if a.editingLabel == nil {
+			a.confirmDeleteLabel = false
+			return a, nil
+		}
+
+		labelID := a.editingLabel.ID
+		a.confirmDeleteLabel = false
+		a.editingLabel = nil
+		a.loading = true
+
+		return a, func() tea.Msg {
+			if err := a.client.DeleteLabel(labelID); err != nil {
+				return errMsg{err}
+			}
+			return labelDeletedMsg{id: labelID}
+		}
+
+	case "n", "N", "esc":
+		a.confirmDeleteLabel = false
+		a.editingLabel = nil
+		return a, nil
+
+	default:
+		return a, nil
+	}
+}
+
+// handleSectionInputKeyMsg handles keyboard input during section creation.
+func (a *App) handleSectionInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		a.isCreatingSection = false
+		a.sectionInput.Reset()
+		return a, nil
+
+	case "enter":
+		name := strings.TrimSpace(a.sectionInput.Value())
+		if name == "" {
+			return a, nil
+		}
+
+		if a.currentTab == TabProjects && len(a.projects) > 0 && a.sidebarCursor < len(a.sidebarItems) {
+			projectID := a.sidebarItems[a.sidebarCursor].ID
+			a.isCreatingSection = false
+			a.sectionInput.Reset()
+			a.loading = true
+
+			return a, func() tea.Msg {
+				section, err := a.client.CreateSection(api.CreateSectionRequest{
+					ProjectID: projectID,
+					Name:      name,
+				})
+				if err != nil {
+					return errMsg{err}
+				}
+				return sectionCreatedMsg{section: section}
+			}
+		}
+		a.isCreatingSection = false
+		return a, nil
+
+	default:
+		var cmd tea.Cmd
+		a.sectionInput, cmd = a.sectionInput.Update(msg)
+		return a, cmd
+	}
+}
+
+// handleSectionEditKeyMsg handles keyboard input during section editing.
+func (a *App) handleSectionEditKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		a.isEditingSection = false
+		a.editingSection = nil
+		a.sectionInput.Reset()
+		return a, nil
+
+	case "enter":
+		name := strings.TrimSpace(a.sectionInput.Value())
+		if name == "" || a.editingSection == nil {
+			a.isEditingSection = false
+			a.editingSection = nil
+			a.sectionInput.Reset()
+			return a, nil
+		}
+
+		sectionID := a.editingSection.ID
+		a.isEditingSection = false
+		a.editingSection = nil
+		a.sectionInput.Reset()
+		a.loading = true
+
+		return a, func() tea.Msg {
+			section, err := a.client.UpdateSection(sectionID, api.UpdateSectionRequest{
+				Name: name,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return sectionUpdatedMsg{section: section}
+		}
+
+	default:
+		var cmd tea.Cmd
+		a.sectionInput, cmd = a.sectionInput.Update(msg)
+		return a, cmd
+	}
+}
+
+// handleSectionDeleteConfirmKeyMsg handles y/n/esc during section delete confirmation.
+func (a *App) handleSectionDeleteConfirmKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		if a.editingSection == nil {
+			a.confirmDeleteSection = false
+			return a, nil
+		}
+
+		sectionID := a.editingSection.ID
+		a.confirmDeleteSection = false
+		a.editingSection = nil
+		a.loading = true
+
+		return a, func() tea.Msg {
+			if err := a.client.DeleteSection(sectionID); err != nil {
+				return errMsg{err}
+			}
+			return sectionDeletedMsg{id: sectionID}
+		}
+
+	case "n", "N", "esc":
+		a.confirmDeleteSection = false
+		a.editingSection = nil
+		return a, nil
+
+	default:
+		return a, nil
+	}
+}
+
+// handleSectionsKeyMsg handles keyboard input for the sections management view.
+func (a *App) handleSectionsKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		a.currentView = a.previousView
+		a.taskCursor = 0
+		return a, nil
+
+	case "up", "k":
+		if a.taskCursor > 0 {
+			a.taskCursor--
+		}
+		return a, nil
+
+	case "down", "j":
+		if a.taskCursor < len(a.sections)-1 {
+			a.taskCursor++
+		}
+		return a, nil
+
+	case "a":
+		a.sectionInput = textinput.New()
+		a.sectionInput.Placeholder = "New section name..."
+		a.sectionInput.CharLimit = 100
+		a.sectionInput.Width = 40
+		a.sectionInput.Focus()
+		a.isCreatingSection = true
+		return a, nil
+
+	case "e":
+		if len(a.sections) == 0 {
+			return a, nil
+		}
+		if a.taskCursor >= 0 && a.taskCursor < len(a.sections) {
+			a.editingSection = &a.sections[a.taskCursor]
+			a.sectionInput = textinput.New()
+			a.sectionInput.SetValue(a.editingSection.Name)
+			a.sectionInput.CharLimit = 100
+			a.sectionInput.Width = 40
+			a.sectionInput.Focus()
+			a.isEditingSection = true
+		}
+		return a, nil
+
+	case "d", "delete":
+		if len(a.sections) == 0 {
+			return a, nil
+		}
+		if a.taskCursor >= 0 && a.taskCursor < len(a.sections) {
+			a.editingSection = &a.sections[a.taskCursor]
+			a.confirmDeleteSection = true
+		}
+		return a, nil
+	}
+
+	return a, nil
+}
+
+// renderSections renders the sections management view.
+func (a *App) renderSections() string {
+	var b strings.Builder
+
+	b.WriteString(styles.Title.Render("Manage Sections"))
+	b.WriteString("\n\n")
+
+	if len(a.sections) == 0 {
+		b.WriteString(styles.HelpDesc.Render("No sections found. Press 'a' to add one."))
+		b.WriteString("\n\n")
+		b.WriteString(styles.HelpDesc.Render("Esc: back"))
+		return b.String()
+	}
+
+	// Render list
+	for i, section := range a.sections {
+		cursor := "  "
+		style := lipgloss.NewStyle()
+		if i == a.taskCursor {
+			cursor = "> "
+			style = lipgloss.NewStyle().Foreground(styles.Highlight)
+		}
+
+		b.WriteString(cursor + style.Render(section.Name) + "\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(styles.HelpDesc.Render("j/k: nav • a: add • e: edit • d: delete • Esc: back"))
+
+	return b.String()
 }
 
 // handleAddSubtask opens the inline subtask creation input.
@@ -2127,6 +2503,8 @@ func (a *App) View() string {
 		content = a.renderSearch()
 	case ViewCalendarDay:
 		content = a.renderCalendarDay()
+	case ViewSections:
+		content = a.renderSections()
 	default:
 		content = a.renderMainView()
 	}
@@ -2172,6 +2550,11 @@ func (a *App) View() string {
 		}
 		content = strings.Join(contentLines, "\n")
 	}
+
+	// Overlay active overlays...
+	// (Skipping project/label overlays replication for brevity... waiting for replace_file_content to handle context correctly)
+	// I should probably target specific blocks instead of replcaing huge chunks unless necessary.
+	// But I will append section overlays at the END of overlays list.
 
 	// Overlay project edit dialog if active
 	if a.isEditingProject {
@@ -2300,6 +2683,90 @@ func (a *App) View() string {
 		content = strings.Join(contentLines, "\n")
 	}
 
+	// Overlay label edit dialog if active
+	if a.isEditingLabel {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("✏️ Edit Label") + "\n\n" +
+			a.labelInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: save • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay label delete confirmation dialog if active
+	if a.confirmDeleteLabel && a.editingLabel != nil {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.ErrorColor).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.StatusBarError.Render("⚠️ Delete Label?") + "\n\n" +
+			fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", a.editingLabel.Name) +
+			styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
 	// Overlay subtask creation dialog if active
 	if a.isCreatingSubtask {
 		dialogWidth := 60
@@ -2312,6 +2779,133 @@ func (a *App) View() string {
 		dialogContent := styles.Title.Render("➕ Add Subtask") + "\n\n" +
 			a.subtaskInput.View() + "\n\n" +
 			styles.HelpDesc.Render("Enter: create • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay section creation dialog if active
+	if a.isCreatingSection {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("📂 New Section") + "\n\n" +
+			a.sectionInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: create • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay section edit dialog if active
+	if a.isEditingSection {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("✏️ Edit Section") + "\n\n" +
+			a.sectionInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: save • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay section delete confirmation dialog if active
+	if a.confirmDeleteSection && a.editingSection != nil {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.ErrorColor).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.StatusBarError.Render("⚠️ Delete Section?") + "\n\n" +
+			fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", a.editingSection.Name) +
+			styles.HelpDesc.Render("This will likely delete/move tasks inside.") + "\n\n" +
+			styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
 
 		dialog := dialogStyle.Render(dialogContent)
 
