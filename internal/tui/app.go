@@ -355,6 +355,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(msg.sections) > 0 {
 			a.sections = msg.sections
+			// Sort sections by SectionOrder
+			sort.Slice(a.sections, func(i, j int) bool {
+				return a.sections[i].SectionOrder < a.sections[j].SectionOrder
+			})
 		}
 		return a, nil
 
@@ -706,11 +710,30 @@ func (a *App) switchToTab(tab Tab) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg processes keyboard input.
 func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global key handling first
-	switch msg.String() {
-	case "ctrl+c":
+	// Only ctrl+c is truly global
+	if msg.String() == "ctrl+c" {
 		return a, tea.Quit
-	// Tab switching with number keys (1-5)
+	}
+
+	// If we're in help view, any key goes back
+	if a.currentView == ViewHelp {
+		a.currentView = a.previousView
+		return a, nil
+	}
+
+	// Route key messages based on current view - BEFORE tab switching
+	// This allows forms to capture number keys for text input
+	switch a.currentView {
+	case ViewTaskForm:
+		return a.handleFormKeyMsg(msg)
+	case ViewSections:
+		return a.handleSectionsKeyMsg(msg)
+	case ViewSearch:
+		return a.handleSearchKeyMsg(msg)
+	}
+
+	// Tab switching with number keys (1-5) - only when not in form/input modes
+	switch msg.String() {
 	case "1":
 		return a.switchToTab(TabToday)
 	case "2":
@@ -721,22 +744,6 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.switchToTab(TabCalendar)
 	case "5":
 		return a.switchToTab(TabProjects)
-	}
-
-	// If we're in help view, any key goes back
-	if a.currentView == ViewHelp {
-		a.currentView = a.previousView
-		return a, nil
-	}
-
-	// Route key messages based on current view
-	switch a.currentView {
-	case ViewTaskForm:
-		return a.handleFormKeyMsg(msg)
-	case ViewSections:
-		return a.handleSectionsKeyMsg(msg)
-	case ViewSearch:
-		return a.handleSearchKeyMsg(msg)
 	}
 
 	// If we're creating a new project, handle project input
