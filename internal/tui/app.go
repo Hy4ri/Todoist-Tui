@@ -114,13 +114,14 @@ type App struct {
 	calendarViewMode CalendarViewMode // Compact or Expanded view
 
 	// UI state
-	loading    bool
-	err        error
-	statusMsg  string
-	width      int
-	height     int
-	showHints  bool        // Toggle visibility of keyboard shortcuts
-	lastAction *LastAction // Last undoable action
+	loading         bool
+	err             error
+	statusMsg       string
+	width           int
+	height          int
+	showHints       bool        // Toggle visibility of keyboard shortcuts
+	lastAction      *LastAction // Last undoable action
+	showDetailPanel bool        // Show task detail panel on right
 
 	// Components
 	spinner  spinner.Model
@@ -1103,8 +1104,7 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 			// Viewing label tasks - select task for detail
 			if a.taskCursor < len(a.tasks) {
 				a.selectedTask = &a.tasks[a.taskCursor]
-				a.previousView = a.currentView
-				a.currentView = ViewTaskDetail
+				a.showDetailPanel = true
 				return a, a.loadTaskComments()
 			}
 		}
@@ -1117,15 +1117,13 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
 			if taskIndex >= 0 && taskIndex < len(a.tasks) {
 				a.selectedTask = &a.tasks[taskIndex]
-				a.previousView = a.currentView
-				a.currentView = ViewTaskDetail
+				a.showDetailPanel = true
 				return a, a.loadTaskComments()
 			}
 		} else if a.taskCursor < len(a.tasks) {
 			// Fallback for views that don't use ordered indices
 			a.selectedTask = &a.tasks[a.taskCursor]
-			a.previousView = a.currentView
-			a.currentView = ViewTaskDetail
+			a.showDetailPanel = true
 			return a, a.loadTaskComments()
 		}
 	}
@@ -1134,6 +1132,14 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 
 // handleBack handles the Escape key.
 func (a *App) handleBack() (tea.Model, tea.Cmd) {
+	// Close detail panel if open
+	if a.showDetailPanel {
+		a.showDetailPanel = false
+		a.selectedTask = nil
+		a.comments = nil
+		return a, nil
+	}
+
 	switch a.currentView {
 	case ViewTaskDetail:
 		a.currentView = a.previousView
@@ -2350,18 +2356,92 @@ func (a *App) renderMainView() string {
 	contentHeight := a.height - tabBarHeight - statusBarHeight
 
 	var mainContent string
-	if a.currentTab == TabProjects {
-		// Projects tab shows sidebar + content
-		mainContent = a.renderProjectsTabContent(contentHeight)
+
+	// If detail panel is shown, split the view
+	if a.showDetailPanel && a.selectedTask != nil {
+		// Split layout: task list on left, detail panel on right
+		detailWidth := a.width / 2
+		listWidth := a.width - detailWidth - 3 // -3 for border/spacing
+
+		var leftPane string
+		if a.currentTab == TabProjects {
+			leftPane = a.renderProjectsTabContent(contentHeight)
+		} else {
+			leftPane = a.renderTaskList(listWidth, contentHeight)
+		}
+
+		// Render detail panel
+		rightPane := a.renderDetailPanel(detailWidth, contentHeight)
+
+		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 	} else {
-		// Other tabs show content only (full width)
-		mainContent = a.renderTaskList(a.width-2, contentHeight)
+		if a.currentTab == TabProjects {
+			// Projects tab shows sidebar + content
+			mainContent = a.renderProjectsTabContent(contentHeight)
+		} else {
+			// Other tabs show content only (full width)
+			mainContent = a.renderTaskList(a.width-2, contentHeight)
+		}
 	}
 
 	// Add status bar
 	statusBar := a.renderStatusBar()
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, mainContent, statusBar)
+}
+
+// renderDetailPanel renders task details in the right panel for split view.
+func (a *App) renderDetailPanel(width, height int) string {
+	if a.selectedTask == nil {
+		return ""
+	}
+
+	t := a.selectedTask
+
+	// Create border style
+	panelStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Highlight).
+		Padding(0, 1).
+		Width(width - 2).
+		Height(height - 2)
+
+	// Build content
+	var content strings.Builder
+
+	// Title
+	content.WriteString(styles.Title.Render(t.Content) + "\n\n")
+
+	// Due date
+	if t.Due != nil {
+		content.WriteString(styles.StatusBarKey.Render("Due: "))
+		content.WriteString(t.Due.String + "\n")
+	}
+
+	// Priority
+	priorityStyle := styles.GetPriorityStyle(t.Priority)
+	priorityLabel := fmt.Sprintf("P%d", 5-t.Priority)
+	content.WriteString(styles.StatusBarKey.Render("Priority: "))
+	content.WriteString(priorityStyle.Render(priorityLabel) + "\n")
+
+	// Description
+	if t.Description != "" {
+		content.WriteString("\n" + styles.StatusBarKey.Render("Description:") + "\n")
+		content.WriteString(t.Description + "\n")
+	}
+
+	// Comments
+	if len(a.comments) > 0 {
+		content.WriteString("\n" + styles.StatusBarKey.Render(fmt.Sprintf("Comments (%d):", len(a.comments))) + "\n")
+		for _, c := range a.comments {
+			content.WriteString("• " + c.Content + "\n")
+		}
+	}
+
+	// Help
+	content.WriteString("\n" + styles.HelpDesc.Render("Esc to close"))
+
+	return panelStyle.Render(content.String())
 }
 
 // tabInfo holds tab metadata for rendering and click handling.
