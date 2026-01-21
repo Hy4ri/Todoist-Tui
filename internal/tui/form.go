@@ -41,6 +41,8 @@ type TaskForm struct {
 	Priority        int    // 1-4 (Todoist priority, 4=highest)
 	ProjectID       string // Selected project ID
 	ProjectName     string // Selected project name (for display)
+	SectionID       string // Selected section ID (optional)
+	SectionName     string // Selected section name (for display)
 	projectCursor   int    // For project selection dropdown
 	showProjectList bool   // Whether project dropdown is open
 
@@ -285,6 +287,10 @@ func (f *TaskForm) ToCreateRequest() api.CreateTaskRequest {
 		Content:   strings.TrimSpace(f.ContentInput.Value()),
 		ProjectID: f.ProjectID,
 		Priority:  f.Priority,
+	}
+
+	if f.SectionID != "" {
+		req.SectionID = f.SectionID
 	}
 
 	if desc := strings.TrimSpace(f.DescriptionInput.Value()); desc != "" {

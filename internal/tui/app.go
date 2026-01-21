@@ -1457,6 +1457,24 @@ func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 	if a.currentProject != nil {
 		a.taskForm.ProjectID = a.currentProject.ID
 		a.taskForm.ProjectName = a.currentProject.Name
+
+		// Try to detect current section based on cursor position
+		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+			taskIndex := a.taskOrderedIndices[a.taskCursor]
+			if taskIndex >= 0 && taskIndex < len(a.tasks) {
+				task := a.tasks[taskIndex]
+				if task.SectionID != nil && *task.SectionID != "" {
+					a.taskForm.SectionID = *task.SectionID
+					// Find section name
+					for _, s := range a.sections {
+						if s.ID == *task.SectionID {
+							a.taskForm.SectionName = s.Name
+							break
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return a, nil
