@@ -1,4 +1,4 @@
-// Package api provides a client for the Todoist REST API v2.
+// Package api provides a client for the Todoist API v1.
 package api
 
 import (
