@@ -136,9 +136,7 @@ func buildFilterQuery(filter TaskFilter) url.Values {
 	if filter.Label != "" {
 		query.Set("label", filter.Label)
 	}
-	if filter.Filter != "" {
-		query.Set("filter", filter.Filter)
-	}
+	// Note: filter.Filter is NOT used here - v1 API requires /tasks/filter endpoint for filter queries
 	if filter.Lang != "" {
 		query.Set("lang", filter.Lang)
 	}

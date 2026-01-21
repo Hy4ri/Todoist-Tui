@@ -232,10 +232,8 @@ func (a *App) loadInitialData() tea.Cmd {
 			return errMsg{err}
 		}
 
-		// Load today's tasks (including overdue)
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: "today | overdue",
-		})
+		// Load today's tasks (including overdue) using filter endpoint
+		tasks, err := a.client.GetTasksByFilter("today | overdue")
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2431,17 +2429,21 @@ func (a *App) loadProjectTasks(projectID string) tea.Cmd {
 // refreshTasks refreshes the current task list.
 func (a *App) refreshTasks() tea.Cmd {
 	return func() tea.Msg {
-		var filter api.TaskFilter
+		var tasks []api.Task
+		var err error
+
 		if a.currentView == ViewProject && a.currentProject != nil {
-			filter.ProjectID = a.currentProject.ID
+			tasks, err = a.client.GetTasks(api.TaskFilter{
+				ProjectID: a.currentProject.ID,
+			})
 		} else if a.currentView == ViewLabels && a.currentLabel != nil {
-			// Load tasks for the selected label
-			filter.Filter = "@" + a.currentLabel.Name
+			// Load tasks for the selected label using filter endpoint
+			tasks, err = a.client.GetTasksByFilter("@" + a.currentLabel.Name)
 		} else {
-			filter.Filter = "today | overdue"
+			// Default to today | overdue
+			tasks, err = a.client.GetTasksByFilter("today | overdue")
 		}
 
-		tasks, err := a.client.GetTasks(filter)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2453,9 +2455,7 @@ func (a *App) refreshTasks() tea.Cmd {
 // loadTodayTasks loads today's tasks including overdue.
 func (a *App) loadTodayTasks() tea.Cmd {
 	return func() tea.Msg {
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: "today | overdue",
-		})
+		tasks, err := a.client.GetTasksByFilter("today | overdue")
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2525,9 +2525,7 @@ func (a *App) loadLabels() tea.Cmd {
 // loadLabelTasks loads tasks filtered by a specific label.
 func (a *App) loadLabelTasks(labelName string) tea.Cmd {
 	return func() tea.Msg {
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: "@" + labelName,
-		})
+		tasks, err := a.client.GetTasksByFilter("@" + labelName)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2541,9 +2539,7 @@ func (a *App) loadCalendarDayTasks() tea.Cmd {
 	dateStr := selectedDate.Format("2006-01-02")
 
 	return func() tea.Msg {
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: dateStr,
-		})
+		tasks, err := a.client.GetTasksByFilter(dateStr)
 		if err != nil {
 			return errMsg{err}
 		}
