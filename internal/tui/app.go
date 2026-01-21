@@ -113,6 +113,7 @@ type App struct {
 	statusMsg string
 	width     int
 	height    int
+	showHints bool // Toggle visibility of keyboard shortcuts
 
 	// Components
 	spinner  spinner.Model
@@ -177,6 +178,7 @@ func NewApp(client *api.Client, cfg *config.Config) *App {
 		calendarDay:      time.Now().Day(),
 		calendarViewMode: calViewMode,
 		loading:          true,
+		showHints:        true,
 	}
 }
 
@@ -748,6 +750,8 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.switchToTab(TabLabels)
 	case "tab_calendar":
 		return a.switchToTab(TabCalendar)
+	case "toggle_hints":
+		a.showHints = !a.showHints
 	}
 
 	return a, nil
@@ -3644,9 +3648,15 @@ func (a *App) renderStatusBar() string {
 		left = styles.StatusBarSuccess.Render(a.statusMsg)
 	}
 
-	// Right side: context-specific key hints
-	hints := a.getContextualHints()
-	right := strings.Join(hints, " ")
+	// Right side: context-specific key hints (or just toggle hint if hidden)
+	var right string
+	if a.showHints {
+		hints := a.getContextualHints()
+		hints = append(hints, styles.StatusBarKey.Render("F1")+styles.StatusBarText.Render(":hide"))
+		right = strings.Join(hints, " ")
+	} else {
+		right = styles.StatusBarKey.Render("F1") + styles.StatusBarText.Render(":keys")
+	}
 
 	// Calculate spacing
 	leftWidth := lipgloss.Width(left)

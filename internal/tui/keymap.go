@@ -213,6 +213,9 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		return "tab_labels", true
 	case "C":
 		return "tab_calendar", true
+	// Hints toggle
+	case "f1":
+		return "toggle_hints", true
 	}
 
 	return "", false
