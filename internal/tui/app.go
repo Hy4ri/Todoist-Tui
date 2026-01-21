@@ -1237,26 +1237,12 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 		return a, nil
 	default:
 		// Select task for detail view
-		// Use viewportLines which maps visual line positions to task indices
-		if len(a.viewportLines) > 0 {
-			// viewportLines contains ALL lines; taskCursor indexes into it after scroll
-			visibleLine := a.scrollOffset + a.taskCursor
-			if visibleLine >= 0 && visibleLine < len(a.viewportLines) {
-				taskIndex := a.viewportLines[visibleLine]
-				if taskIndex >= 0 && taskIndex < len(a.tasks) {
-					// Make a stable copy (heap allocated)
-					taskCopy := new(api.Task)
-					*taskCopy = a.tasks[taskIndex]
-					a.selectedTask = taskCopy
-					a.showDetailPanel = true
-					return a, a.loadTaskComments()
-				}
-			}
-		}
-		// Fallback to taskOrderedIndices for views without section headers
-		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		// taskCursor indexes into taskOrderedIndices which contains task indices
+		// (NOT viewport line positions which include section headers)
+		if len(a.taskOrderedIndices) > 0 && a.taskCursor >= 0 && a.taskCursor < len(a.taskOrderedIndices) {
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
 			if taskIndex >= 0 && taskIndex < len(a.tasks) {
+				// Make a stable copy (heap allocated)
 				taskCopy := new(api.Task)
 				*taskCopy = a.tasks[taskIndex]
 				a.selectedTask = taskCopy
@@ -1264,8 +1250,8 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 				return a, a.loadTaskComments()
 			}
 		}
-		// Final fallback for simple views
-		if a.taskCursor < len(a.tasks) {
+		// Fallback for simple views without ordered indices
+		if a.taskCursor >= 0 && a.taskCursor < len(a.tasks) {
 			taskCopy := new(api.Task)
 			*taskCopy = a.tasks[a.taskCursor]
 			a.selectedTask = taskCopy
