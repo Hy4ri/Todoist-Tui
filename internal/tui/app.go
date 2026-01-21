@@ -1237,28 +1237,38 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 		return a, nil
 	default:
 		// Select task for detail view
-		// First try viewportLines which correctly maps cursor to task index with section headers
-		cursorLine := a.scrollOffset + a.taskCursor
+		// Use viewportLines which maps visual line positions to task indices
 		if len(a.viewportLines) > 0 {
-			if cursorLine >= 0 && cursorLine < len(a.viewportLines) {
-				taskIndex := a.viewportLines[cursorLine]
+			// viewportLines contains ALL lines; taskCursor indexes into it after scroll
+			visibleLine := a.scrollOffset + a.taskCursor
+			if visibleLine >= 0 && visibleLine < len(a.viewportLines) {
+				taskIndex := a.viewportLines[visibleLine]
 				if taskIndex >= 0 && taskIndex < len(a.tasks) {
-					a.selectedTask = &a.tasks[taskIndex]
+					// Make a stable copy (heap allocated)
+					taskCopy := new(api.Task)
+					*taskCopy = a.tasks[taskIndex]
+					a.selectedTask = taskCopy
 					a.showDetailPanel = true
 					return a, a.loadTaskComments()
 				}
 			}
-		} else if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
-			// Fallback to taskOrderedIndices for views without section headers
+		}
+		// Fallback to taskOrderedIndices for views without section headers
+		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
 			if taskIndex >= 0 && taskIndex < len(a.tasks) {
-				a.selectedTask = &a.tasks[taskIndex]
+				taskCopy := new(api.Task)
+				*taskCopy = a.tasks[taskIndex]
+				a.selectedTask = taskCopy
 				a.showDetailPanel = true
 				return a, a.loadTaskComments()
 			}
-		} else if a.taskCursor < len(a.tasks) {
-			// Final fallback for simple views
-			a.selectedTask = &a.tasks[a.taskCursor]
+		}
+		// Final fallback for simple views
+		if a.taskCursor < len(a.tasks) {
+			taskCopy := new(api.Task)
+			*taskCopy = a.tasks[a.taskCursor]
+			a.selectedTask = taskCopy
 			a.showDetailPanel = true
 			return a, a.loadTaskComments()
 		}
