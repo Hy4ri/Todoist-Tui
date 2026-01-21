@@ -104,6 +104,7 @@ todoist-tui
 ### Keyboard Shortcuts
 
 #### Navigation
+
 | Key | Action |
 |-----|--------|
 | `j` / `k` | Move down / up |
@@ -114,6 +115,7 @@ todoist-tui
 | `Esc` | Go back / Cancel |
 
 #### Task Actions
+
 | Key | Action |
 |-----|--------|
 | `a` | Add new task |
@@ -123,6 +125,7 @@ todoist-tui
 | `1-4` | Set priority (1=highest, 4=lowest) |
 
 #### Views & Features
+
 | Key | Action |
 |-----|--------|
 | `/` | Search tasks |
@@ -303,13 +306,16 @@ Contributions are welcome! Please:
 
 ## Roadmap
 
-- [ ] Subtasks support
-- [ ] Comments view
-- [ ] Recurring tasks
-- [ ] Filters (custom Todoist filters)
+- [x] Subtasks support (inline creation & view)
+- [x] Comments view & creation
+- [x] Section management
+- [x] Label management
+- [ ] Recurring tasks support (in UI)
+- [ ] Custom Todoist filters
 - [ ] Collaboration features
 - [ ] Task duration tracking
 - [ ] Offline mode with sync
+- [ ] Bulk operations
 
 ## License
 
