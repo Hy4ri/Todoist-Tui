@@ -56,7 +56,12 @@ func TestGetProjects(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.response != nil {
-					json.NewEncoder(w).Encode(tt.response)
+					// Return paginated response format
+					paginatedResp := map[string]interface{}{
+						"results":     tt.response,
+						"next_cursor": nil,
+					}
+					json.NewEncoder(w).Encode(paginatedResp)
 				}
 			}))
 			defer server.Close()
