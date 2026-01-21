@@ -165,8 +165,12 @@ type App struct {
 	parentTaskID      string
 
 	// Viewport for scrollable task lists
-	taskViewport       viewport.Model
-	viewportReady      bool
+	taskViewport  viewport.Model
+	viewportReady bool
+
+	// Move task state
+	isMovingTask       bool
+	moveSectionCursor  int
 	viewportContent    string // Current content in viewport
 	viewportLines      []int  // Maps viewport line number to task index (-1 for headers)
 	taskOrderedIndices []int  // Maps display order (cursor position) to a.tasks index
@@ -767,6 +771,11 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleSectionDeleteConfirmKeyMsg(msg)
 	}
 
+	// Move task handling
+	if a.isMovingTask {
+		return a.handleMoveTaskKeyMsg(msg)
+	}
+
 	// If we're creating a subtask, handle subtask input
 	if a.isCreatingSubtask {
 		return a.handleSubtaskInputKeyMsg(msg)
@@ -866,6 +875,12 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.previousView = a.currentView
 			a.currentView = ViewSections
 			a.taskCursor = 0 // use cursor for sections
+			return a, nil
+		}
+	case "move_task":
+		if a.focusedPane == PaneMain && len(a.tasks) > 0 && len(a.sections) > 0 {
+			a.isMovingTask = true
+			a.moveSectionCursor = 0
 			return a, nil
 		}
 	}
@@ -1905,6 +1920,52 @@ func (a *App) handleSectionsKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
+// handleMoveTaskKeyMsg handles keyboard input for moving a task to a section.
+func (a *App) handleMoveTaskKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		a.isMovingTask = false
+		a.moveSectionCursor = 0
+		return a, nil
+
+	case "up", "k":
+		if a.moveSectionCursor > 0 {
+			a.moveSectionCursor--
+		}
+		return a, nil
+
+	case "down", "j":
+		if a.moveSectionCursor < len(a.sections)-1 {
+			a.moveSectionCursor++
+		}
+		return a, nil
+
+	case "enter":
+		if len(a.sections) == 0 {
+			a.isMovingTask = false
+			return a, nil
+		}
+
+		task := &a.tasks[a.taskCursor]
+		sectionID := a.sections[a.moveSectionCursor].ID
+		a.isMovingTask = false
+		a.loading = true
+		a.statusMsg = "Moving task..."
+
+		return a, func() tea.Msg {
+			// Update task with new section_id
+			_, err := a.client.UpdateTask(task.ID, api.UpdateTaskRequest{
+				SectionID: &sectionID,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return taskUpdatedMsg{}
+		}
+	}
+	return a, nil
+}
+
 // renderSections renders the sections management view.
 func (a *App) renderSections() string {
 	var b strings.Builder
@@ -2908,6 +2969,64 @@ func (a *App) View() string {
 			styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
 
 		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay move task dialog if active
+	if a.isMovingTask {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		var b strings.Builder
+		b.WriteString(styles.Title.Render("➡️ Move Task to Section") + "\n\n")
+
+		if len(a.sections) == 0 {
+			b.WriteString(styles.HelpDesc.Render("No sections in this project."))
+		} else {
+			for i, section := range a.sections {
+				cursor := "  "
+				style := lipgloss.NewStyle()
+				if i == a.moveSectionCursor {
+					cursor = "> "
+					style = lipgloss.NewStyle().Foreground(styles.Highlight)
+				}
+				b.WriteString(cursor + style.Render(section.Name) + "\n")
+			}
+		}
+
+		b.WriteString("\n" + styles.HelpDesc.Render("j/k: select • Enter: move • Esc: cancel"))
+
+		dialog := dialogStyle.Render(b.String())
 
 		// Center the dialog
 		dialogLines := strings.Split(dialog, "\n")

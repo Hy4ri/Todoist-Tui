@@ -124,6 +124,8 @@ type CreateTaskRequest struct {
 type UpdateTaskRequest struct {
 	Content      *string  `json:"content,omitempty"`
 	Description  *string  `json:"description,omitempty"`
+	ProjectID    *string  `json:"project_id,omitempty"`
+	SectionID    *string  `json:"section_id,omitempty"`
 	Labels       []string `json:"labels,omitempty"`
 	Priority     *int     `json:"priority,omitempty"`
 	DueString    *string  `json:"due_string,omitempty"`
