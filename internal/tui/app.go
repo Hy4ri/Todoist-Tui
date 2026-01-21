@@ -1,0 +1,3385 @@
+// Package tui provides the terminal user interface for Todoist.
+package tui
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/config"
+	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+)
+
+// View represents the current view/screen.
+type View int
+
+const (
+	ViewToday View = iota
+	ViewUpcoming
+	ViewLabels
+	ViewCalendar
+	ViewCalendarDay // Day detail view from calendar
+	ViewProject
+	ViewTaskDetail
+	ViewTaskForm
+	ViewSearch
+	ViewHelp
+)
+
+// Tab represents a top-level tab.
+type Tab int
+
+const (
+	TabToday Tab = iota
+	TabUpcoming
+	TabLabels
+	TabCalendar
+	TabProjects
+)
+
+// SidebarItem represents an item in the sidebar (special views or projects).
+type SidebarItem struct {
+	Type       string // "special", "separator", "project"
+	ID         string // View name for special, project ID for projects
+	Name       string
+	Icon       string
+	IsFavorite bool
+	ParentID   *string
+}
+
+// Pane represents which pane is currently focused (only used in Projects tab).
+type Pane int
+
+const (
+	PaneSidebar Pane = iota
+	PaneMain
+)
+
+// CalendarViewMode represents the calendar display mode.
+type CalendarViewMode int
+
+const (
+	CalendarViewCompact  CalendarViewMode = iota // Small grid view
+	CalendarViewExpanded                         // Grid with task names in cells
+)
+
+// App is the main Bubble Tea model for the application.
+type App struct {
+	// Dependencies
+	client *api.Client
+	config *config.Config
+
+	// View state
+	currentView  View
+	previousView View
+	currentTab   Tab
+	focusedPane  Pane // Only used in Projects tab
+
+	// Data
+	projects       []api.Project
+	tasks          []api.Task
+	allTasks       []api.Task // All tasks for upcoming/calendar views
+	sections       []api.Section
+	labels         []api.Label
+	comments       []api.Comment // Comments for selected task
+	selectedTask   *api.Task
+	currentProject *api.Project
+	currentLabel   *api.Label
+
+	// Sidebar items (only shown in Projects tab)
+	sidebarItems  []SidebarItem
+	sidebarCursor int
+
+	// List state
+	projectCursor int
+	taskCursor    int
+	scrollOffset  int // Track scroll position for click handling
+
+	// Calendar state
+	calendarDate     time.Time        // Currently viewed month
+	calendarDay      int              // Selected day (1-31)
+	calendarViewMode CalendarViewMode // Compact or Expanded view
+
+	// UI state
+	loading   bool
+	err       error
+	statusMsg string
+	width     int
+	height    int
+
+	// Components
+	spinner  spinner.Model
+	keyState KeyState
+	keymap   Keymap
+
+	// Form state (for add/edit)
+	taskForm *TaskForm
+
+	// Search state
+	searchQuery   string
+	searchInput   textinput.Model
+	searchResults []api.Task
+	isSearching   bool
+
+	// New project state
+	projectInput      textinput.Model
+	isCreatingProject bool
+
+	// New label state
+	labelInput      textinput.Model
+	isCreatingLabel bool
+
+	// Viewport for scrollable task lists
+	taskViewport       viewport.Model
+	viewportReady      bool
+	viewportContent    string // Current content in viewport
+	viewportLines      []int  // Maps viewport line number to task index (-1 for headers)
+	taskOrderedIndices []int  // Maps display order (cursor position) to a.tasks index
+}
+
+// NewApp creates a new App instance.
+func NewApp(client *api.Client, cfg *config.Config) *App {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = styles.Spinner
+
+	searchInput := textinput.New()
+	searchInput.Placeholder = "Search tasks..."
+	searchInput.CharLimit = 100
+	searchInput.Width = 40
+
+	// Set calendar view mode from config (default to expanded)
+	calViewMode := CalendarViewExpanded
+	if cfg.UI.CalendarDefaultView == "compact" {
+		calViewMode = CalendarViewCompact
+	}
+
+	return &App{
+		client:           client,
+		config:           cfg,
+		currentView:      ViewToday,
+		currentTab:       TabToday,
+		focusedPane:      PaneMain,
+		spinner:          s,
+		keymap:           DefaultKeymap(),
+		searchInput:      searchInput,
+		calendarDate:     time.Now(),
+		calendarDay:      time.Now().Day(),
+		calendarViewMode: calViewMode,
+		loading:          true,
+	}
+}
+
+// Init implements tea.Model.
+func (a *App) Init() tea.Cmd {
+	return tea.Batch(
+		a.spinner.Tick,
+		a.loadInitialData(),
+	)
+}
+
+// loadInitialData loads projects and today's tasks.
+func (a *App) loadInitialData() tea.Cmd {
+	return func() tea.Msg {
+		// Load projects
+		projects, err := a.client.GetProjects()
+		if err != nil {
+			return errMsg{err}
+		}
+
+		// Load today's tasks (including overdue)
+		tasks, err := a.client.GetTasks(api.TaskFilter{
+			Filter: "today | overdue",
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+
+		// Load all tasks for upcoming/calendar views
+		allTasks, err := a.client.GetTasks(api.TaskFilter{})
+		if err != nil {
+			return errMsg{err}
+		}
+
+		// Load labels
+		labels, err := a.client.GetLabels()
+		if err != nil {
+			return errMsg{err}
+		}
+
+		return dataLoadedMsg{
+			projects: projects,
+			tasks:    tasks,
+			allTasks: allTasks,
+			labels:   labels,
+		}
+	}
+}
+
+// Message types
+type errMsg struct{ err error }
+type statusMsg struct{ msg string }
+type dataLoadedMsg struct {
+	projects []api.Project
+	tasks    []api.Task
+	allTasks []api.Task
+	sections []api.Section
+	labels   []api.Label
+}
+type taskUpdatedMsg struct{ task *api.Task }
+type taskDeletedMsg struct{ id string }
+type taskCompletedMsg struct{ id string }
+type taskCreatedMsg struct{}
+type projectCreatedMsg struct{ project *api.Project }
+type labelCreatedMsg struct{ label *api.Label }
+type searchRefreshMsg struct{}
+type refreshMsg struct{}
+type commentsLoadedMsg struct{ comments []api.Comment }
+
+// Update implements tea.Model.
+func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		return a.handleKeyMsg(msg)
+
+	case tea.MouseMsg:
+		return a.handleMouseMsg(msg)
+
+	case tea.WindowSizeMsg:
+		a.width = msg.Width
+		a.height = msg.Height
+		// Initialize or update viewport dimensions
+		// Reserve space for tab bar (~3 lines), status bar (2 lines), borders (2 lines), title (2 lines)
+		vpHeight := msg.Height - 9
+		if vpHeight < 5 {
+			vpHeight = 5
+		}
+		vpWidth := msg.Width - 4
+		if vpWidth < 20 {
+			vpWidth = 20
+		}
+		if !a.viewportReady {
+			a.taskViewport = viewport.New(vpWidth, vpHeight)
+			a.taskViewport.Style = lipgloss.NewStyle()
+			a.taskViewport.MouseWheelEnabled = true
+			a.viewportReady = true
+		} else {
+			a.taskViewport.Width = vpWidth
+			a.taskViewport.Height = vpHeight
+		}
+		return a, nil
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		a.spinner, cmd = a.spinner.Update(msg)
+		return a, cmd
+
+	case errMsg:
+		a.loading = false
+		a.err = msg.err
+		return a, nil
+
+	case statusMsg:
+		a.statusMsg = msg.msg
+		return a, nil
+
+	case dataLoadedMsg:
+		a.loading = false
+		// Only update fields that are non-nil/non-empty to avoid overwriting
+		if len(msg.projects) > 0 {
+			a.projects = msg.projects
+			a.buildSidebarItems()
+		}
+		if msg.tasks != nil {
+			a.tasks = msg.tasks
+		}
+		if len(msg.labels) > 0 {
+			a.labels = msg.labels
+		}
+		if len(msg.allTasks) > 0 {
+			a.allTasks = msg.allTasks
+		}
+		if len(msg.sections) > 0 {
+			a.sections = msg.sections
+		}
+		return a, nil
+
+	case taskUpdatedMsg:
+		a.loading = false
+		// Refresh the task list
+		return a, a.refreshTasks()
+
+	case taskDeletedMsg:
+		a.loading = false
+		a.statusMsg = "Task deleted"
+		return a, a.refreshTasks()
+
+	case taskCompletedMsg:
+		a.loading = false
+		return a, a.refreshTasks()
+
+	case taskCreatedMsg:
+		a.loading = false
+		a.statusMsg = "Task saved"
+		a.currentView = a.previousView
+		a.taskForm = nil
+		return a, a.refreshTasks()
+
+	case projectCreatedMsg:
+		a.loading = false
+		a.statusMsg = fmt.Sprintf("Created project: %s", msg.project.Name)
+		// Reload projects
+		return a, a.loadProjects()
+
+	case labelCreatedMsg:
+		a.loading = false
+		a.statusMsg = fmt.Sprintf("Created label: %s", msg.label.Name)
+		// Reload labels
+		return a, a.loadLabels()
+
+	case searchRefreshMsg:
+		a.loading = false
+		a.statusMsg = "Task updated"
+		return a, a.refreshSearchResults()
+
+	case refreshMsg:
+		a.loading = true
+		return a, a.loadInitialData()
+
+	case commentsLoadedMsg:
+		a.comments = msg.comments
+		return a, nil
+	}
+
+	return a, nil
+}
+
+// handleMouseMsg processes mouse input.
+func (a *App) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// Only handle clicks
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return a, nil
+	}
+
+	// Skip if in modal views
+	if a.currentView == ViewHelp || a.currentView == ViewTaskForm || a.currentView == ViewSearch || a.currentView == ViewTaskDetail {
+		return a, nil
+	}
+
+	x, y := msg.X, msg.Y
+
+	// Check if click is on tab bar (first 3 lines: border + tabs + border)
+	if y <= 2 {
+		return a.handleTabClick(x)
+	}
+
+	// Handle clicks in main content area
+	contentStartY := 3 // After tab bar
+	if y >= contentStartY {
+		return a.handleContentClick(x, y-contentStartY)
+	}
+
+	return a, nil
+}
+
+// handleTabClick handles mouse clicks on the tab bar.
+func (a *App) handleTabClick(x int) (tea.Model, tea.Cmd) {
+	tabs := getTabDefinitions()
+
+	// Determine label style based on available width (same logic as renderTabBar)
+	useShortLabels := a.width < 80
+	useMinimalLabels := a.width < 50
+
+	// Calculate actual rendered positions for each tab
+	currentPos := 2 // Start after TabBar left padding
+
+	for _, t := range tabs {
+		var label string
+		if useMinimalLabels {
+			label = t.icon
+		} else if useShortLabels {
+			label = fmt.Sprintf("%s %s", t.icon, t.shortName)
+		} else {
+			label = fmt.Sprintf("%s %s", t.icon, t.name)
+		}
+
+		// Render the tab to get its actual width (includes padding from Tab/TabActive style)
+		var renderedTab string
+		if a.currentTab == t.tab {
+			renderedTab = styles.TabActive.Render(label)
+		} else {
+			renderedTab = styles.Tab.Render(label)
+		}
+
+		tabWidth := lipgloss.Width(renderedTab)
+		endPos := currentPos + tabWidth
+
+		// Check if click is within this tab
+		if x >= currentPos && x < endPos {
+			a.currentTab = t.tab
+			a.taskCursor = 0
+			a.currentLabel = nil
+
+			switch t.tab {
+			case TabToday:
+				a.currentView = ViewToday
+				a.currentProject = nil
+				return a, a.loadTodayTasks()
+			case TabUpcoming:
+				a.currentView = ViewUpcoming
+				a.currentProject = nil
+				return a, a.loadUpcomingTasks()
+			case TabLabels:
+				a.currentView = ViewLabels
+				a.currentProject = nil
+				return a, nil
+			case TabCalendar:
+				a.currentView = ViewCalendar
+				a.currentProject = nil
+				a.calendarDate = time.Now()
+				a.calendarDay = time.Now().Day()
+				return a, a.loadAllTasks()
+			case TabProjects:
+				a.currentView = ViewProject
+				a.focusedPane = PaneSidebar
+				a.sidebarCursor = 0
+				return a, nil
+			}
+		}
+
+		// Move to next tab position (+1 for space separator between tabs)
+		currentPos = endPos + 1
+	}
+
+	return a, nil
+}
+
+// handleContentClick handles mouse clicks in the content area.
+func (a *App) handleContentClick(x, y int) (tea.Model, tea.Cmd) {
+	// In Projects tab, check if click is in sidebar
+	if a.currentTab == TabProjects {
+		sidebarWidth := 25
+		if x < sidebarWidth {
+			// Click in sidebar
+			a.focusedPane = PaneSidebar
+			// Calculate which item was clicked (accounting for title + blank line)
+			itemIdx := y - 2
+			if itemIdx >= 0 && itemIdx < len(a.sidebarItems) {
+				// Skip separators
+				if a.sidebarItems[itemIdx].Type != "separator" {
+					a.sidebarCursor = itemIdx
+					// Select the item
+					return a.handleSelect()
+				}
+			}
+		} else {
+			// Click in main content
+			a.focusedPane = PaneMain
+			return a.handleTaskClick(y)
+		}
+	} else {
+		// Other tabs - click directly on tasks
+		return a.handleTaskClick(y)
+	}
+
+	return a, nil
+}
+
+// handleTaskClick handles clicking on a task in the task list.
+func (a *App) handleTaskClick(y int) (tea.Model, tea.Cmd) {
+	// Calculate header offset based on view
+	// Default: title (1 line) + blank line (1 line) = 2 lines
+	headerOffset := 2
+
+	// Account for scroll indicator if there's content above
+	if a.scrollOffset > 0 {
+		headerOffset++ // "▲ N more above" takes 1 line
+	}
+
+	// In Labels view, might be clicking on a label
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		labelsToUse := a.labels
+		if len(labelsToUse) == 0 {
+			labelsToUse = a.extractLabelsFromTasks()
+		}
+		// Adjust for scroll offset
+		clickedIdx := y - headerOffset + a.scrollOffset
+		if clickedIdx >= 0 && clickedIdx < len(labelsToUse) {
+			a.taskCursor = clickedIdx
+			return a.handleSelect()
+		}
+		return a, nil
+	}
+
+	// For task lists - adjust for scroll offset
+	clickedIdx := y - headerOffset + a.scrollOffset
+	if clickedIdx >= 0 && clickedIdx < len(a.tasks) {
+		a.taskCursor = clickedIdx
+		// Double-click could open detail, single click selects
+		return a, nil
+	}
+
+	return a, nil
+}
+
+// switchToTab switches to a specific tab.
+func (a *App) switchToTab(tab Tab) (tea.Model, tea.Cmd) {
+	// Don't switch if in modal views
+	if a.currentView == ViewHelp || a.currentView == ViewTaskForm || a.currentView == ViewSearch || a.currentView == ViewTaskDetail {
+		return a, nil
+	}
+
+	a.currentTab = tab
+	a.taskCursor = 0
+	a.currentLabel = nil
+
+	switch tab {
+	case TabToday:
+		a.currentView = ViewToday
+		a.currentProject = nil
+		a.focusedPane = PaneMain
+		return a, a.loadTodayTasks()
+	case TabUpcoming:
+		a.currentView = ViewUpcoming
+		a.currentProject = nil
+		a.focusedPane = PaneMain
+		return a, a.loadUpcomingTasks()
+	case TabLabels:
+		a.currentView = ViewLabels
+		a.currentProject = nil
+		a.focusedPane = PaneMain
+		return a, nil
+	case TabCalendar:
+		a.currentView = ViewCalendar
+		a.currentProject = nil
+		a.focusedPane = PaneMain
+		a.calendarDate = time.Now()
+		a.calendarDay = time.Now().Day()
+		return a, a.loadAllTasks()
+	case TabProjects:
+		a.currentView = ViewProject
+		a.focusedPane = PaneSidebar
+		a.sidebarCursor = 0
+		return a, nil
+	}
+
+	return a, nil
+}
+
+// handleKeyMsg processes keyboard input.
+func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Global key handling first
+	switch msg.String() {
+	case "ctrl+c":
+		return a, tea.Quit
+	// Tab switching with number keys (1-5)
+	case "1":
+		return a.switchToTab(TabToday)
+	case "2":
+		return a.switchToTab(TabUpcoming)
+	case "3":
+		return a.switchToTab(TabLabels)
+	case "4":
+		return a.switchToTab(TabCalendar)
+	case "5":
+		return a.switchToTab(TabProjects)
+	}
+
+	// If we're in help view, any key goes back
+	if a.currentView == ViewHelp {
+		a.currentView = a.previousView
+		return a, nil
+	}
+
+	// If we're in form view, route to form handler
+	if a.currentView == ViewTaskForm {
+		return a.handleFormKeyMsg(msg)
+	}
+
+	// If we're in search view, route to search handler
+	if a.currentView == ViewSearch {
+		return a.handleSearchKeyMsg(msg)
+	}
+
+	// If we're creating a new project, handle project input
+	if a.isCreatingProject {
+		return a.handleProjectInputKeyMsg(msg)
+	}
+
+	// If we're creating a new label, handle label input
+	if a.isCreatingLabel {
+		return a.handleLabelInputKeyMsg(msg)
+	}
+
+	// If we're in calendar view, handle calendar-specific keys
+	if a.currentView == ViewCalendar && a.focusedPane == PaneMain {
+		return a.handleCalendarKeyMsg(msg)
+	}
+
+	// Process key through keymap
+	action, consumed := a.keyState.HandleKey(msg, a.keymap)
+	if !consumed {
+		return a, nil
+	}
+
+	// Handle actions
+	switch action {
+	case "quit":
+		return a, tea.Quit
+	case "help":
+		a.previousView = a.currentView
+		a.currentView = ViewHelp
+		return a, nil
+	case "refresh":
+		return a, func() tea.Msg { return refreshMsg{} }
+	case "up":
+		a.moveCursor(-1)
+	case "down":
+		a.moveCursor(1)
+	case "top":
+		a.moveCursorTo(0)
+	case "bottom":
+		a.moveCursorToEnd()
+	case "half_up":
+		a.moveCursor(-10)
+	case "half_down":
+		a.moveCursor(10)
+	case "switch_pane":
+		a.switchPane()
+	case "select":
+		return a.handleSelect()
+	case "back":
+		return a.handleBack()
+	case "complete":
+		return a.handleComplete()
+	case "delete":
+		return a.handleDelete()
+	case "add":
+		return a.handleAdd()
+	case "edit":
+		return a.handleEdit()
+	case "search":
+		return a.handleSearch()
+	case "priority1", "priority2", "priority3", "priority4":
+		return a.handlePriority(action)
+	case "due_today":
+		return a.handleDueToday()
+	case "due_tomorrow":
+		return a.handleDueTomorrow()
+	case "new_project":
+		// 'n' key creates project or label depending on current tab
+		if a.currentTab == TabProjects {
+			return a.handleNewProject()
+		} else if a.currentTab == TabLabels {
+			return a.handleNewLabel()
+		}
+	}
+
+	return a, nil
+}
+
+// handleCalendarKeyMsg handles keyboard input when calendar view is active.
+func (a *App) handleCalendarKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	firstOfMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+	daysInMonth := lastOfMonth.Day()
+
+	switch msg.String() {
+	case "q":
+		return a, tea.Quit
+	case "esc":
+		return a.handleBack()
+	case "tab":
+		a.switchPane()
+		return a, nil
+	case "?":
+		a.previousView = a.currentView
+		a.currentView = ViewHelp
+		return a, nil
+	case "h", "left":
+		// Previous day
+		if a.calendarDay > 1 {
+			a.calendarDay--
+		} else {
+			// Go to previous month's last day
+			a.calendarDate = a.calendarDate.AddDate(0, -1, 0)
+			prevMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+			a.calendarDay = prevMonth.AddDate(0, 1, -1).Day()
+		}
+	case "l", "right":
+		// Next day
+		if a.calendarDay < daysInMonth {
+			a.calendarDay++
+		} else {
+			// Go to next month's first day
+			a.calendarDate = a.calendarDate.AddDate(0, 1, 0)
+			a.calendarDay = 1
+		}
+	case "k", "up":
+		// Previous week
+		if a.calendarDay > 7 {
+			a.calendarDay -= 7
+		} else {
+			// Go to previous month
+			a.calendarDate = a.calendarDate.AddDate(0, -1, 0)
+			prevMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+			prevDays := prevMonth.AddDate(0, 1, -1).Day()
+			newDay := a.calendarDay - 7 + prevDays
+			if newDay > prevDays {
+				newDay = prevDays
+			}
+			a.calendarDay = newDay
+		}
+	case "j", "down":
+		// Next week
+		if a.calendarDay+7 <= daysInMonth {
+			a.calendarDay += 7
+		} else {
+			// Go to next month
+			leftover := a.calendarDay + 7 - daysInMonth
+			a.calendarDate = a.calendarDate.AddDate(0, 1, 0)
+			nextMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+			nextDays := nextMonth.AddDate(0, 1, -1).Day()
+			if leftover > nextDays {
+				leftover = nextDays
+			}
+			a.calendarDay = leftover
+		}
+	case "[":
+		// Previous month
+		a.calendarDate = a.calendarDate.AddDate(0, -1, 0)
+		prevMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+		prevDays := prevMonth.AddDate(0, 1, -1).Day()
+		if a.calendarDay > prevDays {
+			a.calendarDay = prevDays
+		}
+	case "]":
+		// Next month
+		a.calendarDate = a.calendarDate.AddDate(0, 1, 0)
+		nextMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+		nextDays := nextMonth.AddDate(0, 1, -1).Day()
+		if a.calendarDay > nextDays {
+			a.calendarDay = nextDays
+		}
+	case "t":
+		// Go to today
+		a.calendarDate = time.Now()
+		a.calendarDay = time.Now().Day()
+	case "v":
+		// Toggle calendar view mode and save preference
+		if a.calendarViewMode == CalendarViewCompact {
+			a.calendarViewMode = CalendarViewExpanded
+			a.config.UI.CalendarDefaultView = "expanded"
+		} else {
+			a.calendarViewMode = CalendarViewCompact
+			a.config.UI.CalendarDefaultView = "compact"
+		}
+		// Save config in background (ignore errors)
+		go func() {
+			_ = config.Save(a.config)
+		}()
+	case "enter":
+		// Open day detail view
+		a.previousView = a.currentView
+		a.currentView = ViewCalendarDay
+		a.taskCursor = 0
+		// Load tasks for this specific day
+		return a, a.loadCalendarDayTasks()
+	}
+
+	return a, nil
+}
+
+// moveCursor moves the cursor by delta in the current list.
+func (a *App) moveCursor(delta int) {
+	if a.focusedPane == PaneSidebar && a.currentTab == TabProjects {
+		newPos := a.sidebarCursor + delta
+		// Skip separators
+		for newPos >= 0 && newPos < len(a.sidebarItems) && a.sidebarItems[newPos].Type == "separator" {
+			if delta > 0 {
+				newPos++
+			} else {
+				newPos--
+			}
+		}
+		if newPos < 0 {
+			newPos = 0
+		}
+		if newPos >= len(a.sidebarItems) {
+			newPos = len(a.sidebarItems) - 1
+		}
+		// Make sure we don't land on a separator
+		for newPos >= 0 && newPos < len(a.sidebarItems) && a.sidebarItems[newPos].Type == "separator" {
+			newPos--
+		}
+		if newPos >= 0 {
+			a.sidebarCursor = newPos
+		}
+	} else {
+		// Determine max items based on current view
+		maxItems := len(a.tasks)
+
+		// In Labels view without a selected label, navigate labels not tasks
+		if a.currentView == ViewLabels && a.currentLabel == nil {
+			labelsToUse := a.labels
+			if len(labelsToUse) == 0 {
+				labelsToUse = a.extractLabelsFromTasks()
+			}
+			maxItems = len(labelsToUse)
+		}
+
+		a.taskCursor += delta
+		if a.taskCursor < 0 {
+			a.taskCursor = 0
+		}
+		if maxItems > 0 && a.taskCursor >= maxItems {
+			a.taskCursor = maxItems - 1
+		}
+		if a.taskCursor < 0 {
+			a.taskCursor = 0
+		}
+	}
+}
+
+// moveCursorTo moves cursor to a specific position.
+func (a *App) moveCursorTo(pos int) {
+	if a.focusedPane == PaneSidebar {
+		a.sidebarCursor = pos
+	} else {
+		a.taskCursor = pos
+	}
+}
+
+// moveCursorToEnd moves cursor to the last item.
+func (a *App) moveCursorToEnd() {
+	if a.focusedPane == PaneSidebar {
+		if len(a.sidebarItems) > 0 {
+			a.sidebarCursor = len(a.sidebarItems) - 1
+			// Skip separator
+			for a.sidebarCursor > 0 && a.sidebarItems[a.sidebarCursor].Type == "separator" {
+				a.sidebarCursor--
+			}
+		}
+	} else {
+		// Handle labels list view (when viewing label list, not label tasks)
+		if a.currentView == ViewLabels && a.currentLabel == nil {
+			labelsToShow := a.labels
+			if len(labelsToShow) == 0 {
+				labelsToShow = a.extractLabelsFromTasks()
+			}
+			if len(labelsToShow) > 0 {
+				a.taskCursor = len(labelsToShow) - 1
+			}
+		} else if len(a.tasks) > 0 {
+			a.taskCursor = len(a.tasks) - 1
+		}
+	}
+}
+
+// syncViewportToCursor ensures the viewport is scrolled to show the cursor line.
+func (a *App) syncViewportToCursor(cursorLine int) {
+	if !a.viewportReady {
+		return
+	}
+	visibleStart := a.taskViewport.YOffset
+	visibleEnd := visibleStart + a.taskViewport.Height
+
+	if cursorLine < visibleStart {
+		// Cursor above viewport - scroll up
+		a.taskViewport.SetYOffset(cursorLine)
+	} else if cursorLine >= visibleEnd {
+		// Cursor below viewport - scroll down to show cursor at bottom
+		a.taskViewport.SetYOffset(cursorLine - a.taskViewport.Height + 1)
+	}
+}
+
+// switchPane toggles between sidebar and main pane (only in Projects tab).
+func (a *App) switchPane() {
+	// Only switch panes in Projects tab
+	if a.currentTab != TabProjects {
+		return
+	}
+	if a.focusedPane == PaneSidebar {
+		a.focusedPane = PaneMain
+	} else {
+		a.focusedPane = PaneSidebar
+	}
+}
+
+// handleSelect handles the Enter key.
+func (a *App) handleSelect() (tea.Model, tea.Cmd) {
+	// Handle sidebar selection (only in Projects tab)
+	if a.currentTab == TabProjects && a.focusedPane == PaneSidebar {
+		if a.sidebarCursor >= len(a.sidebarItems) {
+			return a, nil
+		}
+
+		item := a.sidebarItems[a.sidebarCursor]
+		if item.Type == "separator" {
+			return a, nil
+		}
+
+		a.focusedPane = PaneMain
+		a.taskCursor = 0
+
+		// Find project by ID
+		for i := range a.projects {
+			if a.projects[i].ID == item.ID {
+				a.currentProject = &a.projects[i]
+				return a, a.loadProjectTasks(a.currentProject.ID)
+			}
+		}
+		return a, nil
+	}
+
+	// Handle main pane selection based on current view
+	switch a.currentView {
+	case ViewLabels:
+		// Select label to filter tasks
+		if a.currentLabel == nil {
+			labelsToUse := a.labels
+			if len(labelsToUse) == 0 {
+				labelsToUse = a.extractLabelsFromTasks()
+			}
+			if a.taskCursor < len(labelsToUse) {
+				a.currentLabel = &labelsToUse[a.taskCursor]
+				a.taskCursor = 0 // Reset cursor for task list
+				return a, a.loadLabelTasks(a.currentLabel.Name)
+			}
+		} else {
+			// Viewing label tasks - select task for detail
+			if a.taskCursor < len(a.tasks) {
+				a.selectedTask = &a.tasks[a.taskCursor]
+				a.previousView = a.currentView
+				a.currentView = ViewTaskDetail
+				return a, a.loadTaskComments()
+			}
+		}
+	case ViewCalendar:
+		// Selection handled by calendar navigation
+		return a, nil
+	default:
+		// Select task for detail view using ordered indices mapping
+		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+			taskIndex := a.taskOrderedIndices[a.taskCursor]
+			if taskIndex >= 0 && taskIndex < len(a.tasks) {
+				a.selectedTask = &a.tasks[taskIndex]
+				a.previousView = a.currentView
+				a.currentView = ViewTaskDetail
+				return a, a.loadTaskComments()
+			}
+		} else if a.taskCursor < len(a.tasks) {
+			// Fallback for views that don't use ordered indices
+			a.selectedTask = &a.tasks[a.taskCursor]
+			a.previousView = a.currentView
+			a.currentView = ViewTaskDetail
+			return a, a.loadTaskComments()
+		}
+	}
+	return a, nil
+}
+
+// handleBack handles the Escape key.
+func (a *App) handleBack() (tea.Model, tea.Cmd) {
+	switch a.currentView {
+	case ViewTaskDetail:
+		a.currentView = a.previousView
+		a.selectedTask = nil
+		a.comments = nil
+	case ViewCalendarDay:
+		// Go back to calendar view
+		a.currentView = ViewCalendar
+		a.taskCursor = 0
+		// Reload all tasks for calendar display
+		return a, a.loadAllTasks()
+	case ViewProject:
+		// In Projects tab, just clear selection
+		if a.currentTab == TabProjects {
+			a.currentProject = nil
+			a.tasks = nil
+			a.focusedPane = PaneSidebar
+		}
+	case ViewLabels:
+		if a.currentLabel != nil {
+			// Go back to labels list
+			a.currentLabel = nil
+			a.tasks = nil
+			a.taskCursor = 0
+		}
+	case ViewTaskForm:
+		a.currentView = a.previousView
+	}
+	return a, nil
+}
+
+// handleComplete toggles task completion.
+func (a *App) handleComplete() (tea.Model, tea.Cmd) {
+	// In Projects tab, only allow in main pane
+	if a.currentTab == TabProjects && a.focusedPane != PaneMain {
+		return a, nil
+	}
+
+	// Can't complete if no tasks or in labels list view
+	if len(a.tasks) == 0 {
+		return a, nil
+	}
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		return a, nil
+	}
+
+	task := &a.tasks[a.taskCursor]
+	a.loading = true
+
+	return a, func() tea.Msg {
+		var err error
+		if task.IsCompleted {
+			err = a.client.ReopenTask(task.ID)
+		} else {
+			err = a.client.CloseTask(task.ID)
+		}
+		if err != nil {
+			return errMsg{err}
+		}
+		return taskCompletedMsg{id: task.ID}
+	}
+}
+
+// handleDelete deletes the selected task.
+func (a *App) handleDelete() (tea.Model, tea.Cmd) {
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	// Guard: Don't delete when viewing label list (no task selected)
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		return a, nil
+	}
+
+	task := &a.tasks[a.taskCursor]
+	a.loading = true
+
+	return a, func() tea.Msg {
+		err := a.client.DeleteTask(task.ID)
+		if err != nil {
+			return errMsg{err}
+		}
+		return taskDeletedMsg{id: task.ID}
+	}
+}
+
+// handleAdd opens the add task form.
+func (a *App) handleAdd() (tea.Model, tea.Cmd) {
+	a.previousView = a.currentView
+	a.currentView = ViewTaskForm
+	a.taskForm = NewTaskForm(a.projects)
+	a.taskForm.SetWidth(a.width)
+
+	// If in project view, default to that project
+	if a.currentProject != nil {
+		a.taskForm.ProjectID = a.currentProject.ID
+		a.taskForm.ProjectName = a.currentProject.Name
+	}
+
+	return a, nil
+}
+
+// handleEdit opens the edit task form for the selected task.
+func (a *App) handleEdit() (tea.Model, tea.Cmd) {
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	// Guard: Don't edit when viewing label list (no task selected)
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		return a, nil
+	}
+
+	task := &a.tasks[a.taskCursor]
+	a.previousView = a.currentView
+	a.currentView = ViewTaskForm
+	a.taskForm = NewEditTaskForm(task, a.projects)
+	a.taskForm.SetWidth(a.width)
+
+	return a, nil
+}
+
+// handleNewProject opens the project creation input.
+func (a *App) handleNewProject() (tea.Model, tea.Cmd) {
+	// Only allow creating projects in Projects tab
+	if a.currentTab != TabProjects {
+		return a, nil
+	}
+
+	// Initialize project input
+	a.projectInput = textinput.New()
+	a.projectInput.Placeholder = "Enter project name..."
+	a.projectInput.CharLimit = 100
+	a.projectInput.Width = 40
+	a.projectInput.Focus()
+	a.isCreatingProject = true
+
+	return a, nil
+}
+
+// handleProjectInputKeyMsg handles keyboard input during project creation.
+func (a *App) handleProjectInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel project creation
+		a.isCreatingProject = false
+		a.projectInput.Reset()
+		return a, nil
+
+	case "enter":
+		// Submit new project
+		name := strings.TrimSpace(a.projectInput.Value())
+		if name == "" {
+			a.isCreatingProject = false
+			a.projectInput.Reset()
+			return a, nil
+		}
+
+		a.isCreatingProject = false
+		a.projectInput.Reset()
+		a.loading = true
+
+		return a, func() tea.Msg {
+			project, err := a.client.CreateProject(api.CreateProjectRequest{
+				Name: name,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			// Refresh projects after creation
+			return projectCreatedMsg{project: project}
+		}
+
+	default:
+		// Update text input
+		var cmd tea.Cmd
+		a.projectInput, cmd = a.projectInput.Update(msg)
+		return a, cmd
+	}
+}
+
+// handleNewLabel opens the label creation input.
+func (a *App) handleNewLabel() (tea.Model, tea.Cmd) {
+	// Initialize label input
+	a.labelInput = textinput.New()
+	a.labelInput.Placeholder = "Enter label name..."
+	a.labelInput.CharLimit = 100
+	a.labelInput.Width = 40
+	a.labelInput.Focus()
+	a.isCreatingLabel = true
+
+	return a, nil
+}
+
+// handleLabelInputKeyMsg handles keyboard input during label creation.
+func (a *App) handleLabelInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel label creation
+		a.isCreatingLabel = false
+		a.labelInput.Reset()
+		return a, nil
+
+	case "enter":
+		// Submit new label
+		name := strings.TrimSpace(a.labelInput.Value())
+		if name == "" {
+			a.isCreatingLabel = false
+			a.labelInput.Reset()
+			return a, nil
+		}
+
+		a.isCreatingLabel = false
+		a.labelInput.Reset()
+		a.loading = true
+
+		return a, func() tea.Msg {
+			label, err := a.client.CreateLabel(api.CreateLabelRequest{
+				Name: name,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return labelCreatedMsg{label: label}
+		}
+
+	default:
+		// Update text input
+		var cmd tea.Cmd
+		a.labelInput, cmd = a.labelInput.Update(msg)
+		return a, cmd
+	}
+}
+
+// handleFormKeyMsg handles keyboard input when the form is active.
+func (a *App) handleFormKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if a.taskForm == nil {
+		return a, nil
+	}
+
+	switch msg.String() {
+	case "esc":
+		// Cancel form and go back
+		a.currentView = a.previousView
+		a.taskForm = nil
+		return a, nil
+
+	case "enter":
+		// If on submit button or Ctrl+Enter from any field, submit form
+		if a.taskForm.FocusedField == FormFieldSubmit || msg.String() == "ctrl+enter" {
+			return a.submitForm()
+		}
+		// Otherwise, let form handle it (e.g., for project dropdown)
+	}
+
+	// Forward to form
+	var cmd tea.Cmd
+	a.taskForm, cmd = a.taskForm.Update(msg)
+	return a, cmd
+}
+
+// submitForm submits the task form (create or update).
+func (a *App) submitForm() (tea.Model, tea.Cmd) {
+	if a.taskForm == nil || !a.taskForm.IsValid() {
+		a.statusMsg = "Task name is required"
+		return a, nil
+	}
+
+	a.loading = true
+
+	if a.taskForm.Mode == "edit" {
+		// Update existing task
+		taskID := a.taskForm.TaskID
+		req := a.taskForm.ToUpdateRequest()
+		return a, func() tea.Msg {
+			_, err := a.client.UpdateTask(taskID, req)
+			if err != nil {
+				return errMsg{err}
+			}
+			return taskCreatedMsg{} // Reuse message type for refresh
+		}
+	}
+
+	// Create new task
+	req := a.taskForm.ToCreateRequest()
+	return a, func() tea.Msg {
+		_, err := a.client.CreateTask(req)
+		if err != nil {
+			return errMsg{err}
+		}
+		return taskCreatedMsg{}
+	}
+}
+
+// handleSearch opens the search view.
+func (a *App) handleSearch() (tea.Model, tea.Cmd) {
+	a.previousView = a.currentView
+	a.currentView = ViewSearch
+	a.searchInput.Reset()
+	a.searchInput.Focus()
+	a.searchResults = nil
+	a.searchQuery = ""
+	a.taskCursor = 0
+	return a, nil
+}
+
+// handleSearchKeyMsg handles keyboard input when search is active.
+func (a *App) handleSearchKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel search and go back
+		a.currentView = a.previousView
+		a.searchInput.Blur()
+		a.searchResults = nil
+		a.searchQuery = ""
+		return a, nil
+
+	case "enter":
+		// Select task from search results
+		if len(a.searchResults) > 0 && a.taskCursor < len(a.searchResults) {
+			a.selectedTask = &a.searchResults[a.taskCursor]
+			a.previousView = ViewSearch
+			a.currentView = ViewTaskDetail
+			return a, nil
+		}
+		return a, nil
+
+	case "down", "j":
+		if a.taskCursor < len(a.searchResults)-1 {
+			a.taskCursor++
+		}
+		return a, nil
+
+	case "up", "k":
+		if a.taskCursor > 0 {
+			a.taskCursor--
+		}
+		return a, nil
+
+	case "x":
+		// Complete task from search results
+		if len(a.searchResults) > 0 && a.taskCursor < len(a.searchResults) {
+			task := &a.searchResults[a.taskCursor]
+			a.loading = true
+			return a, func() tea.Msg {
+				var err error
+				if task.IsCompleted {
+					err = a.client.ReopenTask(task.ID)
+				} else {
+					err = a.client.CloseTask(task.ID)
+				}
+				if err != nil {
+					return errMsg{err}
+				}
+				return searchRefreshMsg{}
+			}
+		}
+		return a, nil
+	}
+
+	// Update search input and filter results
+	var cmd tea.Cmd
+	a.searchInput, cmd = a.searchInput.Update(msg)
+	a.searchQuery = a.searchInput.Value()
+	a.filterSearchResults()
+	a.taskCursor = 0 // Reset cursor when query changes
+	return a, cmd
+}
+
+// filterSearchResults filters tasks based on search query.
+func (a *App) filterSearchResults() {
+	query := strings.ToLower(strings.TrimSpace(a.searchQuery))
+	if query == "" {
+		a.searchResults = nil
+		return
+	}
+
+	var results []api.Task
+	for _, task := range a.tasks {
+		// Search in content, description, and labels
+		if strings.Contains(strings.ToLower(task.Content), query) ||
+			strings.Contains(strings.ToLower(task.Description), query) {
+			results = append(results, task)
+			continue
+		}
+
+		// Search in labels
+		for _, label := range task.Labels {
+			if strings.Contains(strings.ToLower(label), query) {
+				results = append(results, task)
+				break
+			}
+		}
+	}
+
+	a.searchResults = results
+}
+
+// refreshSearchResults refreshes the search results after a task update.
+func (a *App) refreshSearchResults() tea.Cmd {
+	return func() tea.Msg {
+		// Reload all tasks
+		tasks, err := a.client.GetTasks(api.TaskFilter{})
+		if err != nil {
+			return errMsg{err}
+		}
+		a.tasks = tasks
+		a.filterSearchResults()
+		return dataLoadedMsg{tasks: tasks}
+	}
+}
+
+// handlePriority sets task priority.
+func (a *App) handlePriority(action string) (tea.Model, tea.Cmd) {
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	task := &a.tasks[a.taskCursor]
+	var priority int
+	switch action {
+	case "priority1":
+		priority = 4 // Todoist uses 4 as highest
+	case "priority2":
+		priority = 3
+	case "priority3":
+		priority = 2
+	case "priority4":
+		priority = 1
+	}
+
+	a.loading = true
+	return a, func() tea.Msg {
+		_, err := a.client.UpdateTask(task.ID, api.UpdateTaskRequest{
+			Priority: &priority,
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return taskUpdatedMsg{}
+	}
+}
+
+// handleDueToday sets the task due date to today.
+func (a *App) handleDueToday() (tea.Model, tea.Cmd) {
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	// Guard: Don't operate when viewing label list
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		return a, nil
+	}
+
+	task := &a.tasks[a.taskCursor]
+	dueString := "today"
+
+	a.loading = true
+	a.statusMsg = "Moving to today..."
+	return a, func() tea.Msg {
+		_, err := a.client.UpdateTask(task.ID, api.UpdateTaskRequest{
+			DueString: &dueString,
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return taskUpdatedMsg{}
+	}
+}
+
+// handleDueTomorrow sets the task due date to tomorrow.
+func (a *App) handleDueTomorrow() (tea.Model, tea.Cmd) {
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	// Guard: Don't operate when viewing label list
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		return a, nil
+	}
+
+	task := &a.tasks[a.taskCursor]
+	dueString := "tomorrow"
+
+	a.loading = true
+	a.statusMsg = "Moving to tomorrow..."
+	return a, func() tea.Msg {
+		_, err := a.client.UpdateTask(task.ID, api.UpdateTaskRequest{
+			DueString: &dueString,
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return taskUpdatedMsg{}
+	}
+}
+
+// loadProjectTasks loads tasks for a specific project.
+func (a *App) loadProjectTasks(projectID string) tea.Cmd {
+	return func() tea.Msg {
+		tasks, err := a.client.GetTasks(api.TaskFilter{
+			ProjectID: projectID,
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+
+		sections, err := a.client.GetSections(projectID)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		return dataLoadedMsg{
+			tasks:    tasks,
+			sections: sections,
+		}
+	}
+}
+
+// refreshTasks refreshes the current task list.
+func (a *App) refreshTasks() tea.Cmd {
+	return func() tea.Msg {
+		var filter api.TaskFilter
+		if a.currentView == ViewProject && a.currentProject != nil {
+			filter.ProjectID = a.currentProject.ID
+		} else if a.currentView == ViewLabels && a.currentLabel != nil {
+			// Load tasks for the selected label
+			filter.Filter = "@" + a.currentLabel.Name
+		} else {
+			filter.Filter = "today | overdue"
+		}
+
+		tasks, err := a.client.GetTasks(filter)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		return dataLoadedMsg{tasks: tasks}
+	}
+}
+
+// loadTodayTasks loads today's tasks including overdue.
+func (a *App) loadTodayTasks() tea.Cmd {
+	return func() tea.Msg {
+		tasks, err := a.client.GetTasks(api.TaskFilter{
+			Filter: "today | overdue",
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return dataLoadedMsg{tasks: tasks}
+	}
+}
+
+// loadUpcomingTasks loads all tasks with due dates for the upcoming view.
+func (a *App) loadUpcomingTasks() tea.Cmd {
+	return func() tea.Msg {
+		// Get all tasks and filter to those with due dates
+		tasks, err := a.client.GetTasks(api.TaskFilter{})
+		if err != nil {
+			return errMsg{err}
+		}
+
+		// Filter to tasks with due dates and sort by date
+		var upcoming []api.Task
+		for _, t := range tasks {
+			if t.Due != nil {
+				upcoming = append(upcoming, t)
+			}
+		}
+
+		// Sort by due date
+		sort.Slice(upcoming, func(i, j int) bool {
+			return upcoming[i].Due.Date < upcoming[j].Due.Date
+		})
+
+		return dataLoadedMsg{tasks: upcoming, allTasks: tasks}
+	}
+}
+
+// loadAllTasks loads all tasks (for calendar view).
+func (a *App) loadAllTasks() tea.Cmd {
+	return func() tea.Msg {
+		tasks, err := a.client.GetTasks(api.TaskFilter{})
+		if err != nil {
+			return errMsg{err}
+		}
+		return dataLoadedMsg{allTasks: tasks}
+	}
+}
+
+// loadProjects loads all projects.
+func (a *App) loadProjects() tea.Cmd {
+	return func() tea.Msg {
+		projects, err := a.client.GetProjects()
+		if err != nil {
+			return errMsg{err}
+		}
+		return dataLoadedMsg{projects: projects}
+	}
+}
+
+// loadLabels loads all labels.
+func (a *App) loadLabels() tea.Cmd {
+	return func() tea.Msg {
+		labels, err := a.client.GetLabels()
+		if err != nil {
+			return errMsg{err}
+		}
+		return dataLoadedMsg{labels: labels}
+	}
+}
+
+// loadLabelTasks loads tasks filtered by a specific label.
+func (a *App) loadLabelTasks(labelName string) tea.Cmd {
+	return func() tea.Msg {
+		tasks, err := a.client.GetTasks(api.TaskFilter{
+			Filter: "@" + labelName,
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return dataLoadedMsg{tasks: tasks}
+	}
+}
+
+// loadCalendarDayTasks loads tasks for the selected calendar day.
+func (a *App) loadCalendarDayTasks() tea.Cmd {
+	selectedDate := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), a.calendarDay, 0, 0, 0, 0, time.Local)
+	dateStr := selectedDate.Format("2006-01-02")
+
+	return func() tea.Msg {
+		tasks, err := a.client.GetTasks(api.TaskFilter{
+			Filter: dateStr,
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return dataLoadedMsg{tasks: tasks}
+	}
+}
+
+// loadTaskComments loads comments for the selected task.
+func (a *App) loadTaskComments() tea.Cmd {
+	if a.selectedTask == nil {
+		return nil
+	}
+	taskID := a.selectedTask.ID
+	return func() tea.Msg {
+		comments, err := a.client.GetComments(taskID, "")
+		if err != nil {
+			return errMsg{err}
+		}
+		return commentsLoadedMsg{comments: comments}
+	}
+}
+
+// buildSidebarItems constructs the sidebar items list with only projects (for Projects tab).
+func (a *App) buildSidebarItems() {
+	a.sidebarItems = []SidebarItem{}
+
+	// Add favorite projects first
+	for _, p := range a.projects {
+		if p.IsFavorite {
+			icon := "⭐"
+			if p.IsInboxProject {
+				icon = "📥"
+			}
+			a.sidebarItems = append(a.sidebarItems, SidebarItem{
+				Type:       "project",
+				ID:         p.ID,
+				Name:       p.Name,
+				Icon:       icon,
+				IsFavorite: true,
+				ParentID:   p.ParentID,
+			})
+		}
+	}
+
+	// Add separator if there were favorites
+	hasFavorites := false
+	for _, p := range a.projects {
+		if p.IsFavorite {
+			hasFavorites = true
+			break
+		}
+	}
+	if hasFavorites {
+		a.sidebarItems = append(a.sidebarItems, SidebarItem{Type: "separator", ID: "", Name: ""})
+	}
+
+	// Add remaining projects (non-favorites)
+	for _, p := range a.projects {
+		if !p.IsFavorite {
+			icon := "📁"
+			if p.IsInboxProject {
+				icon = "📥"
+			}
+			a.sidebarItems = append(a.sidebarItems, SidebarItem{
+				Type:     "project",
+				ID:       p.ID,
+				Name:     p.Name,
+				Icon:     icon,
+				ParentID: p.ParentID,
+			})
+		}
+	}
+}
+
+// View implements tea.Model.
+func (a *App) View() string {
+	if a.width == 0 {
+		return "Loading..."
+	}
+
+	var content string
+	switch a.currentView {
+	case ViewHelp:
+		content = a.renderHelp()
+	case ViewTaskDetail:
+		content = a.renderTaskDetail()
+	case ViewTaskForm:
+		content = a.renderTaskForm()
+	case ViewSearch:
+		content = a.renderSearch()
+	case ViewCalendarDay:
+		content = a.renderCalendarDay()
+	default:
+		content = a.renderMainView()
+	}
+
+	// Overlay project creation dialog if active
+	if a.isCreatingProject {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("📁 New Project") + "\n\n" +
+			a.projectInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: create • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay label creation dialog if active
+	if a.isCreatingLabel {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("🏷️ New Label") + "\n\n" +
+			a.labelInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: create • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	return content
+}
+
+// renderMainView renders the main layout with tab bar and content.
+func (a *App) renderMainView() string {
+	// Render tab bar
+	tabBar := a.renderTabBar()
+
+	// Calculate content height dynamically (total - tab bar - status bar)
+	tabBarHeight := lipgloss.Height(tabBar)
+	statusBarHeight := 2
+	contentHeight := a.height - tabBarHeight - statusBarHeight
+
+	var mainContent string
+	if a.currentTab == TabProjects {
+		// Projects tab shows sidebar + content
+		mainContent = a.renderProjectsTabContent(contentHeight)
+	} else {
+		// Other tabs show content only (full width)
+		mainContent = a.renderTaskList(a.width-2, contentHeight)
+	}
+
+	// Add status bar
+	statusBar := a.renderStatusBar()
+
+	return lipgloss.JoinVertical(lipgloss.Left, tabBar, mainContent, statusBar)
+}
+
+// tabInfo holds tab metadata for rendering and click handling.
+type tabInfo struct {
+	tab       Tab
+	icon      string
+	name      string
+	shortName string
+}
+
+// getTabDefinitions returns the tab definitions.
+func getTabDefinitions() []tabInfo {
+	return []tabInfo{
+		{TabToday, "[T]", "Today", "Tdy"},
+		{TabUpcoming, "[U]", "Upcoming", "Up"},
+		{TabLabels, "[L]", "Labels", "Lbl"},
+		{TabCalendar, "[C]", "Calendar", "Cal"},
+		{TabProjects, "[P]", "Projects", "Prj"},
+	}
+}
+
+// renderTabBar renders the top tab bar.
+func (a *App) renderTabBar() string {
+	tabs := getTabDefinitions()
+
+	// Determine label style based on available width
+	// Full: "T Today" (~9 chars rendered), Short: "T Tdy" (~7 chars), Minimal: "T" (~3 chars)
+	// Each tab with padding(2+2) + separator(1) = +5 chars overhead
+	// 5 tabs * 14 chars (full with padding) = ~70 chars minimum for full labels
+	useShortLabels := a.width < 80
+	useMinimalLabels := a.width < 50
+
+	var tabStrs []string
+	for _, t := range tabs {
+		var label string
+		if useMinimalLabels {
+			label = t.icon
+		} else if useShortLabels {
+			label = fmt.Sprintf("%s %s", t.icon, t.shortName)
+		} else {
+			label = fmt.Sprintf("%s %s", t.icon, t.name)
+		}
+
+		if a.currentTab == t.tab {
+			tabStrs = append(tabStrs, styles.TabActive.Render(label))
+		} else {
+			tabStrs = append(tabStrs, styles.Tab.Render(label))
+		}
+	}
+
+	tabLine := strings.Join(tabStrs, " ")
+
+	// Truncate if still too wide
+	maxWidth := a.width - 4 // Account for TabBar padding
+	if lipgloss.Width(tabLine) > maxWidth && maxWidth > 0 {
+		tabLine = lipgloss.NewStyle().MaxWidth(maxWidth).Render(tabLine)
+	}
+
+	return styles.TabBar.Width(a.width).Render(tabLine)
+}
+
+// renderProjectsTabContent renders content for the Projects tab (sidebar + tasks).
+func (a *App) renderProjectsTabContent(height int) string {
+	sidebarWidth := 30 // Wider sidebar for full project names
+	mainWidth := a.width - sidebarWidth - 4
+
+	// Render sidebar (project list)
+	sidebar := a.renderProjectSidebar(sidebarWidth, height)
+
+	// Render main content (tasks for selected project)
+	main := a.renderProjectTaskList(mainWidth, height)
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, main)
+}
+
+// renderProjectSidebar renders the project list sidebar (only in Projects tab).
+func (a *App) renderProjectSidebar(width, height int) string {
+	var b strings.Builder
+
+	// Title
+	b.WriteString(styles.Title.Render("Projects"))
+	b.WriteString("\n\n")
+
+	// Max name length (accounting for cursor, indent, icon, and padding)
+	maxNameLen := width - 10
+
+	// Render project items
+	for i, item := range a.sidebarItems {
+		if item.Type == "separator" {
+			b.WriteString(styles.SidebarSeparator.Render(strings.Repeat("─", width-4)))
+			b.WriteString("\n")
+			continue
+		}
+
+		cursor := "  "
+		style := styles.ProjectItem
+		if i == a.sidebarCursor && a.focusedPane == PaneSidebar {
+			cursor = "> "
+			style = styles.ProjectSelected
+		}
+
+		// Highlight active project
+		if a.currentProject != nil && a.currentProject.ID == item.ID {
+			if a.focusedPane != PaneSidebar {
+				style = styles.SidebarActive
+			}
+		}
+
+		// Indent for child projects
+		indent := ""
+		if item.ParentID != nil {
+			indent = "  "
+			maxNameLen = width - 12 // Less space for indented items
+		}
+
+		// Truncate long names
+		name := item.Name
+		if len(name) > maxNameLen && maxNameLen > 3 {
+			name = name[:maxNameLen-1] + "…"
+		}
+
+		line := style.Render(fmt.Sprintf("%s%s%s %s", cursor, indent, item.Icon, name))
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	// Add hint for creating new project
+	b.WriteString("\n")
+	b.WriteString(styles.HelpDesc.Render("n: new project"))
+
+	// Apply container style with fixed height
+	// Sidebar has rounded border (2 lines), so inner height = height - 2
+	innerHeight := height - 2
+	if innerHeight < 3 {
+		innerHeight = 3
+	}
+	containerStyle := styles.Sidebar
+	if a.focusedPane == PaneSidebar {
+		containerStyle = styles.SidebarFocused
+	}
+
+	return containerStyle.Width(width).Height(innerHeight).Render(b.String())
+}
+
+// renderProjectTaskList renders the task list for the selected project.
+func (a *App) renderProjectTaskList(width, height int) string {
+	var content string
+
+	// Reserve space for borders (top + bottom = 2 lines)
+	innerHeight := height - 2
+	if innerHeight < 5 {
+		innerHeight = 5
+	}
+
+	if a.currentProject == nil {
+		content = styles.HelpDesc.Render("Select a project from the sidebar")
+	} else {
+		content = a.renderDefaultTaskList(innerHeight)
+	}
+
+	containerStyle := styles.MainContent
+	if a.focusedPane == PaneMain {
+		containerStyle = styles.MainContentFocused
+	}
+
+	return containerStyle.Width(width).Height(innerHeight).Render(content)
+}
+
+// renderTaskList renders the task list.
+func (a *App) renderTaskList(width, height int) string {
+	var content string
+
+	// Reserve space for borders (top + bottom = 2 lines)
+	innerHeight := height - 2
+	if innerHeight < 5 {
+		innerHeight = 5
+	}
+
+	switch a.currentView {
+	case ViewUpcoming:
+		content = a.renderUpcoming(innerHeight)
+	case ViewLabels:
+		content = a.renderLabelsView(innerHeight)
+	case ViewCalendar:
+		content = a.renderCalendar(innerHeight)
+	default:
+		content = a.renderDefaultTaskList(innerHeight)
+	}
+
+	// Apply container style with fixed height
+	// Note: Height() sets INNER content height, so use innerHeight (not full height)
+	containerStyle := styles.MainContent
+	if a.focusedPane == PaneMain {
+		containerStyle = styles.MainContentFocused
+	}
+
+	return containerStyle.Width(width).Height(innerHeight).Render(content)
+}
+
+// renderDefaultTaskList renders the default task list for Today/Project views.
+func (a *App) renderDefaultTaskList(maxHeight int) string {
+	var b strings.Builder
+
+	// Title
+	var title string
+	switch a.currentView {
+	case ViewToday:
+		title = time.Now().Format("Monday 2 Jan")
+	case ViewProject:
+		if a.currentProject != nil {
+			title = a.currentProject.Name
+		}
+	default:
+		title = "Tasks"
+	}
+	b.WriteString(styles.Title.Render(title))
+	b.WriteString("\n")
+
+	if a.loading {
+		b.WriteString(a.spinner.View())
+		b.WriteString(" Loading...")
+	} else if a.err != nil {
+		b.WriteString(styles.StatusBarError.Render(fmt.Sprintf("Error: %v", a.err)))
+	} else if len(a.tasks) == 0 {
+		msg := "No tasks found"
+		if a.currentView == ViewToday {
+			msg = "All done for today! \n" + styles.HelpDesc.Render("Enjoy your day off 🏝️")
+		} else {
+			msg = "No tasks here.\n" + styles.HelpDesc.Render("Press 'a' to add one.")
+		}
+		b.WriteString(msg)
+	} else {
+		// Group tasks by due status for Today view
+		// Title uses 2 lines (title + newline)
+		if a.currentView == ViewToday {
+			b.WriteString(a.renderGroupedTasks(maxHeight - 2))
+		} else if a.currentView == ViewProject {
+			b.WriteString(a.renderProjectTasks(maxHeight - 2))
+		} else {
+			b.WriteString(a.renderFlatTasks(maxHeight - 2))
+		}
+	}
+
+	return b.String()
+}
+
+// lineInfo represents a display line with optional task reference.
+type lineInfo struct {
+	content   string
+	taskIndex int // -1 for headers
+}
+
+// renderProjectTasks renders tasks grouped by section for a project.
+func (a *App) renderProjectTasks(maxHeight int) string {
+	// Build ordered list of task indices matching display order
+	var orderedIndices []int
+
+	// Group tasks by section
+	tasksBySection := make(map[string][]int)
+	var noSectionTasks []int
+
+	for i, t := range a.tasks {
+		if t.SectionID != nil && *t.SectionID != "" {
+			tasksBySection[*t.SectionID] = append(tasksBySection[*t.SectionID], i)
+		} else {
+			noSectionTasks = append(noSectionTasks, i)
+		}
+	}
+
+	// Build ordered indices: no-section tasks first, then by section
+	orderedIndices = append(orderedIndices, noSectionTasks...)
+	for _, section := range a.sections {
+		if indices, exists := tasksBySection[section.ID]; exists {
+			orderedIndices = append(orderedIndices, indices...)
+		}
+	}
+
+	// Build lines with scroll support
+	var lines []lineInfo
+
+	if len(noSectionTasks) > 0 {
+		for _, i := range noSectionTasks {
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+		}
+	}
+
+	for _, section := range a.sections {
+		taskIndices, exists := tasksBySection[section.ID]
+		if !exists || len(taskIndices) == 0 {
+			continue
+		}
+
+		// Add blank line before section header for spacing
+		// IMPORTANT: Use separate lineInfo entries, NOT embedded \n in content
+		// Embedded \n breaks viewport line counting
+		lines = append(lines, lineInfo{content: "", taskIndex: -1})
+		lines = append(lines, lineInfo{content: styles.SectionHeader.Render(section.Name), taskIndex: -1})
+		for _, i := range taskIndices {
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+		}
+	}
+
+	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
+}
+
+// renderGroupedTasks renders tasks grouped by due status.
+func (a *App) renderGroupedTasks(maxHeight int) string {
+	var overdue, today, other []int
+
+	// Group tasks
+	for i, t := range a.tasks {
+		if t.IsOverdue() {
+			overdue = append(overdue, i)
+		} else if t.IsDueToday() {
+			today = append(today, i)
+		} else {
+			other = append(other, i)
+		}
+	}
+
+	// Build ordered indices
+	var orderedIndices []int
+	orderedIndices = append(orderedIndices, overdue...)
+	orderedIndices = append(orderedIndices, today...)
+	orderedIndices = append(orderedIndices, other...)
+
+	// Build lines
+	var lines []lineInfo
+
+	if len(overdue) > 0 {
+		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("OVERDUE"), taskIndex: -1})
+		for _, i := range overdue {
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+		}
+	}
+
+	if len(today) > 0 {
+		// Add blank line before header if there are previous sections
+		if len(overdue) > 0 {
+			lines = append(lines, lineInfo{content: "", taskIndex: -1})
+			// Only show separation if we have overdue tasks
+		}
+
+		for _, i := range today {
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+		}
+	}
+
+	if len(other) > 0 {
+		// Add blank line before header if there are previous sections
+		if len(overdue) > 0 || len(today) > 0 {
+			lines = append(lines, lineInfo{content: "", taskIndex: -1})
+		}
+		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("NO DUE DATE"), taskIndex: -1})
+		for _, i := range other {
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+		}
+	}
+
+	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
+}
+
+// renderFlatTasks renders tasks in a flat list.
+func (a *App) renderFlatTasks(maxHeight int) string {
+	var lines []lineInfo
+	var orderedIndices []int
+
+	for i := range a.tasks {
+		orderedIndices = append(orderedIndices, i)
+		lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+	}
+
+	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
+}
+
+// renderTaskByDisplayIndex renders a task with cursor based on display order.
+func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) string {
+	t := a.tasks[taskIndex]
+
+	// Find display position for cursor
+	displayPos := 0
+	for i, idx := range orderedIndices {
+		if idx == taskIndex {
+			displayPos = i
+			break
+		}
+	}
+
+	// Cursor
+	cursor := "  "
+	if displayPos == a.taskCursor && a.focusedPane == PaneMain {
+		cursor = "> "
+	}
+
+	// Checkbox
+	checkbox := styles.CheckboxUnchecked
+	if t.IsCompleted {
+		checkbox = styles.CheckboxChecked
+	}
+
+	// Indent for subtasks
+	indent := ""
+	if t.ParentID != nil {
+		indent = "  "
+	}
+
+	// Content with priority color
+	content := t.Content
+	priorityStyle := styles.GetPriorityStyle(t.Priority)
+	content = priorityStyle.Render(content)
+
+	// Due date
+	due := ""
+	if t.Due != nil {
+		dueStr := t.DueDisplay()
+		if t.IsOverdue() {
+			due = styles.TaskDueOverdue.Render("| " + dueStr)
+		} else if t.IsDueToday() {
+			due = styles.TaskDueToday.Render("| " + dueStr)
+		} else {
+			due = styles.TaskDue.Render("| " + dueStr)
+		}
+	}
+
+	// Labels
+	labels := ""
+	if len(t.Labels) > 0 {
+		labelStrs := make([]string, len(t.Labels))
+		for i, l := range t.Labels {
+			labelStrs[i] = "@" + l
+		}
+		labels = styles.TaskLabel.Render(strings.Join(labelStrs, " "))
+	}
+
+	// Build line
+	line := fmt.Sprintf("%s%s%s %s %s %s", cursor, indent, checkbox, content, due, labels)
+
+	// Apply style
+	style := styles.TaskItem
+	if displayPos == a.taskCursor && a.focusedPane == PaneMain {
+		style = styles.TaskSelected
+	}
+	if t.IsCompleted {
+		style = styles.TaskCompleted
+	}
+
+	return style.Render(line)
+}
+
+// renderScrollableLines renders lines with scrolling support using viewport.
+func (a *App) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxHeight int) string {
+	// Store ordered indices for use in handleSelect
+	a.taskOrderedIndices = orderedIndices
+
+	if len(lines) == 0 {
+		a.scrollOffset = 0
+		a.viewportLines = nil
+		return ""
+	}
+
+	// Build content string and track line->task mapping
+	var content strings.Builder
+	a.viewportLines = make([]int, 0, len(lines))
+
+	for i, line := range lines {
+		content.WriteString(line.content)
+		if i < len(lines)-1 {
+			content.WriteString("\n")
+		}
+		// Map this viewport line to its task index (-1 for headers)
+		a.viewportLines = append(a.viewportLines, line.taskIndex)
+	}
+
+	// Find which line the cursor is on
+	cursorLine := 0
+	if a.taskCursor >= 0 && a.taskCursor < len(orderedIndices) {
+		targetTaskIndex := orderedIndices[a.taskCursor]
+		for i, line := range lines {
+			if line.taskIndex == targetTaskIndex {
+				cursorLine = i
+				break
+			}
+		}
+	}
+
+	// If viewport is ready, use it for scrolling
+	if a.viewportReady {
+		// Update viewport height if needed (maxHeight is the available height)
+		if a.taskViewport.Height != maxHeight && maxHeight > 0 {
+			a.taskViewport.Height = maxHeight
+		}
+
+		// Set content to viewport
+		a.taskViewport.SetContent(content.String())
+
+		// Sync viewport to show cursor
+		a.syncViewportToCursor(cursorLine)
+
+		// Store scroll offset for click handling
+		a.scrollOffset = a.taskViewport.YOffset
+
+		return a.taskViewport.View()
+	}
+
+	// Fallback: viewport not ready, just return raw content (truncated)
+	a.scrollOffset = 0
+	return content.String()
+}
+
+// renderTaskDetail renders the task detail view.
+func (a *App) renderTaskDetail() string {
+	if a.selectedTask == nil {
+		return "No task selected"
+	}
+
+	t := a.selectedTask
+	var b strings.Builder
+
+	// Title with checkbox status
+	checkbox := "[ ]"
+	if t.IsCompleted {
+		checkbox = "[x]"
+	}
+	b.WriteString(styles.Title.Render("Task Details"))
+	b.WriteString("\n\n")
+
+	// Task content (main title)
+	priorityStyle := styles.GetPriorityStyle(t.Priority)
+	b.WriteString(fmt.Sprintf("  %s %s\n\n", checkbox, priorityStyle.Render(t.Content)))
+
+	// Horizontal divider
+	b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", 40)))
+	b.WriteString("\n\n")
+
+	// Description (if present)
+	if t.Description != "" {
+		b.WriteString(styles.DetailIcon.Render("  📝"))
+		b.WriteString(styles.DetailLabel.Render("Description"))
+		b.WriteString("\n")
+		b.WriteString(styles.DetailDescription.Render(t.Description))
+		b.WriteString("\n\n")
+	}
+
+	// Due date
+	if t.Due != nil {
+		dueIcon := "📅"
+		dueStyle := styles.DetailValue
+		if t.IsOverdue() {
+			dueIcon = "🔴"
+			dueStyle = styles.TaskDueOverdue
+		} else if t.IsDueToday() {
+			dueIcon = "🟢"
+			dueStyle = styles.TaskDueToday
+		}
+		b.WriteString(styles.DetailIcon.Render("  " + dueIcon))
+		b.WriteString(styles.DetailLabel.Render("Due"))
+		b.WriteString(dueStyle.Render(t.Due.String))
+		if t.Due.IsRecurring {
+			b.WriteString(styles.HelpDesc.Render(" (recurring)"))
+		}
+		b.WriteString("\n")
+	}
+
+	// Priority
+	priorityIcon := "⚪"
+	priorityLabel := "P4 (Low)"
+	switch t.Priority {
+	case 4:
+		priorityIcon = "🔴"
+		priorityLabel = "P1 (Urgent)"
+	case 3:
+		priorityIcon = "🟠"
+		priorityLabel = "P2 (High)"
+	case 2:
+		priorityIcon = "🟡"
+		priorityLabel = "P3 (Medium)"
+	}
+	b.WriteString(styles.DetailIcon.Render("  " + priorityIcon))
+	b.WriteString(styles.DetailLabel.Render("Priority"))
+	b.WriteString(priorityStyle.Render(priorityLabel))
+	b.WriteString("\n")
+
+	// Labels
+	if len(t.Labels) > 0 {
+		b.WriteString(styles.DetailIcon.Render("  🏷️"))
+		b.WriteString(styles.DetailLabel.Render("Labels"))
+		for i, l := range t.Labels {
+			if i > 0 {
+				b.WriteString(" ")
+			}
+			b.WriteString(styles.TaskLabel.Render("@" + l))
+		}
+		b.WriteString("\n")
+	}
+
+	// Project (find name)
+	if t.ProjectID != "" {
+		projectName := t.ProjectID
+		for _, p := range a.projects {
+			if p.ID == t.ProjectID {
+				projectName = p.Name
+				break
+			}
+		}
+		b.WriteString(styles.DetailIcon.Render("  📁"))
+		b.WriteString(styles.DetailLabel.Render("Project"))
+		b.WriteString(styles.DetailValue.Render(projectName))
+		b.WriteString("\n")
+	}
+
+	// Comment count
+	if t.CommentCount > 0 {
+		b.WriteString(styles.DetailIcon.Render("  💬"))
+		b.WriteString(styles.DetailLabel.Render("Comments"))
+		b.WriteString(styles.DetailValue.Render(fmt.Sprintf("%d", t.CommentCount)))
+		b.WriteString("\n")
+	}
+
+	// Comments section
+	if len(a.comments) > 0 {
+		b.WriteString("\n")
+		b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", 40)))
+		b.WriteString("\n")
+		b.WriteString(styles.Subtitle.Render("  Comments"))
+		b.WriteString("\n\n")
+
+		for _, c := range a.comments {
+			// Parse and format timestamp
+			timestamp := c.PostedAt
+			if t, err := time.Parse(time.RFC3339, c.PostedAt); err == nil {
+				timestamp = t.Format("Jan 2, 2006 3:04 PM")
+			}
+			b.WriteString(styles.CommentAuthor.Render(fmt.Sprintf("    %s", timestamp)))
+			b.WriteString("\n")
+			b.WriteString(styles.CommentContent.Render(fmt.Sprintf("    %s", c.Content)))
+			b.WriteString("\n\n")
+		}
+	}
+
+	// Divider before help
+	b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", 40)))
+	b.WriteString("\n\n")
+
+	// Help section
+	b.WriteString(styles.HelpDesc.Render("  Shortcuts: "))
+	b.WriteString(styles.HelpKey.Render("ESC"))
+	b.WriteString(styles.HelpDesc.Render(" back  "))
+	b.WriteString(styles.HelpKey.Render("x"))
+	b.WriteString(styles.HelpDesc.Render(" complete  "))
+	b.WriteString(styles.HelpKey.Render("e"))
+	b.WriteString(styles.HelpDesc.Render(" edit  "))
+	b.WriteString(styles.HelpKey.Render("s"))
+	b.WriteString(styles.HelpDesc.Render(" add subtask"))
+
+	return styles.Dialog.Width(a.width - 4).Render(b.String())
+}
+
+// renderTaskForm renders the add/edit task form.
+func (a *App) renderTaskForm() string {
+	if a.taskForm == nil {
+		return styles.Dialog.Width(a.width - 4).Render("Form not initialized")
+	}
+
+	return styles.Dialog.Width(a.width - 4).Render(a.taskForm.View())
+}
+
+// renderHelp renders the help view.
+func (a *App) renderHelp() string {
+	var b strings.Builder
+
+	b.WriteString(styles.Title.Render("Keyboard Shortcuts"))
+	b.WriteString("\n\n")
+
+	items := a.keymap.HelpItems()
+	for _, item := range items {
+		if item[0] == "" {
+			b.WriteString("\n")
+			continue
+		}
+		if item[1] == "" {
+			// Section header
+			b.WriteString(styles.Subtitle.Render(item[0]))
+			b.WriteString("\n")
+			continue
+		}
+		key := styles.HelpKey.Render(fmt.Sprintf("%-12s", item[0]))
+		desc := styles.HelpDesc.Render(item[1])
+		b.WriteString(fmt.Sprintf("  %s %s\n", key, desc))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(styles.HelpDesc.Render("Press any key to close"))
+
+	return styles.Dialog.Width(a.width - 4).Render(b.String())
+}
+
+// renderSearch renders the search view.
+func (a *App) renderSearch() string {
+	var b strings.Builder
+
+	// Title
+	b.WriteString(styles.Title.Render("Search Tasks"))
+	b.WriteString("\n\n")
+
+	// Search input
+	b.WriteString(styles.InputLabel.Render("Query"))
+	b.WriteString("\n")
+	b.WriteString(a.searchInput.View())
+	b.WriteString("\n\n")
+
+	// Results
+	if a.searchQuery == "" {
+		b.WriteString(styles.HelpDesc.Render("Type to search..."))
+	} else if len(a.searchResults) == 0 {
+		b.WriteString(styles.StatusBarError.Render("No results found"))
+	} else {
+		b.WriteString(styles.Subtitle.Render(fmt.Sprintf("Found %d task(s)", len(a.searchResults))))
+		b.WriteString("\n\n")
+
+		// Render search results
+		for i, task := range a.searchResults {
+			cursor := "  "
+			itemStyle := styles.TaskItem
+			if i == a.taskCursor {
+				cursor = "> "
+				itemStyle = styles.TaskSelected
+			}
+
+			checkbox := styles.CheckboxUnchecked
+			if task.IsCompleted {
+				checkbox = styles.CheckboxChecked
+			}
+
+			content := task.Content
+			priorityStyle := styles.GetPriorityStyle(task.Priority)
+			content = priorityStyle.Render(content)
+
+			// Due date
+			due := ""
+			if task.Due != nil {
+				dueStr := task.DueDisplay()
+				if task.IsOverdue() {
+					due = styles.TaskDueOverdue.Render(" | " + dueStr)
+				} else if task.IsDueToday() {
+					due = styles.TaskDueToday.Render(" | " + dueStr)
+				} else {
+					due = styles.TaskDue.Render(" | " + dueStr)
+				}
+			}
+
+			line := fmt.Sprintf("%s%s %s%s", cursor, checkbox, content, due)
+			b.WriteString(itemStyle.Render(line))
+			b.WriteString("\n")
+		}
+	}
+
+	b.WriteString("\n")
+	b.WriteString(styles.HelpDesc.Render("j/k: navigate | Enter: view | x: complete | Esc: back"))
+
+	return styles.Dialog.Width(a.width - 4).Render(b.String())
+}
+
+// renderUpcoming renders the upcoming view with tasks grouped by date.
+func (a *App) renderUpcoming(maxHeight int) string {
+	var b strings.Builder
+
+	b.WriteString(styles.Title.Render("Upcoming"))
+	b.WriteString("\n")
+
+	if a.loading {
+		b.WriteString(a.spinner.View())
+		b.WriteString(" Loading...")
+		return b.String()
+	}
+
+	if len(a.tasks) == 0 {
+		b.WriteString("\n")
+		b.WriteString(styles.HelpDesc.Render("No upcoming tasks"))
+		return b.String()
+	}
+
+	// Group tasks by date
+	tasksByDate := make(map[string][]int)
+	var dates []string
+
+	for i, t := range a.tasks {
+		if t.Due == nil {
+			continue
+		}
+		date := t.Due.Date
+		if _, exists := tasksByDate[date]; !exists {
+			dates = append(dates, date)
+		}
+		tasksByDate[date] = append(tasksByDate[date], i)
+	}
+
+	// Sort dates
+	sort.Strings(dates)
+
+	// Build ordered indices for cursor mapping
+	var orderedIndices []int
+	for _, date := range dates {
+		orderedIndices = append(orderedIndices, tasksByDate[date]...)
+	}
+
+	// Build lines
+	var lines []lineInfo
+
+	for idx, date := range dates {
+		// Parse date for display
+		displayDate := date
+		if parsed, err := time.Parse("2006-01-02", date); err == nil {
+			today := time.Now().Format("2006-01-02")
+			tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+			switch date {
+			case today:
+				displayDate = "Today"
+			case tomorrow:
+				displayDate = "Tomorrow"
+			default:
+				displayDate = parsed.Format("Mon, Jan 2")
+			}
+		}
+
+		// Add blank line before header (except first) for spacing
+		if idx > 0 {
+			lines = append(lines, lineInfo{content: "", taskIndex: -1})
+		}
+
+		lines = append(lines, lineInfo{
+			content:   styles.DateGroupHeader.Render(displayDate),
+			taskIndex: -1,
+		})
+
+		for _, i := range tasksByDate[date] {
+			lines = append(lines, lineInfo{
+				content:   a.renderTaskByDisplayIndex(i, orderedIndices),
+				taskIndex: i,
+			})
+		}
+	}
+
+	// Use common scrollable rendering - maxHeight already accounts for borders
+	// Subtract 2 for Title line + newline
+	result := a.renderScrollableLines(lines, orderedIndices, maxHeight-2)
+	b.WriteString(result)
+
+	return b.String()
+}
+
+// renderLabelsView renders the labels view.
+func (a *App) renderLabelsView(maxHeight int) string {
+	var b strings.Builder
+
+	b.WriteString(styles.Title.Render("Labels"))
+	b.WriteString("\n\n")
+
+	// Account for title + blank line (2 lines used)
+	contentHeight := maxHeight - 2
+
+	if a.currentLabel != nil {
+		// Show tasks for selected label
+		labelTitle := "@" + a.currentLabel.Name
+		if a.currentLabel.Color != "" {
+			labelTitle = lipgloss.NewStyle().Foreground(lipgloss.Color(a.currentLabel.Color)).Render(labelTitle)
+		}
+		b.WriteString(styles.Subtitle.Render(labelTitle))
+		b.WriteString("\n\n")
+
+		// Account for subtitle + blank line + footer (4 more lines)
+		taskHeight := contentHeight - 4
+
+		if len(a.tasks) == 0 {
+			b.WriteString(styles.HelpDesc.Render("No tasks with this label"))
+		} else {
+			// Build lines and ordered indices for scrolling - FIX: populate content field
+			var lines []lineInfo
+			var orderedIndices []int
+			for i := range a.tasks {
+				orderedIndices = append(orderedIndices, i)
+			}
+			for i := range a.tasks {
+				lines = append(lines, lineInfo{
+					content:   a.renderTaskByDisplayIndex(i, orderedIndices),
+					taskIndex: i,
+				})
+			}
+			b.WriteString(a.renderScrollableLines(lines, orderedIndices, taskHeight))
+		}
+
+		b.WriteString("\n")
+		b.WriteString(styles.HelpDesc.Render("Press ESC to go back to labels list"))
+	} else {
+		// Extract unique labels from all tasks if personal labels are empty
+		labelsToShow := a.labels
+		if len(labelsToShow) == 0 {
+			labelsToShow = a.extractLabelsFromTasks()
+		}
+
+		// Build task count map for labels
+		taskCountMap := a.getLabelTaskCounts()
+
+		// Account for footer (2 lines)
+		labelHeight := contentHeight - 2
+
+		// Show list of labels
+		if len(labelsToShow) == 0 {
+			b.WriteString(styles.HelpDesc.Render("No labels found"))
+		} else {
+			// Calculate scroll window for labels
+			startIdx := 0
+			if a.taskCursor >= labelHeight {
+				startIdx = a.taskCursor - labelHeight + 1
+			}
+			endIdx := startIdx + labelHeight
+			if endIdx > len(labelsToShow) {
+				endIdx = len(labelsToShow)
+			}
+
+			for i := startIdx; i < endIdx; i++ {
+				label := labelsToShow[i]
+				cursor := "  "
+				style := styles.LabelItem
+				if i == a.taskCursor && a.focusedPane == PaneMain {
+					cursor = "> "
+					style = styles.LabelSelected
+				}
+
+				// Label name with optional color
+				name := "@" + label.Name
+				if label.Color != "" {
+					name = lipgloss.NewStyle().Foreground(lipgloss.Color(label.Color)).Render(name)
+				}
+
+				// Task count badge
+				taskCount := taskCountMap[label.Name]
+				countBadge := ""
+				if taskCount > 0 {
+					countBadge = styles.HelpDesc.Render(fmt.Sprintf(" (%d)", taskCount))
+				}
+
+				line := fmt.Sprintf("%s%s%s", cursor, name, countBadge)
+				b.WriteString(style.Render(line))
+				b.WriteString("\n")
+			}
+		}
+
+		b.WriteString("\n")
+		b.WriteString(styles.HelpDesc.Render("Press Enter to view tasks with label"))
+	}
+
+	return b.String()
+}
+
+// getLabelTaskCounts returns a map of label name to task count.
+func (a *App) getLabelTaskCounts() map[string]int {
+	counts := make(map[string]int)
+
+	// Use allTasks if available, otherwise fall back to tasks
+	tasksToScan := a.allTasks
+	if len(tasksToScan) == 0 {
+		tasksToScan = a.tasks
+	}
+
+	for _, t := range tasksToScan {
+		for _, labelName := range t.Labels {
+			counts[labelName]++
+		}
+	}
+
+	return counts
+}
+
+// extractLabelsFromTasks extracts unique labels from all tasks.
+func (a *App) extractLabelsFromTasks() []api.Label {
+	labelSet := make(map[string]bool)
+	var labels []api.Label
+
+	// Check allTasks first, fall back to tasks
+	tasksToScan := a.allTasks
+	if len(tasksToScan) == 0 {
+		tasksToScan = a.tasks
+	}
+
+	for _, t := range tasksToScan {
+		for _, labelName := range t.Labels {
+			if !labelSet[labelName] {
+				labelSet[labelName] = true
+				labels = append(labels, api.Label{
+					Name: labelName,
+				})
+			}
+		}
+	}
+
+	// Sort labels alphabetically
+	sort.Slice(labels, func(i, j int) bool {
+		return labels[i].Name < labels[j].Name
+	})
+
+	return labels
+}
+
+// renderCalendar renders the calendar view (dispatches based on view mode).
+func (a *App) renderCalendar(maxHeight int) string {
+	if a.calendarViewMode == CalendarViewExpanded {
+		return a.renderCalendarExpanded(maxHeight)
+	}
+	return a.renderCalendarCompact(maxHeight)
+}
+
+// renderCalendarCompact renders the compact calendar view.
+func (a *App) renderCalendarCompact(maxHeight int) string {
+	var b strings.Builder
+
+	// Header with month/year and navigation hints
+	monthYear := a.calendarDate.Format("January 2006")
+	b.WriteString(styles.Title.Render(monthYear))
+	b.WriteString("\n")
+	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
+	b.WriteString("\n\n")
+
+	// Weekday headers
+	weekdays := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+	for _, wd := range weekdays {
+		b.WriteString(styles.CalendarWeekday.Render(fmt.Sprintf(" %s ", wd)))
+	}
+	b.WriteString("\n")
+
+	// Calculate first day and number of days in month
+	firstOfMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+	startWeekday := int(firstOfMonth.Weekday())
+	daysInMonth := lastOfMonth.Day()
+	today := time.Now()
+
+	// Build map of tasks by day
+	tasksByDay := make(map[int]int) // day -> count
+	for _, t := range a.allTasks {
+		if t.Due == nil {
+			continue
+		}
+		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
+			if parsed.Year() == a.calendarDate.Year() && parsed.Month() == a.calendarDate.Month() {
+				tasksByDay[parsed.Day()]++
+			}
+		}
+	}
+
+	// Render calendar grid and count weeks rendered
+	day := 1
+	weeksRendered := 0
+	for week := 0; week < 6; week++ {
+		if day > daysInMonth {
+			break
+		}
+		weeksRendered++
+
+		for weekday := 0; weekday < 7; weekday++ {
+			if week == 0 && weekday < startWeekday {
+				b.WriteString("     ")
+				continue
+			}
+
+			if day > daysInMonth {
+				b.WriteString("     ")
+				continue
+			}
+
+			dayStr := fmt.Sprintf(" %2d ", day)
+			style := styles.CalendarDay
+
+			// Check if this is today
+			isToday := today.Year() == a.calendarDate.Year() &&
+				today.Month() == a.calendarDate.Month() &&
+				today.Day() == day
+
+			// Check if this day has tasks
+			hasTasks := tasksByDay[day] > 0
+
+			// Check if this is the selected day
+			isSelected := day == a.calendarDay && a.focusedPane == PaneMain
+
+			// Check if this is a weekend (Friday=5, Saturday=6 in Jordan)
+			isWeekend := weekday == 5 || weekday == 6
+
+			if isSelected {
+				style = styles.CalendarDaySelected
+			} else if isToday {
+				style = styles.CalendarDayToday
+			} else if hasTasks {
+				style = styles.CalendarDayWithTasks
+			} else if isWeekend {
+				style = styles.CalendarDayWeekend
+			}
+
+			// Add task indicator
+			if hasTasks && !isSelected {
+				dayStr = fmt.Sprintf(" %2d*", day)
+			}
+
+			b.WriteString(style.Render(dayStr))
+			b.WriteString(" ")
+			day++
+		}
+		b.WriteString("\n")
+	}
+
+	// Show tasks for selected day
+	b.WriteString("\n")
+	selectedDate := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), a.calendarDay, 0, 0, 0, 0, time.Local)
+	b.WriteString(styles.Subtitle.Render(selectedDate.Format("Monday, January 2")))
+	b.WriteString("\n\n")
+
+	// Find tasks for selected day
+	var dayTasks []api.Task
+	selectedDateStr := selectedDate.Format("2006-01-02")
+	for _, t := range a.allTasks {
+		if t.Due != nil && t.Due.Date == selectedDateStr {
+			dayTasks = append(dayTasks, t)
+		}
+	}
+
+	// Calculate remaining height for task list
+	// Used: title(1) + help(1) + blank(1) + weekdays(1) + calendar(weeksRendered) + blank(1) + subtitle(1) + blank(1)
+	usedHeight := 7 + weeksRendered
+	taskListHeight := maxHeight - usedHeight
+	if taskListHeight < 1 {
+		taskListHeight = 1
+	}
+
+	if len(dayTasks) == 0 {
+		b.WriteString(styles.HelpDesc.Render("No tasks for this day"))
+	} else {
+		// Calculate scroll window
+		startIdx := 0
+		if a.taskCursor >= taskListHeight {
+			startIdx = a.taskCursor - taskListHeight + 1
+		}
+		endIdx := startIdx + taskListHeight
+		if endIdx > len(dayTasks) {
+			endIdx = len(dayTasks)
+		}
+
+		for i := startIdx; i < endIdx; i++ {
+			t := dayTasks[i]
+			checkbox := styles.CheckboxUnchecked
+			if t.IsCompleted {
+				checkbox = styles.CheckboxChecked
+			}
+			priorityStyle := styles.GetPriorityStyle(t.Priority)
+			content := priorityStyle.Render(t.Content)
+
+			cursor := "  "
+			if i == a.taskCursor && a.focusedPane == PaneMain {
+				cursor = "> "
+			}
+			b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, content))
+		}
+	}
+
+	return b.String()
+}
+
+// renderCalendarExpanded renders the expanded calendar view with task names in cells.
+func (a *App) renderCalendarExpanded(maxHeight int) string {
+	var b strings.Builder
+
+	// Header with month/year and navigation hints
+	monthYear := a.calendarDate.Format("January 2006")
+	b.WriteString(styles.Title.Render(monthYear))
+	b.WriteString("\n")
+	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
+	b.WriteString("\n\n")
+
+	// Calculate cell dimensions based on terminal width
+	// 7 columns + borders (8 vertical lines)
+	availableWidth := a.width - 8 // Subtract for borders
+	if availableWidth < 35 {
+		availableWidth = 35 // Minimum width
+	}
+	cellWidth := availableWidth / 7
+	if cellWidth < 5 {
+		cellWidth = 5
+	}
+	if cellWidth > 20 {
+		cellWidth = 20 // Max cell width
+	}
+
+	// Weekday headers
+	weekdays := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+	headerLine := "│"
+	for _, wd := range weekdays {
+		header := fmt.Sprintf(" %-*s", cellWidth-1, wd)
+		if len(header) > cellWidth {
+			header = header[:cellWidth]
+		}
+		headerLine += styles.CalendarWeekday.Render(header) + "│"
+	}
+	b.WriteString(headerLine)
+	b.WriteString("\n")
+
+	// Top border
+	topBorder := "├" + strings.Repeat(strings.Repeat("─", cellWidth)+"┼", 6) + strings.Repeat("─", cellWidth) + "┤\n"
+	b.WriteString(topBorder)
+
+	// Calculate first day and number of days in month
+	firstOfMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+	startWeekday := int(firstOfMonth.Weekday())
+	daysInMonth := lastOfMonth.Day()
+	today := time.Now()
+
+	// Build map of tasks by day
+	tasksByDay := make(map[int][]api.Task) // day -> tasks
+	for _, t := range a.allTasks {
+		if t.Due == nil {
+			continue
+		}
+		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
+			if parsed.Year() == a.calendarDate.Year() && parsed.Month() == a.calendarDate.Month() {
+				tasksByDay[parsed.Day()] = append(tasksByDay[parsed.Day()], t)
+			}
+		}
+	}
+
+	// Calculate how many weeks we need to display
+	weeksNeeded := (daysInMonth + startWeekday + 6) / 7
+
+	// Calculate how many task lines to show per cell based on available height
+	// Header(1) + help(1) + blank(1) + weekday(1) + topBorder(1) + statusBar(1) = 6 lines overhead
+	// Each week uses: 1 (day number) + maxTasksPerCell (tasks) + 1 (separator) = 2 + maxTasksPerCell
+	// Last week doesn't have separator, so: weeksNeeded * (2 + maxTasksPerCell) - 1 + 6 = maxHeight
+	availableForWeeks := maxHeight - 6
+	if availableForWeeks < weeksNeeded*3 {
+		availableForWeeks = weeksNeeded * 3 // Minimum 1 task line per cell
+	}
+	// Each week row = 1 (day) + tasks + 1 (separator, except last)
+	// Solve for maxTasksPerCell: weeksNeeded*(1+tasks+1) - 1 = availableForWeeks
+	// weeksNeeded*(2+tasks) = availableForWeeks + 1
+	// tasks = (availableForWeeks + 1) / weeksNeeded - 2
+	maxTasksPerCell := (availableForWeeks+1)/weeksNeeded - 2
+	if maxTasksPerCell < 2 {
+		maxTasksPerCell = 2
+	}
+	if maxTasksPerCell > 6 {
+		maxTasksPerCell = 6 // Cap at 6 tasks per cell
+	}
+
+	// Render calendar grid
+	day := 1
+	for week := 0; week < 6; week++ {
+		if day > daysInMonth {
+			break
+		}
+
+		// Row 1: Day numbers
+		dayNumLine := "│"
+		for weekday := 0; weekday < 7; weekday++ {
+			if week == 0 && weekday < startWeekday || day > daysInMonth {
+				dayNumLine += strings.Repeat(" ", cellWidth) + "│"
+				if week == 0 && weekday < startWeekday {
+					continue
+				}
+				continue
+			}
+
+			dayStr := fmt.Sprintf(" %2d", day)
+			style := styles.CalendarDay
+
+			isToday := today.Year() == a.calendarDate.Year() &&
+				today.Month() == a.calendarDate.Month() &&
+				today.Day() == day
+			isSelected := day == a.calendarDay && a.focusedPane == PaneMain
+			isWeekend := weekday == 5 || weekday == 6
+			hasTasks := len(tasksByDay[day]) > 0
+
+			if isSelected {
+				style = styles.CalendarDaySelected
+			} else if isToday {
+				style = styles.CalendarDayToday
+			} else if hasTasks {
+				style = styles.CalendarDayWithTasks
+			} else if isWeekend {
+				style = styles.CalendarDayWeekend
+			}
+
+			// Pad to cell width
+			paddedDay := fmt.Sprintf("%-*s", cellWidth, dayStr)
+			dayNumLine += style.Render(paddedDay) + "│"
+			day++
+		}
+		b.WriteString(dayNumLine)
+		b.WriteString("\n")
+
+		// Reset day counter for task rows
+		day -= 7
+		if day < 1 {
+			day = 1
+		}
+
+		// Rows 2-3: Task previews
+		for taskLine := 0; taskLine < maxTasksPerCell; taskLine++ {
+			taskRow := "│"
+			tempDay := day
+			for weekday := 0; weekday < 7; weekday++ {
+				if week == 0 && weekday < startWeekday {
+					taskRow += strings.Repeat(" ", cellWidth) + "│"
+					continue
+				}
+
+				if tempDay > daysInMonth {
+					taskRow += strings.Repeat(" ", cellWidth) + "│"
+					tempDay++
+					continue
+				}
+
+				tasks := tasksByDay[tempDay]
+				var cellContent string
+
+				if taskLine < len(tasks) && taskLine < maxTasksPerCell-1 {
+					// Show task name with priority color (truncated to fit cell)
+					task := tasks[taskLine]
+					taskName := task.Content
+					maxLen := cellWidth - 2 // Leave space for " " prefix and margin
+					if len(taskName) > maxLen && maxLen > 1 {
+						taskName = taskName[:maxLen-1] + "…"
+					}
+					// Pad the plain text first, then apply priority color
+					paddedTask := fmt.Sprintf(" %-*s", cellWidth-1, taskName)
+					priorityStyle := styles.GetPriorityStyle(task.Priority)
+					cellContent = priorityStyle.Render(paddedTask)
+				} else if taskLine == maxTasksPerCell-1 && len(tasks) > maxTasksPerCell-1 {
+					// Show "+N more" indicator on the last line if there are more tasks
+					hiddenCount := len(tasks) - (maxTasksPerCell - 1)
+					moreText := fmt.Sprintf("+%d more", hiddenCount)
+					paddedMore := fmt.Sprintf(" %-*s", cellWidth-1, moreText)
+					cellContent = styles.CalendarMoreTasks.Render(paddedMore)
+				} else if taskLine < len(tasks) {
+					// This handles the case where we're on the last allowed line but it's a task
+					task := tasks[taskLine]
+					taskName := task.Content
+					maxLen := cellWidth - 2
+					if len(taskName) > maxLen && maxLen > 1 {
+						taskName = taskName[:maxLen-1] + "…"
+					}
+					paddedTask := fmt.Sprintf(" %-*s", cellWidth-1, taskName)
+					priorityStyle := styles.GetPriorityStyle(task.Priority)
+					cellContent = priorityStyle.Render(paddedTask)
+				} else {
+					// Empty cell
+					cellContent = strings.Repeat(" ", cellWidth)
+				}
+
+				taskRow += cellContent + "│"
+				tempDay++
+			}
+			b.WriteString(taskRow)
+			b.WriteString("\n")
+		}
+
+		// Move day forward after processing the week
+		day += 7
+		if week == 0 {
+			day = 8 - startWeekday
+		}
+
+		// Row separator (except for last week)
+		if day <= daysInMonth {
+			separator := "├" + strings.Repeat(strings.Repeat("─", cellWidth)+"┼", 6) + strings.Repeat("─", cellWidth) + "┤\n"
+			b.WriteString(separator)
+		}
+	}
+
+	// Bottom border
+	bottomBorder := "└" + strings.Repeat(strings.Repeat("─", cellWidth)+"┴", 6) + strings.Repeat("─", cellWidth) + "┘\n"
+	b.WriteString(bottomBorder)
+
+	return b.String()
+}
+
+// renderCalendarDay renders the day detail view showing all tasks for the selected calendar day.
+func (a *App) renderCalendarDay() string {
+	var b strings.Builder
+
+	// Header with date - styled nicely
+	selectedDate := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), a.calendarDay, 0, 0, 0, 0, time.Local)
+
+	// Title bar
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(styles.Highlight).
+		Background(lipgloss.Color("#1a1a2e")).
+		Padding(0, 1).
+		Width(a.width - 4)
+
+	b.WriteString(titleStyle.Render("📅 " + selectedDate.Format("Monday, January 2, 2006")))
+	b.WriteString("\n\n")
+
+	if a.loading {
+		b.WriteString(a.spinner.View())
+		b.WriteString(" Loading tasks...")
+		return b.String()
+	}
+
+	// Content area with border
+	contentWidth := a.width - 4
+	contentHeight := a.height - 6 // title + padding + status bar
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
+
+	var content strings.Builder
+
+	if len(a.tasks) == 0 {
+		emptyStyle := lipgloss.NewStyle().
+			Foreground(styles.Subtle).
+			Italic(true).
+			Align(lipgloss.Center).
+			Width(contentWidth - 4)
+
+		content.WriteString("\n")
+		content.WriteString(emptyStyle.Render("No tasks scheduled for this day"))
+		content.WriteString("\n\n")
+		content.WriteString(emptyStyle.Render("Press 'a' to add a new task"))
+	} else {
+		// Task count header
+		countStyle := lipgloss.NewStyle().
+			Foreground(styles.Subtle)
+		content.WriteString(countStyle.Render(fmt.Sprintf("%d task(s)", len(a.tasks))))
+		content.WriteString("\n\n")
+
+		// Build task lines
+		taskHeight := contentHeight - 4 // account for count header and padding
+		if taskHeight < 3 {
+			taskHeight = 3
+		}
+
+		var lines []lineInfo
+		var orderedIndices []int
+		for i := range a.tasks {
+			orderedIndices = append(orderedIndices, i)
+			lines = append(lines, lineInfo{
+				content:   a.renderTaskByDisplayIndex(i, orderedIndices),
+				taskIndex: i,
+			})
+		}
+
+		content.WriteString(a.renderScrollableLines(lines, orderedIndices, taskHeight))
+	}
+
+	// Wrap in a nice container with good padding
+	containerStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Subtle).
+		Padding(1, 3). // More vertical and horizontal padding
+		MarginLeft(2).
+		MarginRight(2).
+		Width(contentWidth - 4) // Account for margins
+
+	b.WriteString(containerStyle.Render(content.String()))
+
+	return b.String()
+}
+
+// renderStatusBar renders the bottom status bar.
+func (a *App) renderStatusBar() string {
+	// Left side: status message or error
+	left := ""
+	if a.err != nil {
+		left = styles.StatusBarError.Render(fmt.Sprintf("Error: %v", a.err))
+	} else if a.statusMsg != "" {
+		left = styles.StatusBarSuccess.Render(a.statusMsg)
+	}
+
+	// Right side: context-specific key hints
+	hints := a.getContextualHints()
+	right := strings.Join(hints, " ")
+
+	// Calculate spacing
+	leftWidth := lipgloss.Width(left)
+	rightWidth := lipgloss.Width(right)
+	padding := styles.StatusBar.GetHorizontalFrameSize()
+	spacing := a.width - leftWidth - rightWidth - padding
+	if spacing < 0 {
+		spacing = 0
+	}
+
+	return styles.StatusBar.Width(a.width - padding).Render(left + strings.Repeat(" ", spacing) + right)
+}
+
+// getContextualHints returns context-specific key hints for the status bar.
+func (a *App) getContextualHints() []string {
+	key := func(k string) string { return styles.StatusBarKey.Render(k) }
+	desc := func(d string) string { return styles.StatusBarText.Render(d) }
+
+	switch a.currentTab {
+	case TabToday, TabUpcoming:
+		return []string{
+			key("j/k") + desc(":nav"),
+			key("x") + desc(":done"),
+			key("e") + desc(":edit"),
+			key("</>") + desc(":due"),
+			key("r") + desc(":refresh"),
+			key("?") + desc(":help"),
+		}
+	case TabLabels:
+		if a.currentLabel != nil {
+			return []string{
+				key("j/k") + desc(":nav"),
+				key("x") + desc(":done"),
+				key("e") + desc(":edit"),
+				key("Esc") + desc(":back"),
+				key("?") + desc(":help"),
+			}
+		}
+		return []string{
+			key("j/k") + desc(":nav"),
+			key("Enter") + desc(":select"),
+			key("?") + desc(":help"),
+			key("q") + desc(":quit"),
+		}
+	case TabCalendar:
+		return []string{
+			key("h/l") + desc(":day"),
+			key("←/→") + desc(":month"),
+			key("v") + desc(":view"),
+			key("Enter") + desc(":select"),
+			key("?") + desc(":help"),
+		}
+	case TabProjects:
+		if a.focusedPane == PaneSidebar {
+			return []string{
+				key("j/k") + desc(":nav"),
+				key("Enter") + desc(":select"),
+				key("Tab") + desc(":pane"),
+				key("?") + desc(":help"),
+			}
+		}
+		return []string{
+			key("j/k") + desc(":nav"),
+			key("x") + desc(":done"),
+			key("e") + desc(":edit"),
+			key("Tab") + desc(":pane"),
+			key("?") + desc(":help"),
+		}
+	default:
+		return []string{
+			key("j/k") + desc(":nav"),
+			key("?") + desc(":help"),
+			key("q") + desc(":quit"),
+		}
+	}
+}
