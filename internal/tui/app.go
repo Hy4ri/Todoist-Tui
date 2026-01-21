@@ -537,12 +537,30 @@ func (a *App) handleTaskClick(y int) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// For task lists - adjust for scroll offset
-	clickedIdx := y - headerOffset + a.scrollOffset
-	if clickedIdx >= 0 && clickedIdx < len(a.tasks) {
-		a.taskCursor = clickedIdx
-		// Double-click could open detail, single click selects
-		return a, nil
+	// For task lists - use viewportLines mapping if available
+	// viewportLines maps viewport line number to task index (-1 for headers)
+	viewportLine := y - headerOffset + a.scrollOffset
+
+	if len(a.viewportLines) > 0 {
+		// Use the viewport line mapping for accurate click handling
+		if viewportLine >= 0 && viewportLine < len(a.viewportLines) {
+			taskIndex := a.viewportLines[viewportLine]
+			if taskIndex >= 0 {
+				// Find the display position (cursor) for this task index
+				for displayPos, idx := range a.taskOrderedIndices {
+					if idx == taskIndex {
+						a.taskCursor = displayPos
+						return a, nil
+					}
+				}
+			}
+		}
+	} else {
+		// Fallback for simple lists without section headers
+		if viewportLine >= 0 && viewportLine < len(a.tasks) {
+			a.taskCursor = viewportLine
+			return a, nil
+		}
 	}
 
 	return a, nil
