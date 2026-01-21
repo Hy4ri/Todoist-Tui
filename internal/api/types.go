@@ -251,7 +251,8 @@ func (t *Task) IsOverdue() bool {
 		return false
 	}
 
-	dueDate, err := time.Parse("2006-01-02", t.Due.Date)
+	// Parse in local timezone to match time.Now()
+	dueDate, err := time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
 	if err != nil {
 		return false
 	}
@@ -266,7 +267,8 @@ func (t *Task) IsDueToday() bool {
 		return false
 	}
 
-	dueDate, err := time.Parse("2006-01-02", t.Due.Date)
+	// Parse in local timezone to match time.Now()
+	dueDate, err := time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
 	if err != nil {
 		return false
 	}
@@ -281,7 +283,8 @@ func (t *Task) DueDisplay() string {
 		return ""
 	}
 
-	dueDate, err := time.Parse("2006-01-02", t.Due.Date)
+	// Parse in local timezone to match time.Now()
+	dueDate, err := time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
 	if err != nil {
 		return t.Due.String
 	}
