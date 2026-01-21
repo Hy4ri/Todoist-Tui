@@ -1236,8 +1236,20 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 		// Selection handled by calendar navigation
 		return a, nil
 	default:
-		// Select task for detail view using ordered indices mapping
-		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		// Select task for detail view
+		// First try viewportLines which correctly maps cursor to task index with section headers
+		cursorLine := a.scrollOffset + a.taskCursor
+		if len(a.viewportLines) > 0 {
+			if cursorLine >= 0 && cursorLine < len(a.viewportLines) {
+				taskIndex := a.viewportLines[cursorLine]
+				if taskIndex >= 0 && taskIndex < len(a.tasks) {
+					a.selectedTask = &a.tasks[taskIndex]
+					a.showDetailPanel = true
+					return a, a.loadTaskComments()
+				}
+			}
+		} else if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+			// Fallback to taskOrderedIndices for views without section headers
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
 			if taskIndex >= 0 && taskIndex < len(a.tasks) {
 				a.selectedTask = &a.tasks[taskIndex]
@@ -1245,7 +1257,7 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 				return a, a.loadTaskComments()
 			}
 		} else if a.taskCursor < len(a.tasks) {
-			// Fallback for views that don't use ordered indices
+			// Final fallback for simple views
 			a.selectedTask = &a.tasks[a.taskCursor]
 			a.showDetailPanel = true
 			return a, a.loadTaskComments()
