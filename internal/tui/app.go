@@ -70,6 +70,12 @@ const (
 	CalendarViewExpanded                         // Grid with task names in cells
 )
 
+// LastAction represents an undoable action.
+type LastAction struct {
+	Type   string // "complete", "uncomplete"
+	TaskID string
+}
+
 // App is the main Bubble Tea model for the application.
 type App struct {
 	// Dependencies
@@ -108,12 +114,13 @@ type App struct {
 	calendarViewMode CalendarViewMode // Compact or Expanded view
 
 	// UI state
-	loading   bool
-	err       error
-	statusMsg string
-	width     int
-	height    int
-	showHints bool // Toggle visibility of keyboard shortcuts
+	loading    bool
+	err        error
+	statusMsg  string
+	width      int
+	height     int
+	showHints  bool        // Toggle visibility of keyboard shortcuts
+	lastAction *LastAction // Last undoable action
 
 	// Components
 	spinner  spinner.Model
@@ -252,6 +259,7 @@ type projectUpdatedMsg struct{ project *api.Project }
 type projectDeletedMsg struct{ id string }
 type labelCreatedMsg struct{ label *api.Label }
 type subtaskCreatedMsg struct{}
+type undoCompletedMsg struct{}
 type searchRefreshMsg struct{}
 type refreshMsg struct{}
 type commentsLoadedMsg struct{ comments []api.Comment }
@@ -375,6 +383,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.loading = false
 		a.statusMsg = "Subtask created"
 		// Reload current view to show subtask
+		return a, func() tea.Msg { return refreshMsg{} }
+
+	case undoCompletedMsg:
+		a.loading = false
+		a.statusMsg = "Undo successful"
+		// Reload current view
 		return a, func() tea.Msg { return refreshMsg{} }
 
 	case searchRefreshMsg:
@@ -771,6 +785,8 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.showHints = !a.showHints
 	case "add_subtask":
 		return a.handleAddSubtask()
+	case "undo":
+		return a.handleUndo()
 	}
 
 	return a, nil
@@ -1156,15 +1172,24 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	// Can't complete if no tasks or in labels list view
-	if len(a.tasks) == 0 {
+	if len(a.tasks) == 0 || a.taskCursor >= len(a.tasks) {
 		return a, nil
 	}
+
+	// In Labels view without a selected label, we're showing label list
 	if a.currentView == ViewLabels && a.currentLabel == nil {
 		return a, nil
 	}
 
 	task := &a.tasks[a.taskCursor]
+
+	// Store last action for undo
+	if task.IsCompleted {
+		a.lastAction = &LastAction{Type: "uncomplete", TaskID: task.ID}
+	} else {
+		a.lastAction = &LastAction{Type: "complete", TaskID: task.ID}
+	}
+
 	a.loading = true
 
 	return a, func() tea.Msg {
@@ -1178,6 +1203,36 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 			return errMsg{err}
 		}
 		return taskCompletedMsg{id: task.ID}
+	}
+}
+
+// handleUndo reverses the last undoable action.
+func (a *App) handleUndo() (tea.Model, tea.Cmd) {
+	if a.lastAction == nil {
+		a.statusMsg = "Nothing to undo"
+		return a, nil
+	}
+
+	action := a.lastAction
+	a.lastAction = nil
+	a.loading = true
+
+	return a, func() tea.Msg {
+		var err error
+		switch action.Type {
+		case "complete":
+			// Was completed, so reopen it
+			err = a.client.ReopenTask(action.TaskID)
+		case "uncomplete":
+			// Was reopened, so close it
+			err = a.client.CloseTask(action.TaskID)
+		default:
+			return statusMsg{msg: "Unknown action"}
+		}
+		if err != nil {
+			return errMsg{err}
+		}
+		return undoCompletedMsg{}
 	}
 }
 
