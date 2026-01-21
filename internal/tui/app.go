@@ -140,6 +140,11 @@ type App struct {
 	labelInput      textinput.Model
 	isCreatingLabel bool
 
+	// Subtask creation state
+	subtaskInput      textinput.Model
+	isCreatingSubtask bool
+	parentTaskID      string
+
 	// Viewport for scrollable task lists
 	taskViewport       viewport.Model
 	viewportReady      bool
@@ -246,6 +251,7 @@ type projectCreatedMsg struct{ project *api.Project }
 type projectUpdatedMsg struct{ project *api.Project }
 type projectDeletedMsg struct{ id string }
 type labelCreatedMsg struct{ label *api.Label }
+type subtaskCreatedMsg struct{}
 type searchRefreshMsg struct{}
 type refreshMsg struct{}
 type commentsLoadedMsg struct{ comments []api.Comment }
@@ -364,6 +370,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statusMsg = fmt.Sprintf("Created label: %s", msg.label.Name)
 		// Reload labels
 		return a, a.loadLabels()
+
+	case subtaskCreatedMsg:
+		a.loading = false
+		a.statusMsg = "Subtask created"
+		// Reload current view to show subtask
+		return a, func() tea.Msg { return refreshMsg{} }
 
 	case searchRefreshMsg:
 		a.loading = false
@@ -667,6 +679,11 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handleLabelInputKeyMsg(msg)
 	}
 
+	// If we're creating a subtask, handle subtask input
+	if a.isCreatingSubtask {
+		return a.handleSubtaskInputKeyMsg(msg)
+	}
+
 	// If we're in calendar view, handle calendar-specific keys
 	if a.currentView == ViewCalendar && a.focusedPane == PaneMain {
 		return a.handleCalendarKeyMsg(msg)
@@ -752,6 +769,8 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.switchToTab(TabCalendar)
 	case "toggle_hints":
 		a.showHints = !a.showHints
+	case "add_subtask":
+		return a.handleAddSubtask()
 	}
 
 	return a, nil
@@ -1481,6 +1500,79 @@ func (a *App) handleLabelInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// handleAddSubtask opens the inline subtask creation input.
+func (a *App) handleAddSubtask() (tea.Model, tea.Cmd) {
+	// Guard: Only in main pane with tasks
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	// Get the selected task using ordered indices
+	taskIndex := a.taskCursor
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex = a.taskOrderedIndices[a.taskCursor]
+	}
+	if taskIndex < 0 || taskIndex >= len(a.tasks) {
+		return a, nil
+	}
+
+	// Initialize subtask input
+	a.parentTaskID = a.tasks[taskIndex].ID
+	a.subtaskInput = textinput.New()
+	a.subtaskInput.Placeholder = "Enter subtask..."
+	a.subtaskInput.CharLimit = 200
+	a.subtaskInput.Width = 50
+	a.subtaskInput.Focus()
+	a.isCreatingSubtask = true
+
+	return a, nil
+}
+
+// handleSubtaskInputKeyMsg handles keyboard input during subtask creation.
+func (a *App) handleSubtaskInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel subtask creation
+		a.isCreatingSubtask = false
+		a.parentTaskID = ""
+		a.subtaskInput.Reset()
+		return a, nil
+
+	case "enter":
+		// Submit new subtask
+		content := strings.TrimSpace(a.subtaskInput.Value())
+		if content == "" {
+			a.isCreatingSubtask = false
+			a.parentTaskID = ""
+			a.subtaskInput.Reset()
+			return a, nil
+		}
+
+		parentID := a.parentTaskID
+		a.isCreatingSubtask = false
+		a.parentTaskID = ""
+		a.subtaskInput.Reset()
+		a.loading = true
+
+		return a, func() tea.Msg {
+			_, err := a.client.CreateTask(api.CreateTaskRequest{
+				Content:  content,
+				ParentID: parentID,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return subtaskCreatedMsg{}
+		}
+
+	default:
+		// Update text input
+		var cmd tea.Cmd
+		a.subtaskInput, cmd = a.subtaskInput.Update(msg)
+		return a, cmd
+	}
+}
+
 // handleFormKeyMsg handles keyboard input when the form is active.
 func (a *App) handleFormKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.taskForm == nil {
@@ -2116,6 +2208,48 @@ func (a *App) View() string {
 
 		dialogContent := styles.Title.Render("🏷️ New Label") + "\n\n" +
 			a.labelInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: create • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay subtask creation dialog if active
+	if a.isCreatingSubtask {
+		dialogWidth := 60
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("➕ Add Subtask") + "\n\n" +
+			a.subtaskInput.View() + "\n\n" +
 			styles.HelpDesc.Render("Enter: create • Esc: cancel")
 
 		dialog := dialogStyle.Render(dialogContent)
