@@ -1295,7 +1295,7 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	if len(a.tasks) == 0 || a.taskCursor >= len(a.tasks) {
+	if len(a.tasks) == 0 {
 		return a, nil
 	}
 
@@ -1304,7 +1304,21 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	task := &a.tasks[a.taskCursor]
+	// Get the correct task using ordered indices mapping
+	var task *api.Task
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex := a.taskOrderedIndices[a.taskCursor]
+		if taskIndex >= 0 && taskIndex < len(a.tasks) {
+			task = &a.tasks[taskIndex]
+		}
+	} else if a.taskCursor < len(a.tasks) {
+		// Fallback for views that don't use ordered indices
+		task = &a.tasks[a.taskCursor]
+	}
+
+	if task == nil {
+		return a, nil
+	}
 
 	// Store last action for undo
 	if task.Checked {
@@ -3552,18 +3566,19 @@ func (a *App) renderProjectTasks(maxHeight int) string {
 	}
 
 	for _, section := range a.sections {
-		taskIndices, exists := tasksBySection[section.ID]
-		if !exists || len(taskIndices) == 0 {
-			continue
-		}
+		taskIndices := tasksBySection[section.ID]
 
 		// Add blank line before section header for spacing
 		// IMPORTANT: Use separate lineInfo entries, NOT embedded \n in content
 		// Embedded \n breaks viewport line counting
 		lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render(section.Name), taskIndex: -1})
-		for _, i := range taskIndices {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+
+		// Show tasks if any, otherwise show placeholder for empty section
+		if len(taskIndices) > 0 {
+			for _, i := range taskIndices {
+				lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+			}
 		}
 	}
 
