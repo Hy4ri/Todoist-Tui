@@ -129,8 +129,11 @@ type App struct {
 	isSearching   bool
 
 	// New project state
-	projectInput      textinput.Model
-	isCreatingProject bool
+	projectInput         textinput.Model
+	isCreatingProject    bool
+	isEditingProject     bool
+	editingProject       *api.Project
+	confirmDeleteProject bool
 
 	// New label state
 	labelInput      textinput.Model
@@ -238,6 +241,7 @@ type taskDeletedMsg struct{ id string }
 type taskCompletedMsg struct{ id string }
 type taskCreatedMsg struct{}
 type projectCreatedMsg struct{ project *api.Project }
+type projectUpdatedMsg struct{ project *api.Project }
 type labelCreatedMsg struct{ label *api.Label }
 type searchRefreshMsg struct{}
 type refreshMsg struct{}
@@ -335,6 +339,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case projectCreatedMsg:
 		a.loading = false
 		a.statusMsg = fmt.Sprintf("Created project: %s", msg.project.Name)
+		// Reload projects
+		return a, a.loadProjects()
+
+	case projectUpdatedMsg:
+		a.loading = false
+		a.statusMsg = fmt.Sprintf("Updated project: %s", msg.project.Name)
 		// Reload projects
 		return a, a.loadProjects()
 
@@ -611,6 +621,11 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// If we're creating a new project, handle project input
 	if a.isCreatingProject {
 		return a.handleProjectInputKeyMsg(msg)
+	}
+
+	// If we're editing a project, handle project input
+	if a.isEditingProject {
+		return a.handleProjectEditKeyMsg(msg)
 	}
 
 	// If we're creating a new label, handle label input
@@ -1090,8 +1105,34 @@ func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// handleEdit opens the edit task form for the selected task.
+// handleEdit opens the edit task form for the selected task, or edit project dialog.
 func (a *App) handleEdit() (tea.Model, tea.Cmd) {
+	// Handle project editing when sidebar is focused
+	if a.currentTab == TabProjects && a.focusedPane == PaneSidebar {
+		if a.sidebarCursor >= len(a.sidebarItems) {
+			return a, nil
+		}
+		item := a.sidebarItems[a.sidebarCursor]
+		if item.Type != "project" {
+			return a, nil
+		}
+		// Find the project to edit
+		for i := range a.projects {
+			if a.projects[i].ID == item.ID {
+				a.editingProject = &a.projects[i]
+				a.projectInput = textinput.New()
+				a.projectInput.SetValue(a.projects[i].Name)
+				a.projectInput.CharLimit = 100
+				a.projectInput.Width = 40
+				a.projectInput.Focus()
+				a.isEditingProject = true
+				return a, nil
+			}
+		}
+		return a, nil
+	}
+
+	// Handle task editing
 	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
 		return a, nil
 	}
@@ -1101,7 +1142,16 @@ func (a *App) handleEdit() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	task := &a.tasks[a.taskCursor]
+	// Use ordered indices if available
+	taskIndex := a.taskCursor
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex = a.taskOrderedIndices[a.taskCursor]
+	}
+	if taskIndex < 0 || taskIndex >= len(a.tasks) {
+		return a, nil
+	}
+
+	task := &a.tasks[taskIndex]
 	a.previousView = a.currentView
 	a.currentView = ViewTaskForm
 	a.taskForm = NewEditTaskForm(task, a.projects)
@@ -1159,6 +1209,50 @@ func (a *App) handleProjectInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			// Refresh projects after creation
 			return projectCreatedMsg{project: project}
+		}
+
+	default:
+		// Update text input
+		var cmd tea.Cmd
+		a.projectInput, cmd = a.projectInput.Update(msg)
+		return a, cmd
+	}
+}
+
+// handleProjectEditKeyMsg handles keyboard input during project editing.
+func (a *App) handleProjectEditKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		// Cancel project editing
+		a.isEditingProject = false
+		a.editingProject = nil
+		a.projectInput.Reset()
+		return a, nil
+
+	case "enter":
+		// Submit project update
+		name := strings.TrimSpace(a.projectInput.Value())
+		if name == "" || a.editingProject == nil {
+			a.isEditingProject = false
+			a.editingProject = nil
+			a.projectInput.Reset()
+			return a, nil
+		}
+
+		projectID := a.editingProject.ID
+		a.isEditingProject = false
+		a.editingProject = nil
+		a.projectInput.Reset()
+		a.loading = true
+
+		return a, func() tea.Msg {
+			project, err := a.client.UpdateProject(projectID, api.UpdateProjectRequest{
+				Name: &name,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return projectUpdatedMsg{project: project}
 		}
 
 	default:
@@ -1731,6 +1825,48 @@ func (a *App) View() string {
 		dialogContent := styles.Title.Render("📁 New Project") + "\n\n" +
 			a.projectInput.View() + "\n\n" +
 			styles.HelpDesc.Render("Enter: create • Esc: cancel")
+
+		dialog := dialogStyle.Render(dialogContent)
+
+		// Center the dialog
+		dialogLines := strings.Split(dialog, "\n")
+		centeredDialog := ""
+		leftPad := (a.width - dialogWidth - 4) / 2
+		if leftPad < 0 {
+			leftPad = 0
+		}
+		for _, line := range dialogLines {
+			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
+		}
+
+		// Overlay on content
+		contentLines := strings.Split(content, "\n")
+		dialogLineCount := len(dialogLines)
+		startLine := (len(contentLines) - dialogLineCount) / 2
+		if startLine < 0 {
+			startLine = 0
+		}
+
+		// Replace content lines with dialog
+		dialogSplit := strings.Split(centeredDialog, "\n")
+		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
+			contentLines[startLine+i] = dialogSplit[i]
+		}
+		content = strings.Join(contentLines, "\n")
+	}
+
+	// Overlay project edit dialog if active
+	if a.isEditingProject {
+		dialogWidth := 50
+		dialogStyle := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(1, 2).
+			Width(dialogWidth)
+
+		dialogContent := styles.Title.Render("✏️ Edit Project") + "\n\n" +
+			a.projectInput.View() + "\n\n" +
+			styles.HelpDesc.Render("Enter: save • Esc: cancel")
 
 		dialog := dialogStyle.Render(dialogContent)
 
