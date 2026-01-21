@@ -16,6 +16,9 @@ coverage.html
 # Dependency directories
 vendor/
 
+.agent/*
+AGENTS.md
+
 # IDE
 .idea/
 .vscode/
