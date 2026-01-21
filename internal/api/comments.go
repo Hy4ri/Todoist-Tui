@@ -7,18 +7,31 @@ import (
 
 // GetComments returns comments for a task or project.
 // Either taskID or projectID must be provided.
+// Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetComments(taskID, projectID string) ([]Comment, error) {
-	var comments []Comment
+	var allComments []Comment
 	query := url.Values{}
 	if taskID != "" {
 		query.Set("task_id", taskID)
 	} else if projectID != "" {
 		query.Set("project_id", projectID)
 	}
-	if err := c.GetWithQuery("/comments", query, &comments); err != nil {
-		return nil, fmt.Errorf("failed to get comments: %w", err)
+
+	for {
+		var response CommentsPaginatedResponse
+		if err := c.GetWithQuery("/comments", query, &response); err != nil {
+			return nil, fmt.Errorf("failed to get comments: %w", err)
+		}
+
+		allComments = append(allComments, response.Results...)
+
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		query.Set("cursor", *response.NextCursor)
 	}
-	return comments, nil
+
+	return allComments, nil
 }
 
 // GetComment returns a single comment by ID.

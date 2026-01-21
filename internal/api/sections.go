@@ -6,16 +6,29 @@ import (
 )
 
 // GetSections returns all sections, optionally filtered by project.
+// Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetSections(projectID string) ([]Section, error) {
-	var sections []Section
+	var allSections []Section
 	query := url.Values{}
 	if projectID != "" {
 		query.Set("project_id", projectID)
 	}
-	if err := c.GetWithQuery("/sections", query, &sections); err != nil {
-		return nil, fmt.Errorf("failed to get sections: %w", err)
+
+	for {
+		var response SectionsPaginatedResponse
+		if err := c.GetWithQuery("/sections", query, &response); err != nil {
+			return nil, fmt.Errorf("failed to get sections: %w", err)
+		}
+
+		allSections = append(allSections, response.Results...)
+
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		query.Set("cursor", *response.NextCursor)
 	}
-	return sections, nil
+
+	return allSections, nil
 }
 
 // GetSection returns a single section by ID.

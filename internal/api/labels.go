@@ -1,14 +1,31 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+)
 
 // GetLabels returns all personal labels.
+// Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetLabels() ([]Label, error) {
-	var labels []Label
-	if err := c.Get("/labels", &labels); err != nil {
-		return nil, fmt.Errorf("failed to get labels: %w", err)
+	var allLabels []Label
+	query := url.Values{}
+
+	for {
+		var response LabelsPaginatedResponse
+		if err := c.GetWithQuery("/labels", query, &response); err != nil {
+			return nil, fmt.Errorf("failed to get labels: %w", err)
+		}
+
+		allLabels = append(allLabels, response.Results...)
+
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		query.Set("cursor", *response.NextCursor)
 	}
-	return labels, nil
+
+	return allLabels, nil
 }
 
 // GetLabel returns a single label by ID.

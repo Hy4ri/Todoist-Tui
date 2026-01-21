@@ -3,13 +3,26 @@ package api
 import "fmt"
 
 // GetTasks returns all active tasks, optionally filtered.
+// Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetTasks(filter TaskFilter) ([]Task, error) {
-	var tasks []Task
+	var allTasks []Task
 	query := buildFilterQuery(filter)
-	if err := c.GetWithQuery("/tasks", query, &tasks); err != nil {
-		return nil, fmt.Errorf("failed to get tasks: %w", err)
+
+	for {
+		var response TasksPaginatedResponse
+		if err := c.GetWithQuery("/tasks", query, &response); err != nil {
+			return nil, fmt.Errorf("failed to get tasks: %w", err)
+		}
+
+		allTasks = append(allTasks, response.Results...)
+
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		query.Set("cursor", *response.NextCursor)
 	}
-	return tasks, nil
+
+	return allTasks, nil
 }
 
 // GetTask returns a single task by ID.
