@@ -1237,12 +1237,15 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 		return a, nil
 	default:
 		// Select task for detail view
-		// taskCursor indexes into taskOrderedIndices which contains task indices
-		// (NOT viewport line positions which include section headers)
+		// First check if we have tasks at all
+		if len(a.tasks) == 0 {
+			return a, nil
+		}
+
+		// Try taskOrderedIndices first (for views with sections/groups)
 		if len(a.taskOrderedIndices) > 0 && a.taskCursor >= 0 && a.taskCursor < len(a.taskOrderedIndices) {
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
 			if taskIndex >= 0 && taskIndex < len(a.tasks) {
-				// Make a stable copy (heap allocated)
 				taskCopy := new(api.Task)
 				*taskCopy = a.tasks[taskIndex]
 				a.selectedTask = taskCopy
@@ -1250,7 +1253,9 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 				return a, a.loadTaskComments()
 			}
 		}
-		// Fallback for simple views without ordered indices
+
+		// Fallback: use taskCursor directly to index a.tasks
+		// This works for views that don't pre-populate taskOrderedIndices
 		if a.taskCursor >= 0 && a.taskCursor < len(a.tasks) {
 			taskCopy := new(api.Task)
 			*taskCopy = a.tasks[a.taskCursor]
@@ -3235,7 +3240,7 @@ func (a *App) renderMainView() string {
 
 		var leftPane string
 		if a.currentTab == TabProjects {
-			leftPane = a.renderProjectsTabContent(contentHeight)
+			leftPane = a.renderProjectsTabContent(listWidth, contentHeight)
 		} else {
 			leftPane = a.renderTaskList(listWidth, contentHeight)
 		}
@@ -3247,7 +3252,7 @@ func (a *App) renderMainView() string {
 	} else {
 		if a.currentTab == TabProjects {
 			// Projects tab shows sidebar + content
-			mainContent = a.renderProjectsTabContent(contentHeight)
+			mainContent = a.renderProjectsTabContent(a.width, contentHeight)
 		} else {
 			// Other tabs show content only (full width)
 			mainContent = a.renderTaskList(a.width-2, contentHeight)
@@ -3374,9 +3379,18 @@ func (a *App) renderTabBar() string {
 }
 
 // renderProjectsTabContent renders content for the Projects tab (sidebar + tasks).
-func (a *App) renderProjectsTabContent(height int) string {
+func (a *App) renderProjectsTabContent(width, height int) string {
 	sidebarWidth := 30 // Wider sidebar for full project names
-	mainWidth := a.width - sidebarWidth - 4
+	if width < 70 {
+		sidebarWidth = 20
+	}
+	if width < 50 {
+		sidebarWidth = 15
+	}
+	mainWidth := width - sidebarWidth - 4
+	if mainWidth < 20 {
+		mainWidth = 20
+	}
 
 	// Render sidebar (project list)
 	sidebar := a.renderProjectSidebar(sidebarWidth, height)
