@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	// BaseURL is the Todoist REST API v2 base URL.
-	BaseURL = "https://api.todoist.com/rest/v2"
+	// BaseURL is the Todoist API v1 base URL.
+	BaseURL = "https://api.todoist.com/api/v1"
 
 	// DefaultTimeout is the default HTTP client timeout.
 	DefaultTimeout = 30 * time.Second
@@ -136,9 +136,7 @@ func buildFilterQuery(filter TaskFilter) url.Values {
 	if filter.Label != "" {
 		query.Set("label", filter.Label)
 	}
-	if filter.Filter != "" {
-		query.Set("filter", filter.Filter)
-	}
+	// Note: filter.Filter is NOT used here - v1 API requires /tasks/filter endpoint for filter queries
 	if filter.Lang != "" {
 		query.Set("lang", filter.Lang)
 	}
@@ -147,4 +145,34 @@ func buildFilterQuery(filter TaskFilter) url.Values {
 	}
 
 	return query
+}
+
+// PaginatedResponse represents a paginated API response for tasks.
+type TasksPaginatedResponse struct {
+	Results    []Task  `json:"results"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+// ProjectsPaginatedResponse represents a paginated API response for projects.
+type ProjectsPaginatedResponse struct {
+	Results    []Project `json:"results"`
+	NextCursor *string   `json:"next_cursor"`
+}
+
+// SectionsPaginatedResponse represents a paginated API response for sections.
+type SectionsPaginatedResponse struct {
+	Results    []Section `json:"results"`
+	NextCursor *string   `json:"next_cursor"`
+}
+
+// LabelsPaginatedResponse represents a paginated API response for labels.
+type LabelsPaginatedResponse struct {
+	Results    []Label `json:"results"`
+	NextCursor *string `json:"next_cursor"`
+}
+
+// CommentsPaginatedResponse represents a paginated API response for comments.
+type CommentsPaginatedResponse struct {
+	Results    []Comment `json:"results"`
+	NextCursor *string   `json:"next_cursor"`
 }

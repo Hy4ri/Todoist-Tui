@@ -232,10 +232,8 @@ func (a *App) loadInitialData() tea.Cmd {
 			return errMsg{err}
 		}
 
-		// Load today's tasks (including overdue)
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: "today | overdue",
-		})
+		// Load today's tasks (including overdue) using filter endpoint
+		tasks, err := a.client.GetTasksByFilter("today | overdue")
 		if err != nil {
 			return errMsg{err}
 		}
@@ -357,6 +355,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(msg.sections) > 0 {
 			a.sections = msg.sections
+			// Sort sections by SectionOrder
+			sort.Slice(a.sections, func(i, j int) bool {
+				return a.sections[i].SectionOrder < a.sections[j].SectionOrder
+			})
 		}
 		return a, nil
 
@@ -708,11 +710,30 @@ func (a *App) switchToTab(tab Tab) (tea.Model, tea.Cmd) {
 
 // handleKeyMsg processes keyboard input.
 func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global key handling first
-	switch msg.String() {
-	case "ctrl+c":
+	// Only ctrl+c is truly global
+	if msg.String() == "ctrl+c" {
 		return a, tea.Quit
-	// Tab switching with number keys (1-5)
+	}
+
+	// If we're in help view, any key goes back
+	if a.currentView == ViewHelp {
+		a.currentView = a.previousView
+		return a, nil
+	}
+
+	// Route key messages based on current view - BEFORE tab switching
+	// This allows forms to capture number keys for text input
+	switch a.currentView {
+	case ViewTaskForm:
+		return a.handleFormKeyMsg(msg)
+	case ViewSections:
+		return a.handleSectionsKeyMsg(msg)
+	case ViewSearch:
+		return a.handleSearchKeyMsg(msg)
+	}
+
+	// Tab switching with number keys (1-5) - only when not in form/input modes
+	switch msg.String() {
 	case "1":
 		return a.switchToTab(TabToday)
 	case "2":
@@ -723,22 +744,6 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.switchToTab(TabCalendar)
 	case "5":
 		return a.switchToTab(TabProjects)
-	}
-
-	// If we're in help view, any key goes back
-	if a.currentView == ViewHelp {
-		a.currentView = a.previousView
-		return a, nil
-	}
-
-	// Route key messages based on current view
-	switch a.currentView {
-	case ViewTaskForm:
-		return a.handleFormKeyMsg(msg)
-	case ViewSections:
-		return a.handleSectionsKeyMsg(msg)
-	case ViewSearch:
-		return a.handleSearchKeyMsg(msg)
 	}
 
 	// If we're creating a new project, handle project input
@@ -1231,17 +1236,30 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 		// Selection handled by calendar navigation
 		return a, nil
 	default:
-		// Select task for detail view using ordered indices mapping
-		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		// Select task for detail view
+		// First check if we have tasks at all
+		if len(a.tasks) == 0 {
+			return a, nil
+		}
+
+		// Try taskOrderedIndices first (for views with sections/groups)
+		if len(a.taskOrderedIndices) > 0 && a.taskCursor >= 0 && a.taskCursor < len(a.taskOrderedIndices) {
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
 			if taskIndex >= 0 && taskIndex < len(a.tasks) {
-				a.selectedTask = &a.tasks[taskIndex]
+				taskCopy := new(api.Task)
+				*taskCopy = a.tasks[taskIndex]
+				a.selectedTask = taskCopy
 				a.showDetailPanel = true
 				return a, a.loadTaskComments()
 			}
-		} else if a.taskCursor < len(a.tasks) {
-			// Fallback for views that don't use ordered indices
-			a.selectedTask = &a.tasks[a.taskCursor]
+		}
+
+		// Fallback: use taskCursor directly to index a.tasks
+		// This works for views that don't pre-populate taskOrderedIndices
+		if a.taskCursor >= 0 && a.taskCursor < len(a.tasks) {
+			taskCopy := new(api.Task)
+			*taskCopy = a.tasks[a.taskCursor]
+			a.selectedTask = taskCopy
 			a.showDetailPanel = true
 			return a, a.loadTaskComments()
 		}
@@ -1297,7 +1315,7 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	if len(a.tasks) == 0 || a.taskCursor >= len(a.tasks) {
+	if len(a.tasks) == 0 {
 		return a, nil
 	}
 
@@ -1306,10 +1324,24 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	task := &a.tasks[a.taskCursor]
+	// Get the correct task using ordered indices mapping
+	var task *api.Task
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex := a.taskOrderedIndices[a.taskCursor]
+		if taskIndex >= 0 && taskIndex < len(a.tasks) {
+			task = &a.tasks[taskIndex]
+		}
+	} else if a.taskCursor < len(a.tasks) {
+		// Fallback for views that don't use ordered indices
+		task = &a.tasks[a.taskCursor]
+	}
+
+	if task == nil {
+		return a, nil
+	}
 
 	// Store last action for undo
-	if task.IsCompleted {
+	if task.Checked {
 		a.lastAction = &LastAction{Type: "uncomplete", TaskID: task.ID}
 	} else {
 		a.lastAction = &LastAction{Type: "complete", TaskID: task.ID}
@@ -1319,7 +1351,7 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 
 	return a, func() tea.Msg {
 		var err error
-		if task.IsCompleted {
+		if task.Checked {
 			err = a.client.ReopenTask(task.ID)
 		} else {
 			err = a.client.CloseTask(task.ID)
@@ -1376,7 +1408,7 @@ func (a *App) handleDelete() (tea.Model, tea.Cmd) {
 		for i := range a.projects {
 			if a.projects[i].ID == item.ID {
 				// Don't allow deleting inbox
-				if a.projects[i].IsInboxProject {
+				if a.projects[i].InboxProject {
 					a.statusMsg = "Cannot delete Inbox project"
 					return a, nil
 				}
@@ -1438,6 +1470,24 @@ func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 	if a.currentProject != nil {
 		a.taskForm.ProjectID = a.currentProject.ID
 		a.taskForm.ProjectName = a.currentProject.Name
+
+		// Try to detect current section based on cursor position
+		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+			taskIndex := a.taskOrderedIndices[a.taskCursor]
+			if taskIndex >= 0 && taskIndex < len(a.tasks) {
+				task := a.tasks[taskIndex]
+				if task.SectionID != nil && *task.SectionID != "" {
+					a.taskForm.SectionID = *task.SectionID
+					// Find section name
+					for _, s := range a.sections {
+						if s.ID == *task.SectionID {
+							a.taskForm.SectionName = s.Name
+							break
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return a, nil
@@ -2255,7 +2305,7 @@ func (a *App) handleSearchKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.loading = true
 			return a, func() tea.Msg {
 				var err error
-				if task.IsCompleted {
+				if task.Checked {
 					err = a.client.ReopenTask(task.ID)
 				} else {
 					err = a.client.CloseTask(task.ID)
@@ -2431,17 +2481,21 @@ func (a *App) loadProjectTasks(projectID string) tea.Cmd {
 // refreshTasks refreshes the current task list.
 func (a *App) refreshTasks() tea.Cmd {
 	return func() tea.Msg {
-		var filter api.TaskFilter
+		var tasks []api.Task
+		var err error
+
 		if a.currentView == ViewProject && a.currentProject != nil {
-			filter.ProjectID = a.currentProject.ID
+			tasks, err = a.client.GetTasks(api.TaskFilter{
+				ProjectID: a.currentProject.ID,
+			})
 		} else if a.currentView == ViewLabels && a.currentLabel != nil {
-			// Load tasks for the selected label
-			filter.Filter = "@" + a.currentLabel.Name
+			// Load tasks for the selected label using filter endpoint
+			tasks, err = a.client.GetTasksByFilter("@" + a.currentLabel.Name)
 		} else {
-			filter.Filter = "today | overdue"
+			// Default to today | overdue
+			tasks, err = a.client.GetTasksByFilter("today | overdue")
 		}
 
-		tasks, err := a.client.GetTasks(filter)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2453,9 +2507,7 @@ func (a *App) refreshTasks() tea.Cmd {
 // loadTodayTasks loads today's tasks including overdue.
 func (a *App) loadTodayTasks() tea.Cmd {
 	return func() tea.Msg {
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: "today | overdue",
-		})
+		tasks, err := a.client.GetTasksByFilter("today | overdue")
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2525,9 +2577,7 @@ func (a *App) loadLabels() tea.Cmd {
 // loadLabelTasks loads tasks filtered by a specific label.
 func (a *App) loadLabelTasks(labelName string) tea.Cmd {
 	return func() tea.Msg {
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: "@" + labelName,
-		})
+		tasks, err := a.client.GetTasksByFilter("@" + labelName)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2541,9 +2591,7 @@ func (a *App) loadCalendarDayTasks() tea.Cmd {
 	dateStr := selectedDate.Format("2006-01-02")
 
 	return func() tea.Msg {
-		tasks, err := a.client.GetTasks(api.TaskFilter{
-			Filter: dateStr,
-		})
+		tasks, err := a.client.GetTasksByFilter(dateStr)
 		if err != nil {
 			return errMsg{err}
 		}
@@ -2574,7 +2622,7 @@ func (a *App) buildSidebarItems() {
 	for _, p := range a.projects {
 		if p.IsFavorite {
 			icon := "⭐"
-			if p.IsInboxProject {
+			if p.InboxProject {
 				icon = "📥"
 			}
 			a.sidebarItems = append(a.sidebarItems, SidebarItem{
@@ -2604,7 +2652,7 @@ func (a *App) buildSidebarItems() {
 	for _, p := range a.projects {
 		if !p.IsFavorite {
 			icon := "📁"
-			if p.IsInboxProject {
+			if p.InboxProject {
 				icon = "📥"
 			}
 			a.sidebarItems = append(a.sidebarItems, SidebarItem{
@@ -3192,7 +3240,7 @@ func (a *App) renderMainView() string {
 
 		var leftPane string
 		if a.currentTab == TabProjects {
-			leftPane = a.renderProjectsTabContent(contentHeight)
+			leftPane = a.renderProjectsTabContent(listWidth, contentHeight)
 		} else {
 			leftPane = a.renderTaskList(listWidth, contentHeight)
 		}
@@ -3204,7 +3252,7 @@ func (a *App) renderMainView() string {
 	} else {
 		if a.currentTab == TabProjects {
 			// Projects tab shows sidebar + content
-			mainContent = a.renderProjectsTabContent(contentHeight)
+			mainContent = a.renderProjectsTabContent(a.width, contentHeight)
 		} else {
 			// Other tabs show content only (full width)
 			mainContent = a.renderTaskList(a.width-2, contentHeight)
@@ -3331,9 +3379,18 @@ func (a *App) renderTabBar() string {
 }
 
 // renderProjectsTabContent renders content for the Projects tab (sidebar + tasks).
-func (a *App) renderProjectsTabContent(height int) string {
+func (a *App) renderProjectsTabContent(width, height int) string {
 	sidebarWidth := 30 // Wider sidebar for full project names
-	mainWidth := a.width - sidebarWidth - 4
+	if width < 70 {
+		sidebarWidth = 20
+	}
+	if width < 50 {
+		sidebarWidth = 15
+	}
+	mainWidth := width - sidebarWidth - 4
+	if mainWidth < 20 {
+		mainWidth = 20
+	}
 
 	// Render sidebar (project list)
 	sidebar := a.renderProjectSidebar(sidebarWidth, height)
@@ -3556,18 +3613,19 @@ func (a *App) renderProjectTasks(maxHeight int) string {
 	}
 
 	for _, section := range a.sections {
-		taskIndices, exists := tasksBySection[section.ID]
-		if !exists || len(taskIndices) == 0 {
-			continue
-		}
+		taskIndices := tasksBySection[section.ID]
 
 		// Add blank line before section header for spacing
 		// IMPORTANT: Use separate lineInfo entries, NOT embedded \n in content
 		// Embedded \n breaks viewport line counting
 		lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render(section.Name), taskIndex: -1})
-		for _, i := range taskIndices {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+
+		// Show tasks if any, otherwise show placeholder for empty section
+		if len(taskIndices) > 0 {
+			for _, i := range taskIndices {
+				lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+			}
 		}
 	}
 
@@ -3665,7 +3723,7 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 
 	// Checkbox
 	checkbox := styles.CheckboxUnchecked
-	if t.IsCompleted {
+	if t.Checked {
 		checkbox = styles.CheckboxChecked
 	}
 
@@ -3711,7 +3769,7 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 	if displayPos == a.taskCursor && a.focusedPane == PaneMain {
 		style = styles.TaskSelected
 	}
-	if t.IsCompleted {
+	if t.Checked {
 		style = styles.TaskCompleted
 	}
 
@@ -3789,7 +3847,7 @@ func (a *App) renderTaskDetail() string {
 
 	// Title with checkbox status
 	checkbox := "[ ]"
-	if t.IsCompleted {
+	if t.Checked {
 		checkbox = "[x]"
 	}
 	b.WriteString(styles.Title.Render("Task Details"))
@@ -3880,10 +3938,10 @@ func (a *App) renderTaskDetail() string {
 	}
 
 	// Comment count
-	if t.CommentCount > 0 {
+	if t.NoteCount > 0 {
 		b.WriteString(styles.DetailIcon.Render("  💬"))
 		b.WriteString(styles.DetailLabel.Render("Comments"))
-		b.WriteString(styles.DetailValue.Render(fmt.Sprintf("%d", t.CommentCount)))
+		b.WriteString(styles.DetailValue.Render(fmt.Sprintf("%d", t.NoteCount)))
 		b.WriteString("\n")
 	}
 
@@ -3998,7 +4056,7 @@ func (a *App) renderSearch() string {
 			}
 
 			checkbox := styles.CheckboxUnchecked
-			if task.IsCompleted {
+			if task.Checked {
 				checkbox = styles.CheckboxChecked
 			}
 
@@ -4416,7 +4474,7 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 		for i := startIdx; i < endIdx; i++ {
 			t := dayTasks[i]
 			checkbox := styles.CheckboxUnchecked
-			if t.IsCompleted {
+			if t.Checked {
 				checkbox = styles.CheckboxChecked
 			}
 			priorityStyle := styles.GetPriorityStyle(t.Priority)

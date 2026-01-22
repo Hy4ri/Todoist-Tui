@@ -1,14 +1,31 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+)
 
 // GetProjects returns all projects.
+// Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetProjects() ([]Project, error) {
-	var projects []Project
-	if err := c.Get("/projects", &projects); err != nil {
-		return nil, fmt.Errorf("failed to get projects: %w", err)
+	var allProjects []Project
+	query := url.Values{}
+
+	for {
+		var response ProjectsPaginatedResponse
+		if err := c.GetWithQuery("/projects", query, &response); err != nil {
+			return nil, fmt.Errorf("failed to get projects: %w", err)
+		}
+
+		allProjects = append(allProjects, response.Results...)
+
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		query.Set("cursor", *response.NextCursor)
 	}
-	return projects, nil
+
+	return allProjects, nil
 }
 
 // GetProject returns a single project by ID.

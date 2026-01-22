@@ -18,17 +18,17 @@ func TestGetProjects(t *testing.T) {
 			name: "successful request",
 			response: []Project{
 				{
-					ID:             "123",
-					Name:           "Inbox",
-					Color:          "grey",
-					Order:          0,
-					IsInboxProject: true,
+					ID:           "123",
+					Name:         "Inbox",
+					Color:        "grey",
+					ChildOrder:   0,
+					InboxProject: true,
 				},
 				{
 					ID:         "456",
 					Name:       "Work",
 					Color:      "blue",
-					Order:      1,
+					ChildOrder: 1,
 					IsFavorite: true,
 				},
 			},
@@ -56,7 +56,12 @@ func TestGetProjects(t *testing.T) {
 
 				w.WriteHeader(tt.statusCode)
 				if tt.response != nil {
-					json.NewEncoder(w).Encode(tt.response)
+					// Return paginated response format
+					paginatedResp := map[string]interface{}{
+						"results":     tt.response,
+						"next_cursor": nil,
+					}
+					json.NewEncoder(w).Encode(paginatedResp)
 				}
 			}))
 			defer server.Close()
@@ -97,7 +102,7 @@ func TestGetProject(t *testing.T) {
 		ID:         projectID,
 		Name:       "My Project",
 		Color:      "red",
-		Order:      5,
+		ChildOrder: 5,
 		IsFavorite: true,
 	}
 

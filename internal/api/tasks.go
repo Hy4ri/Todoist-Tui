@@ -1,15 +1,63 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+	"net/url"
+)
 
-// GetTasks returns all active tasks, optionally filtered.
+// GetTasks returns all active tasks, optionally filtered by project/section/label.
+// Note: The Filter field is NOT supported in v1 API on /tasks endpoint.
+// Use GetTasksByFilter for filter-based queries (e.g., "today | overdue").
+// Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetTasks(filter TaskFilter) ([]Task, error) {
-	var tasks []Task
+	var allTasks []Task
 	query := buildFilterQuery(filter)
-	if err := c.GetWithQuery("/tasks", query, &tasks); err != nil {
-		return nil, fmt.Errorf("failed to get tasks: %w", err)
+
+	for {
+		var response TasksPaginatedResponse
+		if err := c.GetWithQuery("/tasks", query, &response); err != nil {
+			return nil, fmt.Errorf("failed to get tasks: %w", err)
+		}
+
+		allTasks = append(allTasks, response.Results...)
+
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		query.Set("cursor", *response.NextCursor)
 	}
-	return tasks, nil
+
+	return allTasks, nil
+}
+
+// GetTasksByFilter returns tasks matching a Todoist filter query.
+// This uses the v1 API /tasks/filter endpoint.
+// Examples: "today", "today | overdue", "@labelname", "2024-01-22"
+// Handles pagination automatically, fetching all pages.
+func (c *Client) GetTasksByFilter(filterQuery string) ([]Task, error) {
+	if filterQuery == "" {
+		return nil, fmt.Errorf("filter query cannot be empty")
+	}
+
+	var allTasks []Task
+	query := url.Values{}
+	query.Set("query", filterQuery)
+
+	for {
+		var response TasksPaginatedResponse
+		if err := c.GetWithQuery("/tasks/filter", query, &response); err != nil {
+			return nil, fmt.Errorf("failed to get filtered tasks: %w", err)
+		}
+
+		allTasks = append(allTasks, response.Results...)
+
+		if response.NextCursor == nil || *response.NextCursor == "" {
+			break
+		}
+		query.Set("cursor", *response.NextCursor)
+	}
+
+	return allTasks, nil
 }
 
 // GetTask returns a single task by ID.

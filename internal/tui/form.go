@@ -41,6 +41,8 @@ type TaskForm struct {
 	Priority        int    // 1-4 (Todoist priority, 4=highest)
 	ProjectID       string // Selected project ID
 	ProjectName     string // Selected project name (for display)
+	SectionID       string // Selected section ID (optional)
+	SectionName     string // Selected section name (for display)
 	projectCursor   int    // For project selection dropdown
 	showProjectList bool   // Whether project dropdown is open
 
@@ -71,7 +73,7 @@ func NewTaskForm(projects []api.Project) *TaskForm {
 	// Find inbox project as default
 	var inboxID, inboxName string
 	for _, p := range projects {
-		if p.IsInboxProject {
+		if p.InboxProject {
 			inboxID = p.ID
 			inboxName = p.Name
 			break
@@ -287,6 +289,10 @@ func (f *TaskForm) ToCreateRequest() api.CreateTaskRequest {
 		Priority:  f.Priority,
 	}
 
+	if f.SectionID != "" {
+		req.SectionID = f.SectionID
+	}
+
 	if desc := strings.TrimSpace(f.DescriptionInput.Value()); desc != "" {
 		req.Description = desc
 	}
@@ -432,7 +438,7 @@ func (f *TaskForm) renderProjectField() string {
 			}
 
 			name := p.Name
-			if p.IsInboxProject {
+			if p.InboxProject {
 				name = "Inbox"
 			}
 			lines = append(lines, style.Render(cursor+name))
