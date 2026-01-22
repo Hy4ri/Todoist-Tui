@@ -3257,8 +3257,11 @@ func (a *App) renderMainView() string {
 			leftPane = a.renderTaskList(listWidth, contentHeight)
 		}
 
-		// Render detail panel
-		rightPane := a.renderDetailPanel(detailWidth, contentHeight)
+		// Render detail panel - using component
+		a.detailComp.SetSize(detailWidth, contentHeight)
+		a.detailComp.SetTask(a.selectedTask)
+		a.detailComp.SetComments(a.comments)
+		rightPane := a.detailComp.ViewPanel()
 
 		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 	} else {
@@ -3404,8 +3407,18 @@ func (a *App) renderProjectsTabContent(width, height int) string {
 		mainWidth = 20
 	}
 
-	// Render sidebar (project list)
-	sidebar := a.renderProjectSidebar(sidebarWidth, height)
+	// Render sidebar (project list) - using component
+	a.sidebarComp.SetSize(sidebarWidth, height)
+	a.sidebarComp.SetCursor(a.sidebarCursor) // Sync cursor from App state
+	if a.focusedPane == PaneSidebar {
+		a.sidebarComp.Focus()
+	} else {
+		a.sidebarComp.Blur()
+	}
+	if a.currentProject != nil {
+		a.sidebarComp.SetActiveProject(a.currentProject.ID)
+	}
+	sidebar := a.sidebarComp.View()
 
 	// Render main content (tasks for selected project)
 	main := a.renderProjectTaskList(mainWidth, height)
