@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/config"
+	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
@@ -129,6 +130,11 @@ type App struct {
 	keyState KeyState
 	keymap   Keymap
 
+	// UI Components (new)
+	sidebarComp *components.SidebarModel
+	detailComp  *components.DetailModel
+	helpComp    *components.HelpModel
+
 	// Form state (for add/edit)
 	taskForm *TaskForm
 
@@ -212,6 +218,10 @@ func NewApp(client *api.Client, cfg *config.Config) *App {
 		calendarViewMode: calViewMode,
 		loading:          true,
 		showHints:        true,
+		// Initialize UI components
+		sidebarComp: components.NewSidebar(),
+		detailComp:  components.NewDetail(),
+		helpComp:    components.NewHelp(),
 	}
 }
 
@@ -342,6 +352,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(msg.projects) > 0 {
 			a.projects = msg.projects
 			a.buildSidebarItems()
+			// Sync sidebar component
+			a.sidebarComp.SetProjects(msg.projects)
 		}
 		if msg.tasks != nil {
 			a.tasks = msg.tasks
