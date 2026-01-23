@@ -9,7 +9,7 @@ var (
 	Subtle = lipgloss.AdaptiveColor{Light: "#666666", Dark: "#999999"}
 
 	// Highlight is the accent color for selected items
-	Highlight = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#7D56F4"}
+	Highlight = lipgloss.AdaptiveColor{Light: "#874BFD", Dark: "#990000"}
 
 	// Special colors
 	ErrorColor   = lipgloss.AdaptiveColor{Light: "#FF0000", Dark: "#FF6666"}
@@ -19,9 +19,9 @@ var (
 
 // Priority colors (Todoist uses P1=red, P2=orange, P3=yellow, P4=default)
 var (
-	Priority1Color = lipgloss.Color("#FF0000") // P1 - Red (highest)
-	Priority2Color = lipgloss.Color("#FF9900") // P2 - Orange
-	Priority3Color = lipgloss.Color("#FFCC00") // P3 - Yellow
+	Priority1Color = lipgloss.Color("#D0473D") // P1 - Red (highest)
+	Priority2Color = lipgloss.Color("#EA8811") // P2 - Orange
+	Priority3Color = lipgloss.Color("#296FDF") // P3 - Blue
 	Priority4Color = lipgloss.Color("")        // P4 - Default (no color)
 )
 
