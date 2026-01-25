@@ -3,6 +3,7 @@
 # Binary name
 BINARY_NAME=todoist-tui
 BINARY_PATH=bin/$(BINARY_NAME)
+LOCAL_PATH=~/.local/bin/$(BINARY_NAME)
 
 # Go parameters
 GOCMD=go

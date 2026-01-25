@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -182,9 +183,16 @@ type App struct {
 	commentInput    textinput.Model
 	isAddingComment bool
 
-	viewportContent    string // Current content in viewport
-	viewportLines      []int  // Maps viewport line number to task index (-1 for headers)
-	taskOrderedIndices []int  // Maps display order (cursor position) to a.tasks index
+	viewportContent    string   // Current content in viewport
+	viewportLines      []int    // Maps viewport line number to task index (-1 for headers)
+	taskOrderedIndices []int    // Maps display order (cursor position) to a.tasks index
+	viewportSections   []string // Maps viewport line number to section ID
+
+	// Selection state
+	selectedTaskIDs map[string]bool // Task IDs that are selected for bulk operations
+
+	// Cursor restoration state
+	restoreCursorToTaskID string // Task ID to restore cursor to after refresh
 }
 
 // NewApp creates a new App instance.
@@ -218,6 +226,7 @@ func NewApp(client *api.Client, cfg *config.Config) *App {
 		calendarViewMode: calViewMode,
 		loading:          true,
 		showHints:        true,
+		selectedTaskIDs:  make(map[string]bool),
 		// Initialize UI components
 		sidebarComp: components.NewSidebar(),
 		detailComp:  components.NewDetail(),
@@ -372,6 +381,18 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a.sections[i].SectionOrder < a.sections[j].SectionOrder
 			})
 		}
+
+		// Restore cursor position if we have a task ID to restore to
+		if a.restoreCursorToTaskID != "" {
+			for i, task := range a.tasks {
+				if task.ID == a.restoreCursorToTaskID {
+					a.taskCursor = i
+					break
+				}
+			}
+			a.restoreCursorToTaskID = "" // Clear after restoring
+		}
+
 		return a, nil
 
 	case taskUpdatedMsg:
@@ -382,10 +403,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case taskDeletedMsg:
 		a.loading = false
 		a.statusMsg = "Task deleted"
+		// Clear selections after delete
+		a.selectedTaskIDs = make(map[string]bool)
 		return a, a.refreshTasks()
 
 	case taskCompletedMsg:
 		a.loading = false
+		// Clear selections after complete
+		a.selectedTaskIDs = make(map[string]bool)
 		return a, a.refreshTasks()
 
 	case taskCreatedMsg:
@@ -479,6 +504,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.refreshSearchResults()
 
 	case refreshMsg:
+		// Store current task ID to restore cursor position after reload
+		if len(a.tasks) > 0 && a.taskCursor >= 0 && a.taskCursor < len(a.tasks) {
+			a.restoreCursorToTaskID = a.tasks[a.taskCursor].ID
+		}
 		a.loading = true
 		return a, a.loadInitialData()
 
@@ -911,6 +940,24 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.moveSectionCursor = 0
 			return a, nil
 		}
+	case "new_section":
+		// Allow creating sections in project view when a project is selected
+		if a.currentTab == TabProjects && a.currentProject != nil {
+			a.sectionInput = textinput.New()
+			a.sectionInput.Placeholder = "Enter section name..."
+			a.sectionInput.CharLimit = 100
+			a.sectionInput.Width = 40
+			a.sectionInput.Focus()
+			a.isCreatingSection = true
+			return a, nil
+		}
+	case "move_section":
+		// For now, just show a helpful message
+		// Full implementation would require a section reordering UI
+		if a.currentTab == TabProjects && a.currentProject != nil && len(a.sections) > 1 {
+			a.statusMsg = "Section reordering not yet implemented - use Todoist web/app to reorder sections"
+			return a, nil
+		}
 	// Note: 'C' key is not in keymap yet, handling manually or adding to keymap
 	// Actually, I should add 'C' to keymap or handle via raw key manually if I want.
 	// But let's assume I added 'C' -> 'add_comment' in keymap (I didn't yet).
@@ -924,6 +971,10 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.commentInput.Width = 50
 			return a, nil
 		}
+	case "toggle_select":
+		return a.handleToggleSelect()
+	case "copy":
+		return a.handleCopy()
 	}
 
 	return a, nil
@@ -1336,10 +1387,61 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// If there are selected tasks, complete/uncomplete all of them
+	if len(a.selectedTaskIDs) > 0 {
+		a.loading = true
+		tasksToComplete := make([]api.Task, 0)
+		for _, task := range a.tasks {
+			if a.selectedTaskIDs[task.ID] {
+				tasksToComplete = append(tasksToComplete, task)
+			}
+		}
+
+		return a, func() tea.Msg {
+			// Use channels and goroutines for concurrent API calls
+			type result struct {
+				success bool
+			}
+
+			results := make(chan result, len(tasksToComplete))
+
+			// Launch concurrent API calls
+			for _, task := range tasksToComplete {
+				go func(t api.Task) {
+					var err error
+					if t.Checked {
+						err = a.client.ReopenTask(t.ID)
+					} else {
+						err = a.client.CloseTask(t.ID)
+					}
+					results <- result{success: err == nil}
+				}(task)
+			}
+
+			// Collect results
+			completed := 0
+			failed := 0
+			for i := 0; i < len(tasksToComplete); i++ {
+				res := <-results
+				if res.success {
+					completed++
+				} else {
+					failed++
+				}
+			}
+
+			if failed > 0 {
+				return statusMsg{msg: fmt.Sprintf("Completed %d tasks, %d failed", completed, failed)}
+			}
+			return statusMsg{msg: fmt.Sprintf("Completed %d tasks", completed)}
+		}
+	}
+
 	// Get the correct task using ordered indices mapping
 	var task *api.Task
 	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
 		taskIndex := a.taskOrderedIndices[a.taskCursor]
+		// Skip placeholders (negative indices < -100)
 		if taskIndex >= 0 && taskIndex < len(a.tasks) {
 			task = &a.tasks[taskIndex]
 		}
@@ -1405,6 +1507,107 @@ func (a *App) handleUndo() (tea.Model, tea.Cmd) {
 	}
 }
 
+// handleToggleSelect toggles selection of the task under the cursor.
+func (a *App) handleToggleSelect() (tea.Model, tea.Cmd) {
+	// Only allow in main pane with tasks
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	// Don't allow selection in label list view
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		return a, nil
+	}
+
+	// Get the task at cursor
+	var task *api.Task
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex := a.taskOrderedIndices[a.taskCursor]
+		// Skip placeholders (negative indices < -100)
+		if taskIndex >= 0 && taskIndex < len(a.tasks) {
+			task = &a.tasks[taskIndex]
+		}
+	} else if a.taskCursor < len(a.tasks) {
+		task = &a.tasks[a.taskCursor]
+	}
+
+	if task == nil {
+		return a, nil
+	}
+
+	// Toggle selection
+	if a.selectedTaskIDs[task.ID] {
+		delete(a.selectedTaskIDs, task.ID)
+		a.statusMsg = fmt.Sprintf("Deselected (%d selected)", len(a.selectedTaskIDs))
+	} else {
+		a.selectedTaskIDs[task.ID] = true
+		a.statusMsg = fmt.Sprintf("Selected (%d tasks)", len(a.selectedTaskIDs))
+	}
+
+	return a, nil
+}
+
+// handleCopy copies task content to clipboard.
+func (a *App) handleCopy() (tea.Model, tea.Cmd) {
+	// Only allow in main pane with tasks
+	if a.focusedPane != PaneMain || len(a.tasks) == 0 {
+		return a, nil
+	}
+
+	// Don't allow in label list view
+	if a.currentView == ViewLabels && a.currentLabel == nil {
+		return a, nil
+	}
+
+	// If there are selected tasks, copy all of them
+	if len(a.selectedTaskIDs) > 0 {
+		var selectedContents []string
+		for _, task := range a.tasks {
+			if a.selectedTaskIDs[task.ID] {
+				selectedContents = append(selectedContents, task.Content)
+			}
+		}
+
+		if len(selectedContents) == 0 {
+			return a, nil
+		}
+
+		return a, func() tea.Msg {
+			// Join all selected task contents with newlines
+			content := strings.Join(selectedContents, "\n")
+			err := clipboard.WriteAll(content)
+			if err != nil {
+				return statusMsg{msg: "Failed to copy: " + err.Error()}
+			}
+			return statusMsg{msg: fmt.Sprintf("Copied %d tasks", len(selectedContents))}
+		}
+	}
+
+	// Otherwise, copy just the task at cursor
+	var task *api.Task
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex := a.taskOrderedIndices[a.taskCursor]
+		if taskIndex >= 0 && taskIndex < len(a.tasks) {
+			task = &a.tasks[taskIndex]
+		}
+	} else if a.taskCursor < len(a.tasks) {
+		task = &a.tasks[a.taskCursor]
+	}
+
+	if task == nil {
+		return a, nil
+	}
+
+	return a, func() tea.Msg {
+		// Copy to clipboard
+		err := clipboard.WriteAll(task.Content)
+		if err != nil {
+			return statusMsg{msg: "Failed to copy: " + err.Error()}
+		}
+		return statusMsg{msg: "Copied: " + task.Content}
+	}
+}
+
 // handleDelete deletes the selected task or project.
 func (a *App) handleDelete() (tea.Model, tea.Cmd) {
 	// Handle project deletion when sidebar is focused
@@ -1450,6 +1653,51 @@ func (a *App) handleDelete() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
+	// If there are selected tasks, delete all of them
+	if len(a.selectedTaskIDs) > 0 {
+		a.loading = true
+		tasksToDelete := make([]api.Task, 0)
+		for _, task := range a.tasks {
+			if a.selectedTaskIDs[task.ID] {
+				tasksToDelete = append(tasksToDelete, task)
+			}
+		}
+
+		return a, func() tea.Msg {
+			// Use channels and goroutines for concurrent API calls
+			type result struct {
+				success bool
+			}
+
+			results := make(chan result, len(tasksToDelete))
+
+			// Launch concurrent API calls
+			for _, task := range tasksToDelete {
+				go func(t api.Task) {
+					err := a.client.DeleteTask(t.ID)
+					results <- result{success: err == nil}
+				}(task)
+			}
+
+			// Collect results
+			deleted := 0
+			failed := 0
+			for i := 0; i < len(tasksToDelete); i++ {
+				res := <-results
+				if res.success {
+					deleted++
+				} else {
+					failed++
+				}
+			}
+
+			if failed > 0 {
+				return statusMsg{msg: fmt.Sprintf("Deleted %d tasks, %d failed", deleted, failed)}
+			}
+			return statusMsg{msg: fmt.Sprintf("Deleted %d tasks", deleted)}
+		}
+	}
+
 	// Use ordered indices if available
 	taskIndex := a.taskCursor
 	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
@@ -1484,17 +1732,67 @@ func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 		a.taskForm.ProjectName = a.currentProject.Name
 
 		// Try to detect current section based on cursor position
+		// First, check if we can map cursor to a viewport line
+		cursorViewportLine := -1
 		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
-			if taskIndex >= 0 && taskIndex < len(a.tasks) {
-				task := a.tasks[taskIndex]
-				if task.SectionID != nil && *task.SectionID != "" {
-					a.taskForm.SectionID = *task.SectionID
-					// Find section name
-					for _, s := range a.sections {
-						if s.ID == *task.SectionID {
-							a.taskForm.SectionName = s.Name
-							break
+			// Find which viewport line this task is on
+			for i, vTaskIdx := range a.viewportLines {
+				if vTaskIdx == taskIndex {
+					cursorViewportLine = i
+					break
+				}
+			}
+		}
+
+		// Check if cursor is on a section header line (taskIndex == -2)
+		if cursorViewportLine >= 0 && cursorViewportLine < len(a.viewportLines) {
+			if a.viewportLines[cursorViewportLine] == -2 {
+				// Cursor is on a section header, get the section ID
+				if cursorViewportLine < len(a.viewportSections) {
+					sectionID := a.viewportSections[cursorViewportLine]
+					if sectionID != "" {
+						a.taskForm.SectionID = sectionID
+						// Find section name
+						for _, s := range a.sections {
+							if s.ID == sectionID {
+								a.taskForm.SectionName = s.Name
+								break
+							}
+						}
+					}
+				}
+			} else if a.viewportLines[cursorViewportLine] >= 0 {
+				// Cursor is on a task, use its section
+				taskIndex := a.viewportLines[cursorViewportLine]
+				if taskIndex < len(a.tasks) {
+					task := a.tasks[taskIndex]
+					if task.SectionID != nil && *task.SectionID != "" {
+						a.taskForm.SectionID = *task.SectionID
+						// Find section name
+						for _, s := range a.sections {
+							if s.ID == *task.SectionID {
+								a.taskForm.SectionName = s.Name
+								break
+							}
+						}
+					}
+				}
+			}
+		} else {
+			// Fallback: Use the old method
+			if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+				taskIndex := a.taskOrderedIndices[a.taskCursor]
+				if taskIndex >= 0 && taskIndex < len(a.tasks) {
+					task := a.tasks[taskIndex]
+					if task.SectionID != nil && *task.SectionID != "" {
+						a.taskForm.SectionID = *task.SectionID
+						// Find section name
+						for _, s := range a.sections {
+							if s.ID == *task.SectionID {
+								a.taskForm.SectionName = s.Name
+								break
+							}
 						}
 					}
 				}
@@ -1849,8 +2147,15 @@ func (a *App) handleSectionInputKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
-		if a.currentTab == TabProjects && len(a.projects) > 0 && a.sidebarCursor < len(a.sidebarItems) {
-			projectID := a.sidebarItems[a.sidebarCursor].ID
+		// Use current project if available, otherwise fall back to sidebar
+		var projectID string
+		if a.currentProject != nil {
+			projectID = a.currentProject.ID
+		} else if a.currentTab == TabProjects && len(a.projects) > 0 && a.sidebarCursor < len(a.sidebarItems) {
+			projectID = a.sidebarItems[a.sidebarCursor].ID
+		}
+
+		if projectID != "" {
 			a.isCreatingSection = false
 			a.sectionInput.Reset()
 			a.loading = true
@@ -2032,8 +2337,37 @@ func (a *App) handleMoveTaskKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 
-		task := &a.tasks[a.taskCursor]
+		// Get the correct task using ordered indices mapping
+		var task *api.Task
+		if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+			taskIndex := a.taskOrderedIndices[a.taskCursor]
+			if taskIndex >= 0 && taskIndex < len(a.tasks) {
+				task = &a.tasks[taskIndex]
+			}
+		} else if a.taskCursor < len(a.tasks) {
+			task = &a.tasks[a.taskCursor]
+		}
+
+		if task == nil {
+			a.isMovingTask = false
+			a.statusMsg = "No task selected"
+			return a, nil
+		}
+
 		sectionID := a.sections[a.moveSectionCursor].ID
+
+		// Don't move if section ID is empty or if it's the same section
+		if sectionID == "" {
+			a.isMovingTask = false
+			a.statusMsg = "Invalid section"
+			return a, nil
+		}
+		if task.SectionID != nil && *task.SectionID == sectionID {
+			a.isMovingTask = false
+			a.statusMsg = "Task is already in this section"
+			return a, nil
+		}
+
 		a.isMovingTask = false
 		a.loading = true
 		a.statusMsg = "Moving task..."
@@ -3600,7 +3934,8 @@ func (a *App) renderDefaultTaskList(maxHeight int) string {
 // lineInfo represents a display line with optional task reference.
 type lineInfo struct {
 	content   string
-	taskIndex int // -1 for headers
+	taskIndex int    // -1 for headers
+	sectionID string // section ID if this is a section header
 }
 
 // renderProjectTasks renders tasks grouped by section for a project.
@@ -3644,13 +3979,29 @@ func (a *App) renderProjectTasks(maxHeight int) string {
 		// IMPORTANT: Use separate lineInfo entries, NOT embedded \n in content
 		// Embedded \n breaks viewport line counting
 		lines = append(lines, lineInfo{content: "", taskIndex: -1})
-		lines = append(lines, lineInfo{content: styles.SectionHeader.Render(section.Name), taskIndex: -1})
+
+		// Add section header
+		lines = append(lines, lineInfo{
+			content:   styles.SectionHeader.Render(section.Name),
+			taskIndex: -1,
+			sectionID: section.ID,
+		})
 
 		// Show tasks if any, otherwise show placeholder for empty section
 		if len(taskIndices) > 0 {
 			for _, i := range taskIndices {
 				lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
 			}
+		} else {
+			// Add a hoverable placeholder line for empty sections
+			// Using special index -3 to indicate it's an empty section placeholder
+			placeholderStyle := lipgloss.NewStyle().Foreground(styles.Subtle).Faint(true).PaddingLeft(2)
+			placeholder := placeholderStyle.Render("(empty - press 'a' to add task)")
+			lines = append(lines, lineInfo{
+				content:   placeholder,
+				taskIndex: -3, // Special marker for empty section placeholder
+				sectionID: section.ID,
+			})
 		}
 	}
 
@@ -3746,6 +4097,12 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 		cursor = "> "
 	}
 
+	// Selection indicator
+	selectionMark := " "
+	if a.selectedTaskIDs[t.ID] {
+		selectionMark = "●"
+	}
+
 	// Checkbox
 	checkbox := styles.CheckboxUnchecked
 	if t.Checked {
@@ -3786,8 +4143,8 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 		labels = styles.TaskLabel.Render(strings.Join(labelStrs, " "))
 	}
 
-	// Build line
-	line := fmt.Sprintf("%s%s%s %s %s %s", cursor, indent, checkbox, content, due, labels)
+	// Build line with selection mark
+	line := fmt.Sprintf("%s%s%s%s %s %s %s", cursor, selectionMark, indent, checkbox, content, due, labels)
 
 	// Apply style
 	style := styles.TaskItem
@@ -3809,20 +4166,24 @@ func (a *App) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxH
 	if len(lines) == 0 {
 		a.scrollOffset = 0
 		a.viewportLines = nil
+		a.viewportSections = nil
 		return ""
 	}
 
-	// Build content string and track line->task mapping
+	// Build content string and track line->task mapping and section mapping
 	var content strings.Builder
 	a.viewportLines = make([]int, 0, len(lines))
+	a.viewportSections = make([]string, 0, len(lines))
 
 	for i, line := range lines {
 		content.WriteString(line.content)
 		if i < len(lines)-1 {
 			content.WriteString("\n")
 		}
-		// Map this viewport line to its task index (-1 for headers)
+		// Map this viewport line to its task index (-1 for headers, -2 for section headers)
 		a.viewportLines = append(a.viewportLines, line.taskIndex)
+		// Map this viewport line to its section ID (empty string for non-section lines)
+		a.viewportSections = append(a.viewportSections, line.sectionID)
 	}
 
 	// Find which line the cursor is on

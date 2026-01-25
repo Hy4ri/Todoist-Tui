@@ -53,6 +53,10 @@ type Keymap struct {
 
 	// Project actions
 	NewProject Key
+
+	// Section actions
+	NewSection  Key
+	MoveSection Key
 }
 
 // DefaultKeymap returns the default Vim-style key bindings.
@@ -100,14 +104,19 @@ func DefaultKeymap() Keymap {
 
 		// Project actions
 		NewProject: Key{Key: "n", Help: "new project"},
+
+		// Section actions
+		NewSection:  Key{Key: "s", Help: "new section"},
+		MoveSection: Key{Key: "m", Help: "move task/section"},
 	}
 }
 
-// KeyState tracks multi-key sequences (like 'gg' or 'dd').
+// KeyState tracks multi-key sequences (like 'gg' or 'dd' or 'yy').
 type KeyState struct {
 	LastKey  string
 	WaitingG bool // Waiting for second 'g' in 'gg'
 	WaitingD bool // Waiting for second 'd' in 'dd'
+	WaitingY bool // Waiting for second 'y' in 'yy'
 }
 
 // HandleKey processes a key press and returns the action to take.
@@ -133,6 +142,15 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		// If not 'd', reset and process normally
 	}
 
+	// Handle 'yy' sequence (copy)
+	if ks.WaitingY {
+		ks.WaitingY = false
+		if key == "y" {
+			return "copy", true
+		}
+		// If not 'y', reset and process normally
+	}
+
 	// Check for multi-key sequence starts
 	if key == "g" {
 		ks.WaitingG = true
@@ -142,6 +160,12 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 
 	if key == "d" {
 		ks.WaitingD = true
+		ks.LastKey = key
+		return "", true // Key consumed, waiting for next
+	}
+
+	if key == "y" {
+		ks.WaitingY = true
 		ks.LastKey = key
 		return "", true // Key consumed, waiting for next
 	}
@@ -178,16 +202,20 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		return "edit", true
 	case "s":
 		return "add_subtask", true
+	case "S":
+		return "new_section", true
 	case keymap.CompleteTask.Key:
 		return "complete", true
 	case "u":
 		return "undo", true
-	case "S":
-		return "manage_sections", true
 	case "m":
 		return "move_task", true
+	case "M":
+		return "move_section", true
 	case "c":
 		return "add_comment", true
+	case " ": // Space key for selection
+		return "toggle_select", true
 	case keymap.Priority1.Key:
 		return "priority1", true
 	case keymap.Priority2.Key:
@@ -235,6 +263,7 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 func (ks *KeyState) Reset() {
 	ks.WaitingG = false
 	ks.WaitingD = false
+	ks.WaitingY = false
 	ks.LastKey = ""
 }
 
@@ -253,8 +282,15 @@ func (k Keymap) HelpItems() [][]string {
 		{k.EditTask.Key, "Edit task"},
 		{k.CompleteTask.Key, "Complete/uncomplete task"},
 		{"dd", "Delete task"},
+		{"yy", "Copy task(s) to clipboard"},
+		{"Space", "Toggle task selection"},
 		{"1-4", "Set priority"},
 		{k.DueToday.Key + "/" + k.DueTomorrow.Key, "Due today/tomorrow"},
+		{"m", "Move task to section"},
+		{"", ""},
+		{"Section Actions", ""},
+		{"S", "Create new section"},
+		{"M", "Reorder sections"},
 		{"", ""},
 		{"Calendar", ""},
 		{k.CalendarView.Key, "Switch calendar view"},
