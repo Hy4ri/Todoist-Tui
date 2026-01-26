@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
@@ -73,10 +74,26 @@ func (h *HelpModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 
 // View implements Component.
 func (h *HelpModel) View() string {
-	var b strings.Builder
+	if len(h.keymap) == 0 {
+		return ""
+	}
 
+	var b strings.Builder
 	b.WriteString(styles.Title.Render("⌨️  Keyboard Shortcuts"))
 	b.WriteString("\n\n")
+
+	// Split sections into two columns for better space utilization
+	// Column 1: Navigation, View Switching, Section/Project Actions, Calendar
+	// Column 2: Task Actions, General
+	var col1Sections = map[string]bool{
+		"Navigation":              true,
+		"View Switching":          true,
+		"Section/Project Actions": true,
+		"Calendar":                true,
+	}
+
+	var col1Content, col2Content strings.Builder
+	var currentColumn *strings.Builder = &col1Content
 
 	for _, item := range h.keymap {
 		if len(item) < 2 {
@@ -85,24 +102,41 @@ func (h *HelpModel) View() string {
 		key := item[0]
 		desc := item[1]
 
-		if key == "" && desc == "" {
-			b.WriteString("\n")
+		// Check if this is a section header to potentially switch columns
+		if desc == "" && key != "" {
+			if col1Sections[key] {
+				currentColumn = &col1Content
+			} else {
+				currentColumn = &col2Content
+			}
+			currentColumn.WriteString(styles.SectionHeader.Render(key) + "\n")
 			continue
 		}
 
-		if desc == "" {
-			// Section header
-			b.WriteString(styles.SectionHeader.Render(key))
-			b.WriteString("\n")
-		} else {
-			// Key-description pair
-			keyStr := styles.StatusBarKey.Render(key)
-			descStr := styles.HelpDesc.Render(desc)
-			b.WriteString("  " + keyStr + "  " + descStr + "\n")
+		if key == "" && desc == "" {
+			currentColumn.WriteString("\n")
+			continue
 		}
+
+		// Key-description pair
+		keyStr := styles.StatusBarKey.Render(key)
+		descStr := styles.HelpDesc.Render(desc)
+		currentColumn.WriteString("  " + keyStr + "  " + descStr + "\n")
 	}
 
-	b.WriteString("\n")
+	// Join columns horizontally with some padding
+	col1 := col1Content.String()
+	col2 := col2Content.String()
+
+	// Ensure symmetric padding even if one column is shorter
+	columnStyle := lipgloss.NewStyle().Width(h.width / 2).PaddingRight(2)
+	helpView := lipgloss.JoinHorizontal(lipgloss.Top,
+		columnStyle.Render(col1),
+		columnStyle.Render(col2),
+	)
+
+	b.WriteString(helpView)
+	b.WriteString("\n\n")
 	b.WriteString(styles.HelpDesc.Render("Press ESC or ? to close"))
 
 	return b.String()

@@ -441,6 +441,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.taskViewport.Width = vpWidth
 			a.taskViewport.Height = vpHeight
 		}
+
+		a.helpComp.SetSize(msg.Width, msg.Height)
+
 		return a, nil
 
 	case spinner.TickMsg:
@@ -3279,7 +3282,7 @@ func (a *App) View() string {
 	var content string
 	switch a.currentView {
 	case ViewHelp:
-		content = a.renderHelp()
+		content = a.helpComp.View()
 	case ViewTaskDetail:
 		content = a.renderTaskDetail()
 	case ViewTaskForm:
@@ -4678,36 +4681,6 @@ func (a *App) renderTaskForm() string {
 	}
 
 	return styles.Dialog.Width(a.width - 4).Render(a.taskForm.View())
-}
-
-// renderHelp renders the help view.
-func (a *App) renderHelp() string {
-	var b strings.Builder
-
-	b.WriteString(styles.Title.Render("Keyboard Shortcuts"))
-	b.WriteString("\n\n")
-
-	items := a.keymap.HelpItems()
-	for _, item := range items {
-		if item[0] == "" {
-			b.WriteString("\n")
-			continue
-		}
-		if item[1] == "" {
-			// Section header
-			b.WriteString(styles.Subtitle.Render(item[0]))
-			b.WriteString("\n")
-			continue
-		}
-		key := styles.HelpKey.Render(fmt.Sprintf("%-12s", item[0]))
-		desc := styles.HelpDesc.Render(item[1])
-		b.WriteString(fmt.Sprintf("  %s %s\n", key, desc))
-	}
-
-	b.WriteString("\n")
-	b.WriteString(styles.HelpDesc.Render("Press any key to close"))
-
-	return styles.Dialog.Width(a.width - 4).Render(b.String())
 }
 
 // renderSearch renders the search view.
