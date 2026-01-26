@@ -11,6 +11,7 @@ A terminal-based Todoist client written in Go with Vim-style keybindings.
 - Live search across all tasks
 - Smart due date parsing
 - Secure OAuth2 or API token authentication
+- Calendar view
 
 ## Installation
 
