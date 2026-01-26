@@ -2945,7 +2945,16 @@ func (a *App) handlePriority(action string) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	task := &a.tasks[a.taskCursor]
+	// Use ordered indices if available
+	taskIndex := a.taskCursor
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex = a.taskOrderedIndices[a.taskCursor]
+	}
+	if taskIndex < 0 || taskIndex >= len(a.tasks) {
+		return a, nil
+	}
+
+	task := &a.tasks[taskIndex]
 	var priority int
 	switch action {
 	case "priority1":
@@ -2981,7 +2990,16 @@ func (a *App) handleDueToday() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	task := &a.tasks[a.taskCursor]
+	// Use ordered indices if available
+	taskIndex := a.taskCursor
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex = a.taskOrderedIndices[a.taskCursor]
+	}
+	if taskIndex < 0 || taskIndex >= len(a.tasks) {
+		return a, nil
+	}
+
+	task := &a.tasks[taskIndex]
 	dueString := "today"
 
 	a.loading = true
@@ -3008,7 +3026,16 @@ func (a *App) handleDueTomorrow() (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 
-	task := &a.tasks[a.taskCursor]
+	// Use ordered indices if available
+	taskIndex := a.taskCursor
+	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
+		taskIndex = a.taskOrderedIndices[a.taskCursor]
+	}
+	if taskIndex < 0 || taskIndex >= len(a.tasks) {
+		return a, nil
+	}
+
+	task := &a.tasks[taskIndex]
 	dueString := "tomorrow"
 
 	a.loading = true
@@ -4023,8 +4050,8 @@ func (a *App) renderDetailPanel(width, height int) string {
 	// Build content
 	var content strings.Builder
 
-	// Title
-	content.WriteString(styles.Title.Render(t.Content) + "\n\n")
+	// Title - use Width to ensure Lipgloss handles wrapping and style continuation
+	content.WriteString(styles.Title.Width(width-6).Render(t.Content) + "\n\n")
 
 	// Due date
 	if t.Due != nil {
@@ -4165,10 +4192,13 @@ func (a *App) renderProjectTaskList(width, height int) string {
 		innerHeight = 5
 	}
 
+	// Calculate inner width for the content
+	innerWidth := width - styles.MainContent.GetHorizontalFrameSize()
+
 	if a.currentProject == nil {
 		content = styles.HelpDesc.Render("Select a project from the sidebar")
 	} else {
-		content = a.renderDefaultTaskList(width, innerHeight)
+		content = a.renderDefaultTaskList(innerWidth, innerHeight)
 	}
 
 	containerStyle := styles.MainContent
@@ -4187,16 +4217,19 @@ func (a *App) renderTaskList(width, height int) string {
 		innerHeight = 5
 	}
 
+	// Calculate inner width for the content
+	innerWidth := width - styles.MainContent.GetHorizontalFrameSize()
+
 	var content string
 	switch a.currentView {
 	case ViewUpcoming:
-		content = a.renderUpcoming(width, innerHeight)
+		content = a.renderUpcoming(innerWidth, innerHeight)
 	case ViewLabels:
-		content = a.renderLabelsView(width, innerHeight)
+		content = a.renderLabelsView(innerWidth, innerHeight)
 	case ViewCalendar:
 		content = a.renderCalendar(innerHeight) // Calendar handles own sizing
 	default:
-		content = a.renderDefaultTaskList(width, innerHeight)
+		content = a.renderDefaultTaskList(innerWidth, innerHeight)
 	}
 
 	// Apply container style with fixed height
@@ -4506,8 +4539,8 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, widt
 	}
 	content = truncateString(content, maxContentWidth)
 
-	// Apply priority style
-	priorityStyle := styles.GetPriorityStyle(t.Priority)
+	// Apply priority style - use MaxWidth so Lipgloss handles color continuation if it ever wraps
+	priorityStyle := styles.GetPriorityStyle(t.Priority).MaxWidth(maxContentWidth)
 	styledContent := priorityStyle.Render(content)
 
 	// Style metadata

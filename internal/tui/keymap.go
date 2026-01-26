@@ -216,13 +216,13 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		return "add_comment", true
 	case " ": // Space key for selection
 		return "toggle_select", true
-	case keymap.Priority1.Key:
+	case keymap.Priority1.Key, "!":
 		return "priority1", true
-	case keymap.Priority2.Key:
+	case keymap.Priority2.Key, "@":
 		return "priority2", true
-	case keymap.Priority3.Key:
+	case keymap.Priority3.Key, "#":
 		return "priority3", true
-	case keymap.Priority4.Key:
+	case keymap.Priority4.Key, "$":
 		return "priority4", true
 	case keymap.DueToday.Key:
 		return "due_today", true
