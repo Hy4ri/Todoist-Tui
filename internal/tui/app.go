@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -46,16 +47,6 @@ const (
 	TabCalendar
 	TabProjects
 )
-
-// SidebarItem represents an item in the sidebar (special views or projects).
-type SidebarItem struct {
-	Type       string // "special", "separator", "project"
-	ID         string // View name for special, project ID for projects
-	Name       string
-	Icon       string
-	IsFavorite bool
-	ParentID   *string
-}
 
 // Pane represents which pane is currently focused (only used in Projects tab).
 type Pane int
@@ -104,7 +95,7 @@ type App struct {
 	currentLabel   *api.Label
 
 	// Sidebar items (only shown in Projects tab)
-	sidebarItems  []SidebarItem
+	sidebarItems  []components.SidebarItem
 	sidebarCursor int
 
 	// List state
@@ -857,7 +848,16 @@ func (a *App) handleTaskClick(y int) (tea.Model, tea.Cmd) {
 
 // switchToTab switches to a specific tab.
 func (a *App) switchToTab(tab Tab) (tea.Model, tea.Cmd) {
+	// Reset detail panel state when switching tabs
+	if a.showDetailPanel {
+		a.showDetailPanel = false
+		a.selectedTask = nil
+		a.comments = nil
+		a.detailComp.Hide()
+	}
+
 	// Don't switch if in modal views
+
 	if a.currentView == ViewHelp || a.currentView == ViewTaskForm || a.currentView == ViewSearch || a.currentView == ViewTaskDetail {
 		return a, nil
 	}
@@ -3281,7 +3281,15 @@ func (a *App) loadTaskComments() tea.Cmd {
 
 // buildSidebarItems constructs the sidebar items list with only projects (for Projects tab).
 func (a *App) buildSidebarItems() {
-	a.sidebarItems = []SidebarItem{}
+	a.sidebarItems = []components.SidebarItem{}
+
+	// Map projects for easy count lookup
+	counts := make(map[string]int)
+	for _, t := range a.allTasks {
+		if !t.Checked && t.ProjectID != "" {
+			counts[t.ProjectID]++
+		}
+	}
 
 	// Add favorite projects first
 	for _, p := range a.projects {
@@ -3290,11 +3298,12 @@ func (a *App) buildSidebarItems() {
 			if p.InboxProject {
 				icon = "📥"
 			}
-			a.sidebarItems = append(a.sidebarItems, SidebarItem{
+			a.sidebarItems = append(a.sidebarItems, components.SidebarItem{
 				Type:       "project",
 				ID:         p.ID,
 				Name:       p.Name,
 				Icon:       icon,
+				Count:      counts[p.ID],
 				IsFavorite: true,
 				ParentID:   p.ParentID,
 			})
@@ -3310,7 +3319,7 @@ func (a *App) buildSidebarItems() {
 		}
 	}
 	if hasFavorites {
-		a.sidebarItems = append(a.sidebarItems, SidebarItem{Type: "separator", ID: "", Name: ""})
+		a.sidebarItems = append(a.sidebarItems, components.SidebarItem{Type: "separator", ID: "", Name: ""})
 	}
 
 	// Add remaining projects (non-favorites)
@@ -3320,11 +3329,12 @@ func (a *App) buildSidebarItems() {
 			if p.InboxProject {
 				icon = "📥"
 			}
-			a.sidebarItems = append(a.sidebarItems, SidebarItem{
+			a.sidebarItems = append(a.sidebarItems, components.SidebarItem{
 				Type:     "project",
 				ID:       p.ID,
 				Name:     p.Name,
 				Icon:     icon,
+				Count:    counts[p.ID],
 				ParentID: p.ParentID,
 			})
 		}
@@ -3948,6 +3958,11 @@ func (a *App) renderMainView() string {
 			}
 			rightPane := a.detailComp.ViewPanel()
 
+			// Enforce strict dimensions for top alignment and stable layout
+			sidebarPane = lipgloss.Place(sidebarWidth, contentHeight, lipgloss.Left, lipgloss.Top, sidebarPane)
+			taskListPane = lipgloss.Place(taskListWidth, contentHeight, lipgloss.Left, lipgloss.Top, taskListPane)
+			rightPane = lipgloss.Place(detailWidth, contentHeight, lipgloss.Left, lipgloss.Top, rightPane)
+
 			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarPane, " ", taskListPane, " ", rightPane)
 		} else {
 			// Two-pane layout: Tasks | Detail
@@ -3965,6 +3980,10 @@ func (a *App) renderMainView() string {
 				a.detailComp.Blur()
 			}
 			rightPane := a.detailComp.ViewPanel()
+
+			// Enforce strict dimensions
+			leftPane = lipgloss.Place(listWidth, contentHeight, lipgloss.Left, lipgloss.Top, leftPane)
+			rightPane = lipgloss.Place(detailWidth, contentHeight, lipgloss.Left, lipgloss.Top, rightPane)
 
 			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, leftPane, " ", rightPane)
 		}
@@ -4114,6 +4133,7 @@ func (a *App) renderProjectsTabContent(width, height int) string {
 
 	// Render sidebar (project list) - using component
 	a.sidebarComp.SetSize(sidebarWidth, height)
+	a.sidebarComp.SetItems(a.sidebarItems)
 	a.sidebarComp.SetCursor(a.sidebarCursor) // Sync cursor from App state
 	if a.focusedPane == PaneSidebar {
 		a.sidebarComp.Focus()
@@ -4128,76 +4148,11 @@ func (a *App) renderProjectsTabContent(width, height int) string {
 	// Render main content (tasks for selected project)
 	main := a.renderProjectTaskList(mainWidth, height)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, main)
-}
+	// Enforce strict dimensions
+	sidebar = lipgloss.Place(sidebarWidth, height, lipgloss.Left, lipgloss.Top, sidebar)
+	main = lipgloss.Place(mainWidth, height, lipgloss.Left, lipgloss.Top, main)
 
-// renderProjectSidebar renders the project list sidebar (only in Projects tab).
-func (a *App) renderProjectSidebar(width, height int) string {
-	var b strings.Builder
-
-	// Title
-	b.WriteString(styles.Title.Render("Projects"))
-	b.WriteString("\n\n")
-
-	// Max name length (accounting for cursor, indent, icon, and padding)
-	maxNameLen := width - 10
-
-	// Render project items
-	for i, item := range a.sidebarItems {
-		if item.Type == "separator" {
-			b.WriteString(styles.SidebarSeparator.Render(strings.Repeat("─", width-4)))
-			b.WriteString("\n")
-			continue
-		}
-
-		cursor := "  "
-		style := styles.ProjectItem
-		if i == a.sidebarCursor && a.focusedPane == PaneSidebar {
-			cursor = "> "
-			style = styles.ProjectSelected
-		}
-
-		// Highlight active project
-		if a.currentProject != nil && a.currentProject.ID == item.ID {
-			if a.focusedPane != PaneSidebar {
-				style = styles.SidebarActive
-			}
-		}
-
-		// Indent for child projects
-		indent := ""
-		if item.ParentID != nil {
-			indent = "  "
-			maxNameLen = width - 12 // Less space for indented items
-		}
-
-		// Truncate long names
-		name := item.Name
-		if len(name) > maxNameLen && maxNameLen > 3 {
-			name = name[:maxNameLen-1] + "…"
-		}
-
-		line := style.Render(fmt.Sprintf("%s%s%s %s", cursor, indent, item.Icon, name))
-		b.WriteString(line)
-		b.WriteString("\n")
-	}
-
-	// Add hint for creating new project
-	b.WriteString("\n")
-	b.WriteString(styles.HelpDesc.Render("n: new project"))
-
-	// Apply container style with fixed height
-	// Sidebar has rounded border (2 lines), so inner height = height - 2
-	innerHeight := height - 2
-	if innerHeight < 3 {
-		innerHeight = 3
-	}
-	containerStyle := styles.Sidebar
-	if a.focusedPane == PaneSidebar {
-		containerStyle = styles.SidebarFocused
-	}
-
-	return containerStyle.Width(width).Height(innerHeight).Render(b.String())
+	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, " ", main)
 }
 
 // renderProjectTaskList renders the task list for the selected project.
@@ -4213,7 +4168,7 @@ func (a *App) renderProjectTaskList(width, height int) string {
 	if a.currentProject == nil {
 		content = styles.HelpDesc.Render("Select a project from the sidebar")
 	} else {
-		content = a.renderDefaultTaskList(innerHeight)
+		content = a.renderDefaultTaskList(width, innerHeight)
 	}
 
 	containerStyle := styles.MainContent
@@ -4224,29 +4179,27 @@ func (a *App) renderProjectTaskList(width, height int) string {
 	return containerStyle.Width(width).Height(innerHeight).Render(content)
 }
 
-// renderTaskList renders the task list.
+// renderTaskList renders the task list for Today/Upcoming/Labels views.
 func (a *App) renderTaskList(width, height int) string {
-	var content string
-
-	// Reserve space for borders (top + bottom = 2 lines)
+	// Calculate viewport height (subtract title and padding)
 	innerHeight := height - 2
 	if innerHeight < 5 {
 		innerHeight = 5
 	}
 
+	var content string
 	switch a.currentView {
 	case ViewUpcoming:
-		content = a.renderUpcoming(innerHeight)
+		content = a.renderUpcoming(width, innerHeight)
 	case ViewLabels:
-		content = a.renderLabelsView(innerHeight)
+		content = a.renderLabelsView(width, innerHeight)
 	case ViewCalendar:
-		content = a.renderCalendar(innerHeight)
+		content = a.renderCalendar(innerHeight) // Calendar handles own sizing
 	default:
-		content = a.renderDefaultTaskList(innerHeight)
+		content = a.renderDefaultTaskList(width, innerHeight)
 	}
 
 	// Apply container style with fixed height
-	// Note: Height() sets INNER content height, so use innerHeight (not full height)
 	containerStyle := styles.MainContent
 	if a.focusedPane == PaneMain {
 		containerStyle = styles.MainContentFocused
@@ -4256,7 +4209,7 @@ func (a *App) renderTaskList(width, height int) string {
 }
 
 // renderDefaultTaskList renders the default task list for Today/Project views.
-func (a *App) renderDefaultTaskList(maxHeight int) string {
+func (a *App) renderDefaultTaskList(width, maxHeight int) string {
 	var b strings.Builder
 
 	// Title
@@ -4291,11 +4244,11 @@ func (a *App) renderDefaultTaskList(maxHeight int) string {
 		// Group tasks by due status for Today view
 		// Title uses 2 lines (title + newline)
 		if a.currentView == ViewToday {
-			b.WriteString(a.renderGroupedTasks(maxHeight - 2))
+			b.WriteString(a.renderGroupedTasks(width, maxHeight-2))
 		} else if a.currentView == ViewProject {
-			b.WriteString(a.renderProjectTasks(maxHeight - 2))
+			b.WriteString(a.renderProjectTasks(width, maxHeight-2))
 		} else {
-			b.WriteString(a.renderFlatTasks(maxHeight - 2))
+			b.WriteString(a.renderFlatTasks(width, maxHeight-2))
 		}
 	}
 
@@ -4310,7 +4263,7 @@ type lineInfo struct {
 }
 
 // renderProjectTasks renders tasks grouped by section for a project.
-func (a *App) renderProjectTasks(maxHeight int) string {
+func (a *App) renderProjectTasks(width, maxHeight int) string {
 	// Build ordered list of task indices matching display order
 	var orderedIndices []int
 
@@ -4326,64 +4279,48 @@ func (a *App) renderProjectTasks(maxHeight int) string {
 		}
 	}
 
-	// Build ordered indices: no-section tasks first, then by section
-	orderedIndices = append(orderedIndices, noSectionTasks...)
-
-	// Track which sections are empty to add them to orderedIndices later
-	emptySectionIndices := make(map[string]int) // sectionID -> index in orderedIndices
-	sectionOrderCounter := 0
-
-	for _, section := range a.sections {
-		if indices, exists := tasksBySection[section.ID]; exists {
-			orderedIndices = append(orderedIndices, indices...)
-		} else {
-			// Empty section: add a special negative index to make it navigable
-			// Use -100 minus counter to distinguish from other special indices
-			emptyHeaderIndex := -100 - sectionOrderCounter
-			emptySectionIndices[section.ID] = emptyHeaderIndex
-			orderedIndices = append(orderedIndices, emptyHeaderIndex)
-			sectionOrderCounter++
-		}
-	}
-
-	// Build lines with scroll support
 	var lines []lineInfo
 
+	// 1. First, tasks without sections
 	if len(noSectionTasks) > 0 {
 		for _, i := range noSectionTasks {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+			orderedIndices = append(orderedIndices, i)
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+		}
+		// Add spacer if there are sections following
+		if len(a.sections) > 0 {
+			lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		}
 	}
 
-	for _, section := range a.sections {
-		taskIndices := tasksBySection[section.ID]
+	// 2. Then, tasks by section (in order)
+	if len(a.sections) > 0 {
+		for _, section := range a.sections {
+			taskIndices := tasksBySection[section.ID]
 
-		// Add blank line before section header for spacing
-		// IMPORTANT: Use separate lineInfo entries, NOT embedded \n in content
-		// Embedded \n breaks viewport line counting
-		lines = append(lines, lineInfo{content: "", taskIndex: -1})
+			// Create section header index (unique negative value)
+			headerIndex := -100 - len(orderedIndices)
+			orderedIndices = append(orderedIndices, headerIndex)
 
-		// Check if section is empty
-		if len(taskIndices) == 0 {
-			// Empty section: make header hoverable
-			emptyHeaderIndex := emptySectionIndices[section.ID]
-			lines = append(lines, lineInfo{
-				content:   a.renderSectionHeaderByIndex(section.Name, emptyHeaderIndex, orderedIndices),
-				taskIndex: emptyHeaderIndex,
-				sectionID: section.ID,
-			})
-		} else {
-			// Non-empty section: header is just display (not hoverable)
-			lines = append(lines, lineInfo{
-				content:   styles.SectionHeader.Render(section.Name),
-				taskIndex: -1,
-				sectionID: section.ID,
-			})
-
-			// Add tasks
-			for _, i := range taskIndices {
-				lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+			if len(taskIndices) == 0 {
+				lines = append(lines, lineInfo{
+					content:   a.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
+					taskIndex: headerIndex,
+					sectionID: section.ID,
+				})
+			} else {
+				lines = append(lines, lineInfo{
+					content:   a.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
+					taskIndex: headerIndex,
+					sectionID: section.ID,
+				})
+				for _, i := range taskIndices {
+					orderedIndices = append(orderedIndices, i)
+					lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+				}
 			}
+			// Add blank line after section for spacing
+			lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		}
 	}
 
@@ -4391,7 +4328,7 @@ func (a *App) renderProjectTasks(maxHeight int) string {
 }
 
 // renderGroupedTasks renders tasks grouped by due status.
-func (a *App) renderGroupedTasks(maxHeight int) string {
+func (a *App) renderGroupedTasks(width, maxHeight int) string {
 	var overdue, today, other []int
 
 	// Group tasks
@@ -4417,30 +4354,26 @@ func (a *App) renderGroupedTasks(maxHeight int) string {
 	if len(overdue) > 0 {
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("OVERDUE"), taskIndex: -1})
 		for _, i := range overdue {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 		}
 	}
 
 	if len(today) > 0 {
-		// Add blank line before header if there are previous sections
 		if len(overdue) > 0 {
 			lines = append(lines, lineInfo{content: "", taskIndex: -1})
-			// Only show separation if we have overdue tasks
 		}
-
 		for _, i := range today {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 		}
 	}
 
 	if len(other) > 0 {
-		// Add blank line before header if there are previous sections
 		if len(overdue) > 0 || len(today) > 0 {
 			lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		}
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("NO DUE DATE"), taskIndex: -1})
 		for _, i := range other {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 		}
 	}
 
@@ -4448,13 +4381,13 @@ func (a *App) renderGroupedTasks(maxHeight int) string {
 }
 
 // renderFlatTasks renders tasks in a flat list.
-func (a *App) renderFlatTasks(maxHeight int) string {
+func (a *App) renderFlatTasks(width, maxHeight int) string {
 	var lines []lineInfo
 	var orderedIndices []int
 
 	for i := range a.tasks {
 		orderedIndices = append(orderedIndices, i)
-		lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
+		lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 	}
 
 	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
@@ -4480,6 +4413,18 @@ func (a *App) renderSectionHeaderByIndex(sectionName string, headerIndex int, or
 		cursor = "> "
 	}
 
+	// Truncate section name to prevent wrapping
+	// Available width = App Width - Sidebar (if open) - Padding?
+	// We don't have exact pane width here easily unless we pass it.
+	// But usually headers aren't super long. Let's truncate to 40 chars or find a way to access width.
+	// Actually, renderProjectTasks DOES pass 'width' to renderTaskByDisplayIndex but NOT to this function.
+	// We should update the signature if we want perfect strictness.
+	// For now, let's just be conservative.
+	maxHeaderLen := 50
+	if len(sectionName) > maxHeaderLen {
+		sectionName = sectionName[:maxHeaderLen-1] + "…"
+	}
+
 	// Build the header line
 	line := fmt.Sprintf("%s%s", cursor, sectionName)
 
@@ -4493,7 +4438,7 @@ func (a *App) renderSectionHeaderByIndex(sectionName string, headerIndex int, or
 }
 
 // renderTaskByDisplayIndex renders a task with cursor based on display order.
-func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) string {
+func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, width int) string {
 	t := a.tasks[taskIndex]
 
 	// Find display position for cursor
@@ -4529,38 +4474,63 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 		indent = "  "
 	}
 
-	// Content with priority color
-	content := t.Content
-	priorityStyle := styles.GetPriorityStyle(t.Priority)
-	content = priorityStyle.Render(content)
-
-	// Due date
-	due := ""
+	// Calculate metadata widths
+	dueStr := ""
+	dueWidth := 0
 	if t.Due != nil {
-		dueStr := t.DueDisplay()
+		rawDue := t.DueDisplay()
+		dueStr = "| " + rawDue
+		dueWidth = lipgloss.Width(dueStr) + 1
+	}
+
+	labelStr := ""
+	labelWidth := 0
+	if len(t.Labels) > 0 {
+		var lStrs []string
+		for _, l := range t.Labels {
+			lStrs = append(lStrs, "@"+l)
+		}
+		labelStr = strings.Join(lStrs, " ")
+		labelWidth = lipgloss.Width(labelStr) + 1
+	}
+
+	// Calculate fixed overhead (cursor + selection + indent + checkbox + spaces)
+	// "> ●  [ ] " = 2 + 1 + indentLen + 4 = 7 + indentLen
+	overhead := 7 + len(indent) + dueWidth + labelWidth + 2 // +2 for safety margin
+
+	// Truncate content if needed
+	content := t.Content
+	maxContentWidth := width - overhead
+	if maxContentWidth < 5 {
+		maxContentWidth = 5
+	}
+	content = truncateString(content, maxContentWidth)
+
+	// Apply priority style
+	priorityStyle := styles.GetPriorityStyle(t.Priority)
+	styledContent := priorityStyle.Render(content)
+
+	// Style metadata
+	styledDue := ""
+	if dueStr != "" {
 		if t.IsOverdue() {
-			due = styles.TaskDueOverdue.Render("| " + dueStr)
+			styledDue = styles.TaskDueOverdue.Render(dueStr)
 		} else if t.IsDueToday() {
-			due = styles.TaskDueToday.Render("| " + dueStr)
+			styledDue = styles.TaskDueToday.Render(dueStr)
 		} else {
-			due = styles.TaskDue.Render("| " + dueStr)
+			styledDue = styles.TaskDue.Render(dueStr)
 		}
 	}
 
-	// Labels
-	labels := ""
-	if len(t.Labels) > 0 {
-		labelStrs := make([]string, len(t.Labels))
-		for i, l := range t.Labels {
-			labelStrs[i] = "@" + l
-		}
-		labels = styles.TaskLabel.Render(strings.Join(labelStrs, " "))
+	styledLabels := ""
+	if labelStr != "" {
+		styledLabels = styles.TaskLabel.Render(labelStr)
 	}
 
 	// Build line with selection mark
-	line := fmt.Sprintf("%s%s%s%s %s %s %s", cursor, selectionMark, indent, checkbox, content, due, labels)
+	line := fmt.Sprintf("%s%s%s%s %s %s %s", cursor, selectionMark, indent, checkbox, styledContent, styledDue, styledLabels)
 
-	// Apply style
+	// Apply base style
 	style := styles.TaskItem
 	if displayPos == a.taskCursor && a.focusedPane == PaneMain {
 		style = styles.TaskSelected
@@ -4569,7 +4539,8 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int) stri
 		style = styles.TaskCompleted
 	}
 
-	return style.Render(line)
+	// Force exactly one line and width, no wrapping
+	return style.MaxWidth(width - 2).Render(line)
 }
 
 // renderScrollableLines renders lines with scrolling support using viewport.
@@ -4860,7 +4831,7 @@ func (a *App) renderSearch() string {
 }
 
 // renderUpcoming renders the upcoming view with tasks grouped by date.
-func (a *App) renderUpcoming(maxHeight int) string {
+func (a *App) renderUpcoming(width, maxHeight int) string {
 	var b strings.Builder
 
 	b.WriteString(styles.Title.Render("Upcoming"))
@@ -4933,7 +4904,7 @@ func (a *App) renderUpcoming(maxHeight int) string {
 
 		for _, i := range tasksByDate[date] {
 			lines = append(lines, lineInfo{
-				content:   a.renderTaskByDisplayIndex(i, orderedIndices),
+				content:   a.renderTaskByDisplayIndex(i, orderedIndices, width),
 				taskIndex: i,
 			})
 		}
@@ -4948,7 +4919,7 @@ func (a *App) renderUpcoming(maxHeight int) string {
 }
 
 // renderLabelsView renders the labels view.
-func (a *App) renderLabelsView(maxHeight int) string {
+func (a *App) renderLabelsView(width, maxHeight int) string {
 	var b strings.Builder
 
 	b.WriteString(styles.Title.Render("Labels"))
@@ -4972,7 +4943,7 @@ func (a *App) renderLabelsView(maxHeight int) string {
 		if len(a.tasks) == 0 {
 			b.WriteString(styles.HelpDesc.Render("No tasks with this label"))
 		} else {
-			// Build lines and ordered indices for scrolling - FIX: populate content field
+			// Build lines and ordered indices for scrolling
 			var lines []lineInfo
 			var orderedIndices []int
 			for i := range a.tasks {
@@ -4980,7 +4951,7 @@ func (a *App) renderLabelsView(maxHeight int) string {
 			}
 			for i := range a.tasks {
 				lines = append(lines, lineInfo{
-					content:   a.renderTaskByDisplayIndex(i, orderedIndices),
+					content:   a.renderTaskByDisplayIndex(i, orderedIndices, width),
 					taskIndex: i,
 				})
 			}
@@ -5540,7 +5511,7 @@ func (a *App) renderCalendarDay() string {
 		for i := range a.tasks {
 			orderedIndices = append(orderedIndices, i)
 			lines = append(lines, lineInfo{
-				content:   a.renderTaskByDisplayIndex(i, orderedIndices),
+				content:   a.renderTaskByDisplayIndex(i, orderedIndices, contentWidth),
 				taskIndex: i,
 			})
 		}
@@ -5668,4 +5639,27 @@ func (a *App) reorderSectionsCmd(sections []api.Section) tea.Cmd {
 		}
 		return reorderCompleteMsg{}
 	}
+}
+
+// truncateString truncates a string to a given width and adds an ellipsis if truncated.
+func truncateString(s string, width int) string {
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+
+	// Very basic truncation that handles some ANSI/multi-byte
+	// In a real app we'd use a more robust version, but this fits the immediate need.
+	if width <= 1 {
+		return "…"
+	}
+
+	// Fallback to simpler character-at-a-time width check if needed,
+	// but lipgloss.Width is usually reliable for measurement.
+	res := s
+	for lipgloss.Width(res+"…") > width && len(res) > 0 {
+		// Remove one character/byte at a time until it fits
+		_, size := utf8.DecodeLastRuneInString(res)
+		res = res[:len(res)-size]
+	}
+	return res + "…"
 }

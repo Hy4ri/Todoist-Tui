@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
@@ -13,6 +14,7 @@ import (
 type SidebarModel struct {
 	items           []SidebarItem
 	cursor          int
+	scrollOffset    int
 	width, height   int
 	focused         bool
 	activeProjectID string // Currently selected project
@@ -64,6 +66,24 @@ func (s *SidebarModel) handleKeyMsg(msg tea.KeyMsg) (Component, tea.Cmd) {
 	return s, nil
 }
 
+// truncateString truncates a string to a given width and adds an ellipsis if truncated.
+func truncateString(s string, width int) string {
+	if lipgloss.Width(s) <= width {
+		return s
+	}
+	if width <= 1 {
+		return "…"
+	}
+	res := s
+	// Basic retry loop to shorten string until it fits
+	// This serves as a local alternative to app.truncateString since we can't import app
+	for lipgloss.Width(res+"…") > width && len(res) > 0 {
+		runes := []rune(res)
+		res = string(runes[:len(runes)-1])
+	}
+	return res + "…"
+}
+
 // View implements Component.
 func (s *SidebarModel) View() string {
 	var b strings.Builder
@@ -72,13 +92,62 @@ func (s *SidebarModel) View() string {
 	b.WriteString(styles.Title.Render("Projects"))
 	b.WriteString("\n\n")
 
+	// Calculate available height for the list
+	// Height - Borders(2) - Title(1) - Blank(1) - Footer/Hint(2) = 6?
+	// Let's re-verify:
+	// b.WriteString(Title) -> 1
+	// b.WriteString("\n\n") -> 2
+	// ... list items (listHeight)
+	// b.WriteString("\n") -> 1
+	// b.WriteString(Hint) -> 1
+	// Total overhead inside borders = 1 + 2 + 1 + 1 = 5.
+	innerHeight := s.height - 2
+	listHeight := innerHeight - 5
+	if listHeight < 1 {
+		listHeight = 1
+	}
+
+	// Update scroll offset
+	if s.cursor < s.scrollOffset {
+		s.scrollOffset = s.cursor
+	}
+	if s.cursor >= s.scrollOffset+listHeight {
+		s.scrollOffset = s.cursor - listHeight + 1
+	}
+	// Sanity bounds
+	if s.scrollOffset > len(s.items)-listHeight {
+		s.scrollOffset = len(s.items) - listHeight
+	}
+	if s.scrollOffset < 0 {
+		s.scrollOffset = 0
+	}
+
+	// Determine window
+	startIndex := s.scrollOffset
+	endIndex := startIndex + listHeight
+	if endIndex > len(s.items) {
+		endIndex = len(s.items)
+	}
+
 	// Max name length (accounting for cursor, indent, icon, and padding)
 	maxNameLen := s.width - 10
 
-	// Render project items
-	for i, item := range s.items {
+	// Render project items (windowed)
+	for i := startIndex; i < endIndex; i++ {
+		item := s.items[i]
+
+		// Separator handling
 		if item.Type == "separator" {
-			b.WriteString(styles.SidebarSeparator.Render(strings.Repeat("─", s.width-4)))
+			sepWidth := s.width - 6
+			if sepWidth < 1 {
+				sepWidth = 1
+			}
+			lineContent := strings.Repeat("─", sepWidth)
+			if i == s.cursor && s.focused {
+				b.WriteString(styles.SidebarSeparator.Render("> " + lineContent))
+			} else {
+				b.WriteString(styles.SidebarSeparator.Render("  " + lineContent))
+			}
 			b.WriteString("\n")
 			continue
 		}
@@ -97,58 +166,51 @@ func (s *SidebarModel) View() string {
 			}
 		}
 
-		// Indent for child projects
+		// Indent
 		indent := ""
 		nameMaxLen := maxNameLen
 		if item.ParentID != nil {
 			indent = "  "
-			nameMaxLen = s.width - 12 // Less space for indented items
+			nameMaxLen = s.width - 12
 		}
 
-		// Truncate long names
+		// Truncate name
 		name := item.Name
 		countStr := ""
 		if item.Count > 0 {
 			countStr = fmt.Sprintf(" (%d)", item.Count)
 		}
 
-		totalLen := len(name) + len(countStr)
-		if totalLen > nameMaxLen && nameMaxLen > 3 {
-			// avail is strict
-			avail := nameMaxLen - len(countStr)
-			if avail > 1 {
-				name = name[:avail-1] + "…"
-			} else {
-				// Just truncate name entirely if space is super tight, but keep count?
-				// Or just truncate string.
-				// Simple approach: combine first then truncate? No, count is important.
-				name = name[:nameMaxLen-1] + "…"
-				countStr = "" // Hide count if no space?
-			}
+		// Combined truncation logic
+		// We want: visibleName + countStr <= nameMaxLen
+		// Make sure countStr fits first
+		if len(countStr) >= nameMaxLen {
+			countStr = "" // Too small even for count
 		}
 
-		// Actually better:
-		if len(name)+len(countStr) > nameMaxLen {
-			avail := nameMaxLen - len(countStr)
-			if avail > 1 {
-				name = name[:avail-1] + "…"
-			} else {
-				name = name[:nameMaxLen-1] + "…"
-				countStr = ""
-			}
-		}
+		availForName := nameMaxLen - len(countStr)
+		name = truncateString(name, availForName)
 
-		line := style.Render(fmt.Sprintf("%s%s%s %s%s", cursor, indent, item.Icon, name, countStr))
+		line := style.MaxWidth(s.width - 2).Render(fmt.Sprintf("%s%s%s %s%s", cursor, indent, item.Icon, name, countStr))
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
 
 	// Add hint for creating new project
+	// Only if we have space left in the container?
+	// Actually, just append it. If container cuts it off, fine, but list shouldn't be cut off.
+	// But we calculated listHeight to be carefully smaller.
+
+	// Fill padding if list is short
+	linesRendered := endIndex - startIndex
+	if linesRendered < listHeight {
+		b.WriteString(strings.Repeat("\n", listHeight-linesRendered))
+	}
+
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("n: new project"))
 
-	// Apply container style with fixed height
-	innerHeight := s.height - 2
+	// Apply container style
 	if innerHeight < 3 {
 		innerHeight = 3
 	}
@@ -179,6 +241,11 @@ func (s *SidebarModel) Blur() {
 // Focused returns whether the sidebar is focused.
 func (s *SidebarModel) Focused() bool {
 	return s.focused
+}
+
+// SetItems sets the sidebar items directly.
+func (s *SidebarModel) SetItems(items []SidebarItem) {
+	s.items = items
 }
 
 // SetProjects rebuilds the sidebar items from the given projects.

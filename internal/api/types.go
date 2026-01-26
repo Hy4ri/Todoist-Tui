@@ -204,7 +204,8 @@ type CreateSectionRequest struct {
 
 // UpdateSectionRequest represents the request body for updating a section.
 type UpdateSectionRequest struct {
-	Name string `json:"name,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Order *int   `json:"section_order,omitempty"`
 }
 
 // CreateLabelRequest represents the request body for creating a label.
