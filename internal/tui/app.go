@@ -403,14 +403,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case taskDeletedMsg:
 		a.loading = false
 		a.statusMsg = "Task deleted"
-		// Clear selections after delete
-		a.selectedTaskIDs = make(map[string]bool)
+		// Keep selections after delete (remaining tasks stay visible)
 		return a, a.refreshTasks()
 
 	case taskCompletedMsg:
 		a.loading = false
-		// Clear selections after complete
-		a.selectedTaskIDs = make(map[string]bool)
+		// Keep selections after complete (tasks remain visible)
 		return a, a.refreshTasks()
 
 	case taskCreatedMsg:
@@ -767,10 +765,59 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch a.currentView {
 	case ViewTaskForm:
 		return a.handleFormKeyMsg(msg)
-	case ViewSections:
-		return a.handleSectionsKeyMsg(msg)
 	case ViewSearch:
 		return a.handleSearchKeyMsg(msg)
+	}
+
+	// Handle all input/dialog states BEFORE tab switching
+	// This prevents number keys from switching views during text entry
+
+	// Project state handling
+	if a.isCreatingProject {
+		return a.handleProjectInputKeyMsg(msg)
+	}
+	if a.isEditingProject {
+		return a.handleProjectEditKeyMsg(msg)
+	}
+	if a.confirmDeleteProject {
+		return a.handleDeleteConfirmKeyMsg(msg)
+	}
+
+	// Label state handling
+	if a.isCreatingLabel {
+		return a.handleLabelInputKeyMsg(msg)
+	}
+	if a.isEditingLabel {
+		return a.handleLabelEditKeyMsg(msg)
+	}
+	if a.confirmDeleteLabel {
+		return a.handleLabelDeleteConfirmKeyMsg(msg)
+	}
+
+	// Section state handling
+	if a.isCreatingSection {
+		return a.handleSectionInputKeyMsg(msg)
+	}
+	if a.isEditingSection {
+		return a.handleSectionEditKeyMsg(msg)
+	}
+	if a.confirmDeleteSection {
+		return a.handleSectionDeleteConfirmKeyMsg(msg)
+	}
+
+	// Subtask creation handling
+	if a.isCreatingSubtask {
+		return a.handleSubtaskInputKeyMsg(msg)
+	}
+
+	// Comment input handling
+	if a.isAddingComment {
+		return a.handleCommentInputKeyMsg(msg)
+	}
+
+	// Move task handling
+	if a.isMovingTask {
+		return a.handleMoveTaskKeyMsg(msg)
 	}
 
 	// Tab switching with number keys (1-5) - only when not in form/input modes
@@ -787,55 +834,9 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.switchToTab(TabProjects)
 	}
 
-	// If we're creating a new project, handle project input
-	if a.isCreatingProject {
-		return a.handleProjectInputKeyMsg(msg)
-	}
-
-	// If we're editing a project, handle project input
-	if a.isEditingProject {
-		return a.handleProjectEditKeyMsg(msg)
-	}
-
-	// If we're confirming project deletion, handle y/n
-	if a.confirmDeleteProject {
-		return a.handleDeleteConfirmKeyMsg(msg)
-	}
-
-	// If we're creating a new label, handle label input
-	if a.isCreatingLabel {
-		return a.handleLabelInputKeyMsg(msg)
-	}
-
-	// If we're editing a label, handle label input
-	if a.isEditingLabel {
-		return a.handleLabelEditKeyMsg(msg)
-	}
-
-	// If we're confirming label deletion, handle y/n
-	if a.confirmDeleteLabel {
-		return a.handleLabelDeleteConfirmKeyMsg(msg)
-	}
-
-	// Section state handling
-	if a.isCreatingSection {
-		return a.handleSectionInputKeyMsg(msg)
-	}
-	if a.isEditingSection {
-		return a.handleSectionEditKeyMsg(msg)
-	}
-	if a.confirmDeleteSection {
-		return a.handleSectionDeleteConfirmKeyMsg(msg)
-	}
-
-	// Move task handling
-	if a.isMovingTask {
-		return a.handleMoveTaskKeyMsg(msg)
-	}
-
-	// If we're creating a subtask, handle subtask input
-	if a.isCreatingSubtask {
-		return a.handleSubtaskInputKeyMsg(msg)
+	// Sections view routing
+	if a.currentView == ViewSections {
+		return a.handleSectionsKeyMsg(msg)
 	}
 
 	// If we're in calendar view, handle calendar-specific keys
@@ -952,10 +953,9 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 	case "move_section":
-		// For now, just show a helpful message
-		// Full implementation would require a section reordering UI
+		// Redirect to section management view
 		if a.currentTab == TabProjects && a.currentProject != nil && len(a.sections) > 1 {
-			a.statusMsg = "Section reordering not yet implemented - use Todoist web/app to reorder sections"
+			a.statusMsg = "Use 'S' to manage sections - select with Space, reorder with Shift+j/k"
 			return a, nil
 		}
 	// Note: 'C' key is not in keymap yet, handling manually or adding to keymap
@@ -1128,6 +1128,11 @@ func (a *App) moveCursor(delta int) {
 				labelsToUse = a.extractLabelsFromTasks()
 			}
 			maxItems = len(labelsToUse)
+		}
+
+		// In project view, use ordered indices (includes empty section headers)
+		if a.currentView == ViewProject && len(a.taskOrderedIndices) > 0 {
+			maxItems = len(a.taskOrderedIndices)
 		}
 
 		a.taskCursor += delta
@@ -1308,6 +1313,12 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 		// Try taskOrderedIndices first (for views with sections/groups)
 		if len(a.taskOrderedIndices) > 0 && a.taskCursor >= 0 && a.taskCursor < len(a.taskOrderedIndices) {
 			taskIndex := a.taskOrderedIndices[a.taskCursor]
+
+			// Skip if cursor is on empty section header (taskIndex <= -100)
+			if taskIndex <= -100 {
+				return a, nil
+			}
+
 			if taskIndex >= 0 && taskIndex < len(a.tasks) {
 				taskCopy := new(api.Task)
 				*taskCopy = a.tasks[taskIndex]
@@ -1441,7 +1452,7 @@ func (a *App) handleComplete() (tea.Model, tea.Cmd) {
 	var task *api.Task
 	if len(a.taskOrderedIndices) > 0 && a.taskCursor < len(a.taskOrderedIndices) {
 		taskIndex := a.taskOrderedIndices[a.taskCursor]
-		// Skip placeholders (negative indices < -100)
+		// Skip empty section headers (negative indices <= -100)
 		if taskIndex >= 0 && taskIndex < len(a.tasks) {
 			task = &a.tasks[taskIndex]
 		}
@@ -1571,6 +1582,9 @@ func (a *App) handleCopy() (tea.Model, tea.Cmd) {
 		if len(selectedContents) == 0 {
 			return a, nil
 		}
+
+		// Clear selections after copy
+		a.selectedTaskIDs = make(map[string]bool)
 
 		return a, func() tea.Msg {
 			// Join all selected task contents with newlines
@@ -1745,10 +1759,11 @@ func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Check if cursor is on a section header line (taskIndex == -2)
+		// Check if cursor is on an empty section header (taskIndex <= -100)
 		if cursorViewportLine >= 0 && cursorViewportLine < len(a.viewportLines) {
-			if a.viewportLines[cursorViewportLine] == -2 {
-				// Cursor is on a section header, get the section ID
+			taskIdx := a.viewportLines[cursorViewportLine]
+			if taskIdx <= -100 {
+				// Cursor is on an empty section header, get the section ID
 				if cursorViewportLine < len(a.viewportSections) {
 					sectionID := a.viewportSections[cursorViewportLine]
 					if sectionID != "" {
@@ -1762,11 +1777,10 @@ func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 						}
 					}
 				}
-			} else if a.viewportLines[cursorViewportLine] >= 0 {
+			} else if taskIdx >= 0 {
 				// Cursor is on a task, use its section
-				taskIndex := a.viewportLines[cursorViewportLine]
-				if taskIndex < len(a.tasks) {
-					task := a.tasks[taskIndex]
+				if taskIdx < len(a.tasks) {
+					task := a.tasks[taskIdx]
 					if task.SectionID != nil && *task.SectionID != "" {
 						a.taskForm.SectionID = *task.SectionID
 						// Find section name
@@ -2452,6 +2466,7 @@ func (a *App) renderSections() string {
 	for i, section := range a.sections {
 		cursor := "  "
 		style := lipgloss.NewStyle()
+
 		if i == a.taskCursor {
 			cursor = "> "
 			style = lipgloss.NewStyle().Foreground(styles.Highlight)
@@ -3957,9 +3972,21 @@ func (a *App) renderProjectTasks(maxHeight int) string {
 
 	// Build ordered indices: no-section tasks first, then by section
 	orderedIndices = append(orderedIndices, noSectionTasks...)
+
+	// Track which sections are empty to add them to orderedIndices later
+	emptySectionIndices := make(map[string]int) // sectionID -> index in orderedIndices
+	sectionOrderCounter := 0
+
 	for _, section := range a.sections {
 		if indices, exists := tasksBySection[section.ID]; exists {
 			orderedIndices = append(orderedIndices, indices...)
+		} else {
+			// Empty section: add a special negative index to make it navigable
+			// Use -100 minus counter to distinguish from other special indices
+			emptyHeaderIndex := -100 - sectionOrderCounter
+			emptySectionIndices[section.ID] = emptyHeaderIndex
+			orderedIndices = append(orderedIndices, emptyHeaderIndex)
+			sectionOrderCounter++
 		}
 	}
 
@@ -3980,28 +4007,27 @@ func (a *App) renderProjectTasks(maxHeight int) string {
 		// Embedded \n breaks viewport line counting
 		lines = append(lines, lineInfo{content: "", taskIndex: -1})
 
-		// Add section header
-		lines = append(lines, lineInfo{
-			content:   styles.SectionHeader.Render(section.Name),
-			taskIndex: -1,
-			sectionID: section.ID,
-		})
+		// Check if section is empty
+		if len(taskIndices) == 0 {
+			// Empty section: make header hoverable
+			emptyHeaderIndex := emptySectionIndices[section.ID]
+			lines = append(lines, lineInfo{
+				content:   a.renderSectionHeaderByIndex(section.Name, emptyHeaderIndex, orderedIndices),
+				taskIndex: emptyHeaderIndex,
+				sectionID: section.ID,
+			})
+		} else {
+			// Non-empty section: header is just display (not hoverable)
+			lines = append(lines, lineInfo{
+				content:   styles.SectionHeader.Render(section.Name),
+				taskIndex: -1,
+				sectionID: section.ID,
+			})
 
-		// Show tasks if any, otherwise show placeholder for empty section
-		if len(taskIndices) > 0 {
+			// Add tasks
 			for _, i := range taskIndices {
 				lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices), taskIndex: i})
 			}
-		} else {
-			// Add a hoverable placeholder line for empty sections
-			// Using special index -3 to indicate it's an empty section placeholder
-			placeholderStyle := lipgloss.NewStyle().Foreground(styles.Subtle).Faint(true).PaddingLeft(2)
-			placeholder := placeholderStyle.Render("(empty - press 'a' to add task)")
-			lines = append(lines, lineInfo{
-				content:   placeholder,
-				taskIndex: -3, // Special marker for empty section placeholder
-				sectionID: section.ID,
-			})
 		}
 	}
 
@@ -4076,6 +4102,38 @@ func (a *App) renderFlatTasks(maxHeight int) string {
 	}
 
 	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
+}
+
+// renderSectionHeaderByIndex renders a section header with cursor highlighting for empty sections.
+func (a *App) renderSectionHeaderByIndex(sectionName string, headerIndex int, orderedIndices []int) string {
+	// Find display position for cursor
+	displayPos := 0
+	for i, idx := range orderedIndices {
+		if idx == headerIndex {
+			displayPos = i
+			break
+		}
+	}
+
+	// Check if cursor is on this empty section header
+	isCursorHere := displayPos == a.taskCursor && a.focusedPane == PaneMain
+
+	// Cursor indicator
+	cursor := "  "
+	if isCursorHere {
+		cursor = "> "
+	}
+
+	// Build the header line
+	line := fmt.Sprintf("%s%s", cursor, sectionName)
+
+	// Apply style - use TaskSelected style when cursor is here, otherwise SectionHeader
+	style := styles.SectionHeader
+	if isCursorHere {
+		style = styles.TaskSelected
+	}
+
+	return style.Render(line)
 }
 
 // renderTaskByDisplayIndex renders a task with cursor based on display order.

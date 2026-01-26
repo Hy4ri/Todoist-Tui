@@ -203,7 +203,7 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 	case "s":
 		return "add_subtask", true
 	case "S":
-		return "new_section", true
+		return "manage_sections", true
 	case keymap.CompleteTask.Key:
 		return "complete", true
 	case "u":
@@ -289,7 +289,7 @@ func (k Keymap) HelpItems() [][]string {
 		{"m", "Move task to section"},
 		{"", ""},
 		{"Section Actions", ""},
-		{"S", "Create new section"},
+		{"S", "Manage sections (add/edit/delete)"},
 		{"M", "Reorder sections"},
 		{"", ""},
 		{"Calendar", ""},

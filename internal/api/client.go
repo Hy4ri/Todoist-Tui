@@ -12,10 +12,8 @@ import (
 )
 
 const (
-	// BaseURL is the Todoist API v2 REST base URL.
-	// Note: The v2 REST API is deprecated but still functional.
-	// The current API uses /api/v1/sync endpoint with a different format.
-	BaseURL = "https://api.todoist.com/rest/v2"
+	// BaseURL is the Todoist API v1 base URL.
+	BaseURL = "https://api.todoist.com/api/v1"
 
 	// DefaultTimeout is the default HTTP client timeout.
 	DefaultTimeout = 30 * time.Second
