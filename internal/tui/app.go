@@ -96,6 +96,7 @@ type App struct {
 	tasks          []api.Task
 	allTasks       []api.Task // All tasks for upcoming/calendar views
 	sections       []api.Section
+	allSections    []api.Section // All sections for instant project switching
 	labels         []api.Label
 	comments       []api.Comment // Comments for selected task
 	selectedTask   *api.Task
@@ -262,38 +263,116 @@ func (a *App) Init() tea.Cmd {
 	)
 }
 
-// loadInitialData loads projects and today's tasks.
+// loadInitialData loads all necessary data concurrently.
 func (a *App) loadInitialData() tea.Cmd {
 	return func() tea.Msg {
-		// Load projects
-		projects, err := a.client.GetProjects()
-		if err != nil {
-			return errMsg{err}
+		var (
+			projects    []api.Project
+			labels      []api.Label
+			allTasks    []api.Task
+			allSections []api.Section
+		)
+
+		// Create channels for results
+		type projectResult struct {
+			data []api.Project
+			err  error
+		}
+		type labelResult struct {
+			data []api.Label
+			err  error
+		}
+		type taskResult struct {
+			data []api.Task
+			err  error
+		}
+		type sectionResult struct {
+			data []api.Section
+			err  error
 		}
 
-		// Load today's tasks (including overdue) using filter endpoint
-		tasks, err := a.client.GetTasksByFilter("today | overdue")
-		if err != nil {
-			return errMsg{err}
-		}
+		projChan := make(chan projectResult)
+		labelChan := make(chan labelResult)
+		taskChan := make(chan taskResult)
+		secChan := make(chan sectionResult)
 
-		// Load all tasks for upcoming/calendar views
-		allTasks, err := a.client.GetTasks(api.TaskFilter{})
-		if err != nil {
-			return errMsg{err}
-		}
+		// Launch concurrent requests
+		go func() {
+			p, e := a.client.GetProjects()
+			projChan <- projectResult{data: p, err: e}
+		}()
 
-		// Load labels
-		labels, err := a.client.GetLabels()
-		if err != nil {
-			return errMsg{err}
+		go func() {
+			l, e := a.client.GetLabels()
+			labelChan <- labelResult{data: l, err: e}
+		}()
+
+		go func() {
+			t, e := a.client.GetTasks(api.TaskFilter{})
+			taskChan <- taskResult{data: t, err: e}
+		}()
+
+		go func() {
+			s, e := a.client.GetSections("")
+			secChan <- sectionResult{data: s, err: e}
+		}()
+
+		// Collect results
+		pRes := <-projChan
+		if pRes.err != nil {
+			return errMsg{pRes.err}
+		}
+		projects = pRes.data
+
+		lRes := <-labelChan
+		if lRes.err != nil {
+			return errMsg{lRes.err}
+		}
+		labels = lRes.data
+
+		tRes := <-taskChan
+		if tRes.err != nil {
+			return errMsg{tRes.err}
+		}
+		allTasks = tRes.data
+
+		sRes := <-secChan
+		if sRes.err != nil {
+			return errMsg{sRes.err}
+		}
+		allSections = sRes.data
+
+		// Filter tasks for the initial view
+		var initialTasks []api.Task
+		switch a.currentTab {
+		case TabUpcoming:
+			for _, t := range allTasks {
+				if t.Due != nil {
+					initialTasks = append(initialTasks, t)
+				}
+			}
+		case TabCalendar:
+			// In calendar main view, we don't necessarily show a list initially,
+			// or we show allTasks. DataLoadedMsg handler will handle the display.
+			initialTasks = nil
+		case TabProjects, TabLabels:
+			// Items are selected from sidebar/list
+			initialTasks = nil
+		default:
+			// TabToday or fallback
+			for _, t := range allTasks {
+				if t.IsOverdue() || t.IsDueToday() {
+					initialTasks = append(initialTasks, t)
+				}
+			}
 		}
 
 		return dataLoadedMsg{
-			projects: projects,
-			tasks:    tasks,
-			allTasks: allTasks,
-			labels:   labels,
+			projects:    projects,
+			tasks:       initialTasks,
+			allTasks:    allTasks,
+			labels:      labels,
+			allSections: allSections,
 		}
 	}
 }
@@ -302,11 +381,12 @@ func (a *App) loadInitialData() tea.Cmd {
 type errMsg struct{ err error }
 type statusMsg struct{ msg string }
 type dataLoadedMsg struct {
-	projects []api.Project
-	tasks    []api.Task
-	allTasks []api.Task
-	sections []api.Section
-	labels   []api.Label
+	projects    []api.Project
+	tasks       []api.Task
+	allTasks    []api.Task
+	sections    []api.Section
+	allSections []api.Section
+	labels      []api.Label
 }
 type taskUpdatedMsg struct{ task *api.Task }
 type taskDeletedMsg struct{ id string }
@@ -400,6 +480,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			sort.Slice(a.sections, func(i, j int) bool {
 				return a.sections[i].SectionOrder < a.sections[j].SectionOrder
 			})
+		}
+		if len(msg.allSections) > 0 {
+			a.allSections = msg.allSections
 		}
 
 		// Restore cursor position if we have a task ID to restore to
@@ -633,11 +716,11 @@ func (a *App) handleTabClick(x int) (tea.Model, tea.Cmd) {
 			case TabToday:
 				a.currentView = ViewToday
 				a.currentProject = nil
-				return a, a.loadTodayTasks()
+				return a, a.filterTodayTasks()
 			case TabUpcoming:
 				a.currentView = ViewUpcoming
 				a.currentProject = nil
-				return a, a.loadUpcomingTasks()
+				return a, a.filterUpcomingTasks()
 			case TabLabels:
 				a.currentView = ViewLabels
 				a.currentProject = nil
@@ -647,7 +730,7 @@ func (a *App) handleTabClick(x int) (tea.Model, tea.Cmd) {
 				a.currentProject = nil
 				a.calendarDate = time.Now()
 				a.calendarDay = time.Now().Day()
-				return a, a.loadAllTasks()
+				return a, a.filterCalendarTasks()
 			case TabProjects:
 				a.currentView = ViewProject
 				a.focusedPane = PaneSidebar
@@ -765,12 +848,12 @@ func (a *App) switchToTab(tab Tab) (tea.Model, tea.Cmd) {
 		a.currentView = ViewToday
 		a.currentProject = nil
 		a.focusedPane = PaneMain
-		return a, a.loadTodayTasks()
+		return a, a.filterTodayTasks()
 	case TabUpcoming:
 		a.currentView = ViewUpcoming
 		a.currentProject = nil
 		a.focusedPane = PaneMain
-		return a, a.loadUpcomingTasks()
+		return a, a.filterUpcomingTasks()
 	case TabLabels:
 		a.currentView = ViewLabels
 		a.currentProject = nil
@@ -782,7 +865,7 @@ func (a *App) switchToTab(tab Tab) (tea.Model, tea.Cmd) {
 		a.focusedPane = PaneMain
 		a.calendarDate = time.Now()
 		a.calendarDay = time.Now().Day()
-		return a, a.loadAllTasks()
+		return a, a.filterCalendarTasks()
 	case TabProjects:
 		a.currentView = ViewProject
 		a.focusedPane = PaneSidebar
@@ -1333,7 +1416,7 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 		for i := range a.projects {
 			if a.projects[i].ID == item.ID {
 				a.currentProject = &a.projects[i]
-				return a, a.loadProjectTasks(a.currentProject.ID)
+				return a, a.filterProjectTasks(a.currentProject.ID)
 			}
 		}
 		return a, nil
@@ -1351,7 +1434,7 @@ func (a *App) handleSelect() (tea.Model, tea.Cmd) {
 			if a.taskCursor < len(labelsToUse) {
 				a.currentLabel = &labelsToUse[a.taskCursor]
 				a.taskCursor = 0 // Reset cursor for task list
-				return a, a.loadLabelTasks(a.currentLabel.Name)
+				return a, a.filterLabelTasks(a.currentLabel.Name)
 			}
 		} else {
 			// Viewing label tasks - select task for detail
@@ -2900,35 +2983,78 @@ func (a *App) loadProjectTasks(projectID string) tea.Cmd {
 	}
 }
 
+// filterProjectTasks filters cached tasks and sections for a project.
+func (a *App) filterProjectTasks(projectID string) tea.Cmd {
+	var tasks []api.Task
+	for _, t := range a.allTasks {
+		if t.ProjectID == projectID {
+			tasks = append(tasks, t)
+		}
+	}
+
+	var sections []api.Section
+	for _, s := range a.allSections {
+		if s.ProjectID == projectID {
+			sections = append(sections, s)
+		}
+	}
+
+	// Sort sections
+	sort.Slice(sections, func(i, j int) bool {
+		return sections[i].SectionOrder < sections[j].SectionOrder
+	})
+
+	a.tasks = tasks
+	a.sections = sections
+	a.sortTasks()
+	return nil
+}
+
 // refreshTasks refreshes the current task list.
 func (a *App) refreshTasks() tea.Cmd {
 	return func() tea.Msg {
-		var tasks []api.Task
-		var err error
-
-		if a.currentView == ViewProject && a.currentProject != nil {
-			tasks, err = a.client.GetTasks(api.TaskFilter{
-				ProjectID: a.currentProject.ID,
-			})
-		} else if a.currentView == ViewLabels && a.currentLabel != nil {
-			// Load tasks for the selected label using filter endpoint
-			tasks, err = a.client.GetTasksByFilter("@" + a.currentLabel.Name)
-		} else {
-			// Default to today | overdue
-			tasks, err = a.client.GetTasksByFilter("today | overdue")
-		}
-
+		// Always fetch all tasks to keep the cache fresh
+		allTasks, err := a.client.GetTasks(api.TaskFilter{})
 		if err != nil {
 			return errMsg{err}
 		}
 
-		return dataLoadedMsg{tasks: tasks}
+		var filteredTasks []api.Task
+		if a.currentView == ViewProject && a.currentProject != nil {
+			for _, t := range allTasks {
+				if t.ProjectID == a.currentProject.ID {
+					filteredTasks = append(filteredTasks, t)
+				}
+			}
+		} else if a.currentView == ViewLabels && a.currentLabel != nil {
+			for _, t := range allTasks {
+				for _, l := range t.Labels {
+					if l == a.currentLabel.Name {
+						filteredTasks = append(filteredTasks, t)
+						break
+					}
+				}
+			}
+		} else {
+			// Default to today | overdue
+			for _, t := range allTasks {
+				if t.IsDueToday() || t.IsOverdue() {
+					filteredTasks = append(filteredTasks, t)
+				}
+			}
+		}
+
+		return dataLoadedMsg{
+			tasks:    filteredTasks,
+			allTasks: allTasks,
+		}
 	}
 }
 
 // loadTodayTasks loads today's tasks including overdue.
 func (a *App) loadTodayTasks() tea.Cmd {
 	return func() tea.Msg {
+		// Use filter endpoint for today | overdue
 		tasks, err := a.client.GetTasksByFilter("today | overdue")
 		if err != nil {
 			return errMsg{err}
@@ -2937,40 +3063,63 @@ func (a *App) loadTodayTasks() tea.Cmd {
 	}
 }
 
+// filterTodayTasks filters cached tasks for today/overdue.
+func (a *App) filterTodayTasks() tea.Cmd {
+	var tasks []api.Task
+	for _, t := range a.allTasks {
+		if t.IsOverdue() || t.IsDueToday() {
+			tasks = append(tasks, t)
+		}
+	}
+	a.tasks = tasks
+	a.sortTasks()
+	return nil
+}
+
 // loadUpcomingTasks loads all tasks with due dates for the upcoming view.
 func (a *App) loadUpcomingTasks() tea.Cmd {
 	return func() tea.Msg {
-		// Get all tasks and filter to those with due dates
-		tasks, err := a.client.GetTasks(api.TaskFilter{})
+		// Get all tasks
+		allTasks, err := a.client.GetTasks(api.TaskFilter{})
 		if err != nil {
 			return errMsg{err}
 		}
 
-		// Filter to tasks with due dates and sort by date
+		// Filter to tasks with due dates
 		var upcoming []api.Task
-		for _, t := range tasks {
+		for _, t := range allTasks {
 			if t.Due != nil {
 				upcoming = append(upcoming, t)
 			}
 		}
-
-		// Sort by due date
-		sort.Slice(upcoming, func(i, j int) bool {
-			return upcoming[i].Due.Date < upcoming[j].Due.Date
-		})
-
-		return dataLoadedMsg{tasks: upcoming, allTasks: tasks}
+		return dataLoadedMsg{
+			tasks:    upcoming,
+			allTasks: allTasks,
+		}
 	}
+}
+
+// filterUpcomingTasks filters cached tasks for upcoming view.
+func (a *App) filterUpcomingTasks() tea.Cmd {
+	var upcoming []api.Task
+	for _, t := range a.allTasks {
+		if t.Due != nil {
+			upcoming = append(upcoming, t)
+		}
+	}
+	a.tasks = upcoming
+	a.sortTasks()
+	return nil
 }
 
 // loadAllTasks loads all tasks (for calendar view).
 func (a *App) loadAllTasks() tea.Cmd {
 	return func() tea.Msg {
-		tasks, err := a.client.GetTasks(api.TaskFilter{})
+		allTasks, err := a.client.GetTasks(api.TaskFilter{})
 		if err != nil {
 			return errMsg{err}
 		}
-		return dataLoadedMsg{allTasks: tasks}
+		return dataLoadedMsg{allTasks: allTasks}
 	}
 }
 
@@ -3007,18 +3156,49 @@ func (a *App) loadLabelTasks(labelName string) tea.Cmd {
 	}
 }
 
+// filterLabelTasks filters cached tasks for a label.
+func (a *App) filterLabelTasks(labelName string) tea.Cmd {
+	var tasks []api.Task
+	for _, t := range a.allTasks {
+		hasLabel := false
+		for _, l := range t.Labels {
+			if l == labelName {
+				hasLabel = true
+				break
+			}
+		}
+		if hasLabel {
+			tasks = append(tasks, t)
+		}
+	}
+	a.tasks = tasks
+	a.sortTasks()
+	return nil
+}
+
 // loadCalendarDayTasks loads tasks for the selected calendar day.
 func (a *App) loadCalendarDayTasks() tea.Cmd {
 	selectedDate := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), a.calendarDay, 0, 0, 0, 0, time.Local)
 	dateStr := selectedDate.Format("2006-01-02")
 
-	return func() tea.Msg {
-		tasks, err := a.client.GetTasksByFilter(dateStr)
-		if err != nil {
-			return errMsg{err}
+	// Filter from allTasks instead of API call
+	var dayTasks []api.Task
+	for _, t := range a.allTasks {
+		if t.Due != nil && t.Due.Date == dateStr {
+			dayTasks = append(dayTasks, t)
 		}
-		return dataLoadedMsg{tasks: tasks}
 	}
+	a.tasks = dayTasks
+	return nil
+}
+
+// filterCalendarTasks filters cached tasks for calendar view (which uses allTasks).
+func (a *App) filterCalendarTasks() tea.Cmd {
+	// Calendar view mainly relies on a.allTasks which is already loaded.
+	// But we might want to refresh specific day tasks if we switch to day view.
+	// For main calendar view, we just need to ensured allTasks is available.
+	// Since we keep allTasks updated, we just need to trigger a view update if needed.
+	return nil
 }
 
 // loadTaskComments loads comments for the selected task.
