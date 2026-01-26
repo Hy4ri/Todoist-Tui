@@ -527,7 +527,33 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.restoreCursorToTaskID = a.tasks[a.taskCursor].ID
 		}
 		a.loading = true
-		return a, a.loadInitialData()
+
+		if a.currentView == ViewSearch {
+			return a, a.refreshSearchResults()
+		}
+
+		switch a.currentTab {
+		case TabProjects:
+			if a.currentProject != nil {
+				// Reload current project
+				return a, a.loadProjectTasks(a.currentProject.ID)
+			}
+			// Just reload project list
+			return a, a.loadProjects()
+		case TabUpcoming:
+			return a, a.loadUpcomingTasks()
+		case TabCalendar:
+			// Preserve calendar date and reload all tasks
+			return a, a.loadAllTasks()
+		case TabLabels:
+			if a.currentLabel != nil {
+				return a, a.loadLabelTasks(a.currentLabel.Name)
+			}
+			return a, a.loadLabels()
+		default:
+			// TabToday or fallback
+			return a, a.loadTodayTasks()
+		}
 
 	case commentsLoadedMsg:
 		a.comments = msg.comments
