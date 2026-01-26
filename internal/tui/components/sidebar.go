@@ -107,11 +107,38 @@ func (s *SidebarModel) View() string {
 
 		// Truncate long names
 		name := item.Name
-		if len(name) > nameMaxLen && nameMaxLen > 3 {
-			name = name[:nameMaxLen-1] + "…"
+		countStr := ""
+		if item.Count > 0 {
+			countStr = fmt.Sprintf(" (%d)", item.Count)
 		}
 
-		line := style.Render(fmt.Sprintf("%s%s%s %s", cursor, indent, item.Icon, name))
+		totalLen := len(name) + len(countStr)
+		if totalLen > nameMaxLen && nameMaxLen > 3 {
+			// avail is strict
+			avail := nameMaxLen - len(countStr)
+			if avail > 1 {
+				name = name[:avail-1] + "…"
+			} else {
+				// Just truncate name entirely if space is super tight, but keep count?
+				// Or just truncate string.
+				// Simple approach: combine first then truncate? No, count is important.
+				name = name[:nameMaxLen-1] + "…"
+				countStr = "" // Hide count if no space?
+			}
+		}
+
+		// Actually better:
+		if len(name)+len(countStr) > nameMaxLen {
+			avail := nameMaxLen - len(countStr)
+			if avail > 1 {
+				name = name[:avail-1] + "…"
+			} else {
+				name = name[:nameMaxLen-1] + "…"
+				countStr = ""
+			}
+		}
+
+		line := style.Render(fmt.Sprintf("%s%s%s %s%s", cursor, indent, item.Icon, name, countStr))
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
@@ -155,7 +182,7 @@ func (s *SidebarModel) Focused() bool {
 }
 
 // SetProjects rebuilds the sidebar items from the given projects.
-func (s *SidebarModel) SetProjects(projects []api.Project) {
+func (s *SidebarModel) SetProjects(projects []api.Project, counts map[string]int) {
 	s.items = []SidebarItem{}
 
 	// Add favorite projects first
@@ -163,7 +190,7 @@ func (s *SidebarModel) SetProjects(projects []api.Project) {
 		if p.IsFavorite {
 			icon := "⭐"
 			if p.InboxProject {
-				icon := "📥"
+				icon = "📥"
 				_ = icon
 			}
 			s.items = append(s.items, SidebarItem{
@@ -171,6 +198,7 @@ func (s *SidebarModel) SetProjects(projects []api.Project) {
 				ID:         p.ID,
 				Name:       p.Name,
 				Icon:       icon,
+				Count:      counts[p.ID],
 				IsFavorite: true,
 				ParentID:   p.ParentID,
 			})
@@ -201,6 +229,7 @@ func (s *SidebarModel) SetProjects(projects []api.Project) {
 				ID:       p.ID,
 				Name:     p.Name,
 				Icon:     icon,
+				Count:    counts[p.ID],
 				ParentID: p.ParentID,
 			})
 		}

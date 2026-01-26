@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
@@ -16,6 +15,7 @@ type DetailModel struct {
 	comments      []api.Comment
 	width, height int
 	showPanel     bool
+	focused       bool
 }
 
 // NewDetail creates a new DetailModel.
@@ -62,12 +62,14 @@ func (d *DetailModel) ViewPanel() string {
 
 	t := d.task
 
-	// Create border style
-	panelStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(styles.Highlight).
-		Padding(0, 1).
-		Width(d.width - 2).
+	// Use standardized style
+	containerStyle := styles.DetailPanel
+	if d.focused {
+		containerStyle = styles.DetailPanelFocused
+	}
+
+	panelStyle := containerStyle.
+		Width(d.width).
 		Height(d.height - 2)
 
 	// Build content
@@ -211,4 +213,14 @@ func (d *DetailModel) Hide() {
 	d.showPanel = false
 	d.task = nil
 	d.comments = nil
+}
+
+// Focus sets focus.
+func (d *DetailModel) Focus() {
+	d.focused = true
+}
+
+// Blur removes focus.
+func (d *DetailModel) Blur() {
+	d.focused = false
 }

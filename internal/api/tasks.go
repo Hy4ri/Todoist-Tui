@@ -1,8 +1,13 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
+	"time"
 )
 
 // GetTasks returns all active tasks, optionally filtered by project/section/label.
@@ -108,5 +113,68 @@ func (c *Client) DeleteTask(id string) error {
 	if err := c.Delete("/tasks/" + id); err != nil {
 		return fmt.Errorf("failed to delete task %s: %w", id, err)
 	}
+	return nil
+}
+
+// MoveTask moves a task to a different section, parent, or project using Sync API.
+func (c *Client) MoveTask(id string, sectionID *string, projectID *string, parentID *string) error {
+	type moveArgs struct {
+		ID        string  `json:"id"`
+		ProjectID *string `json:"project_id,omitempty"`
+		SectionID *string `json:"section_id,omitempty"`
+		ParentID  *string `json:"parent_id,omitempty"`
+	}
+
+	type syncCommand struct {
+		Type string   `json:"type"`
+		UUID string   `json:"uuid"`
+		Args moveArgs `json:"args"`
+	}
+
+	type syncRequest struct {
+		Commands []syncCommand `json:"commands"`
+	}
+
+	cmd := syncCommand{
+		Type: "item_move",
+		UUID: fmt.Sprintf("%d", time.Now().UnixNano()),
+		Args: moveArgs{
+			ID:        id,
+			ProjectID: projectID,
+			SectionID: sectionID,
+			ParentID:  parentID,
+		},
+	}
+
+	reqBody := syncRequest{
+		Commands: []syncCommand{cmd},
+	}
+
+	syncURL := "https://api.todoist.com/sync/v9/sync"
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal sync request: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", syncURL, bytes.NewReader(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create sync request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("sync request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+	}
+
 	return nil
 }

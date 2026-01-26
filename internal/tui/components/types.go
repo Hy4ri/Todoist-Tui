@@ -50,6 +50,7 @@ type SidebarItem struct {
 	ID         string // View name for special, project ID for projects
 	Name       string
 	Icon       string
+	Count      int
 	IsFavorite bool
 	ParentID   *string
 }

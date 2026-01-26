@@ -168,6 +168,18 @@ var (
 				BorderStyle(lipgloss.RoundedBorder()).
 				BorderForeground(Highlight).
 				Padding(0, 1)
+
+	// DetailPanel is the style for the detail panel container
+	DetailPanel = lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(Subtle).
+			Padding(0, 1)
+
+	// DetailPanelFocused is for when the detail panel is focused
+	DetailPanelFocused = lipgloss.NewStyle().
+				BorderStyle(lipgloss.RoundedBorder()).
+				BorderForeground(Highlight).
+				Padding(0, 1)
 )
 
 // StatusBar styles

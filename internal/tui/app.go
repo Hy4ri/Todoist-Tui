@@ -410,6 +410,8 @@ type searchRefreshMsg struct{}
 type refreshMsg struct{}
 type commentsLoadedMsg struct{ comments []api.Comment }
 
+type reorderCompleteMsg struct{}
+
 // Update implements tea.Model.
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -462,12 +464,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case dataLoadedMsg:
 		a.loading = false
-		// Only update fields that are non-nil/non-empty to avoid overwriting
+
+		if len(msg.allTasks) > 0 {
+			a.allTasks = msg.allTasks
+		}
+
 		if len(msg.projects) > 0 {
 			a.projects = msg.projects
 			a.buildSidebarItems()
-			// Sync sidebar component
-			a.sidebarComp.SetProjects(msg.projects)
+
+			// Calculate task counts
+			counts := make(map[string]int)
+			for _, t := range a.allTasks {
+				if !t.Checked && !t.IsDeleted {
+					counts[t.ProjectID]++
+				}
+			}
+
+			// Sync sidebar component with counts
+			a.sidebarComp.SetProjects(msg.projects, counts)
 		}
 		if msg.tasks != nil {
 			a.tasks = msg.tasks
@@ -475,9 +490,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(msg.labels) > 0 {
 			a.labels = msg.labels
-		}
-		if len(msg.allTasks) > 0 {
-			a.allTasks = msg.allTasks
 		}
 		if len(msg.sections) > 0 {
 			a.sections = msg.sections
@@ -645,6 +657,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commentsLoadedMsg:
 		a.comments = msg.comments
+		return a, nil
+
+	case reorderCompleteMsg:
+		if a.currentProject != nil {
+			return a, a.loadProjectTasks(a.currentProject.ID)
+		}
 		return a, nil
 	}
 
@@ -2436,6 +2454,44 @@ func (a *App) handleSectionsKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case "shift+up", "K":
+		if a.taskCursor > 0 {
+			idx := a.taskCursor
+			prev := idx - 1
+
+			// Swap elements locally
+			a.sections[idx], a.sections[prev] = a.sections[prev], a.sections[idx]
+
+			// Swap orders locally to maintain consistency
+			a.sections[idx].SectionOrder, a.sections[prev].SectionOrder = a.sections[prev].SectionOrder, a.sections[idx].SectionOrder
+
+			// Update cursor to follow the moved item
+			a.taskCursor--
+
+			// Send Sync API update with ALL sections
+			return a, a.reorderSectionsCmd(a.sections)
+		}
+		return a, nil
+
+	case "shift+down", "J":
+		if a.taskCursor < len(a.sections)-1 {
+			idx := a.taskCursor
+			next := idx + 1
+
+			// Swap elements locally
+			a.sections[idx], a.sections[next] = a.sections[next], a.sections[idx]
+
+			// Swap orders locally
+			a.sections[idx].SectionOrder, a.sections[next].SectionOrder = a.sections[next].SectionOrder, a.sections[idx].SectionOrder
+
+			// Update cursor to follow the moved item
+			a.taskCursor++
+
+			// Send Sync API update with ALL sections
+			return a, a.reorderSectionsCmd(a.sections)
+		}
+		return a, nil
+
 	case "a":
 		a.sectionInput = textinput.New()
 		a.sectionInput.Placeholder = "New section name..."
@@ -2536,15 +2592,17 @@ func (a *App) handleMoveTaskKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.statusMsg = "Moving task..."
 
 		return a, func() tea.Msg {
-			// Update task with new section_id
-			_, err := a.client.UpdateTask(task.ID, api.UpdateTaskRequest{
-				SectionID: &sectionID,
-			})
+			// Update task with new section_id using MoveTask (Sync API)
+			err := a.client.MoveTask(task.ID, &sectionID, nil, nil)
 			if err != nil {
 				return errMsg{err}
 			}
-			return taskUpdatedMsg{}
+			return taskUpdatedMsg{task: task} // We don't get the updated task back, but we trigger a refresh usually. Or should we reload?
+			// taskUpdatedMsg usually expects a *Task. The old code returned taskUpdatedMsg{}.
+			// Let's return taskUpdatedMsg{} or maybe trigger reload if structure changed.
+			// Returning taskUpdatedMsg{} usually triggers list update.
 		}
+
 	}
 	return a, nil
 }
@@ -3841,24 +3899,76 @@ func (a *App) renderMainView() string {
 
 	// If detail panel is shown, split the view
 	if a.showDetailPanel && a.selectedTask != nil {
-		// Split layout: task list on left, detail panel on right
+		// Split layout
 		detailWidth := a.width / 2
-		listWidth := a.width - detailWidth - 3 // -3 for border/spacing
+		remainingWidth := a.width - detailWidth - 3 // -3 for border/spacing
 
-		var leftPane string
 		if a.currentTab == TabProjects {
-			leftPane = a.renderProjectsTabContent(listWidth, contentHeight)
+			// Three-pane layout: Sidebar | Tasks | Detail
+			sidebarWidth := 30
+			if remainingWidth < 70 {
+				sidebarWidth = 20
+			}
+			if remainingWidth < 50 {
+				sidebarWidth = 15
+			}
+
+			// We need 2 spaces for joins
+			taskListWidth := remainingWidth - sidebarWidth - 2
+
+			// Sizing validation
+			if taskListWidth < 20 {
+				taskListWidth = 20
+			}
+
+			// Render Sidebar
+			a.sidebarComp.SetSize(sidebarWidth, contentHeight)
+			a.sidebarComp.SetCursor(a.sidebarCursor)
+			if a.focusedPane == PaneSidebar {
+				a.sidebarComp.Focus()
+			} else {
+				a.sidebarComp.Blur()
+			}
+			if a.currentProject != nil {
+				a.sidebarComp.SetActiveProject(a.currentProject.ID)
+			}
+			sidebarPane := a.sidebarComp.View()
+
+			// Render Task List
+			taskListPane := a.renderProjectTaskList(taskListWidth, contentHeight)
+
+			// Render Detail
+			a.detailComp.SetSize(detailWidth, contentHeight)
+			a.detailComp.SetTask(a.selectedTask)
+			a.detailComp.SetComments(a.comments)
+			if a.currentView == ViewTaskDetail {
+				a.detailComp.Focus()
+			} else {
+				a.detailComp.Blur()
+			}
+			rightPane := a.detailComp.ViewPanel()
+
+			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, sidebarPane, " ", taskListPane, " ", rightPane)
 		} else {
-			leftPane = a.renderTaskList(listWidth, contentHeight)
+			// Two-pane layout: Tasks | Detail
+			// Need 1 space for join
+			listWidth := remainingWidth - 1
+			leftPane := a.renderTaskList(listWidth, contentHeight)
+
+			// Render Detail
+			a.detailComp.SetSize(detailWidth, contentHeight)
+			a.detailComp.SetTask(a.selectedTask)
+			a.detailComp.SetComments(a.comments)
+			if a.currentView == ViewTaskDetail {
+				a.detailComp.Focus()
+			} else {
+				a.detailComp.Blur()
+			}
+			rightPane := a.detailComp.ViewPanel()
+
+			mainContent = lipgloss.JoinHorizontal(lipgloss.Top, leftPane, " ", rightPane)
 		}
 
-		// Render detail panel - using component
-		a.detailComp.SetSize(detailWidth, contentHeight)
-		a.detailComp.SetTask(a.selectedTask)
-		a.detailComp.SetComments(a.comments)
-		rightPane := a.detailComp.ViewPanel()
-
-		mainContent = lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 	} else {
 		if a.currentTab == TabProjects {
 			// Projects tab shows sidebar + content
@@ -4162,7 +4272,7 @@ func (a *App) renderDefaultTaskList(maxHeight int) string {
 		title = "Tasks"
 	}
 	b.WriteString(styles.Title.Render(title))
-	b.WriteString("\n")
+	b.WriteString("\n\n")
 
 	if a.loading {
 		b.WriteString(a.spinner.View())
@@ -5545,5 +5655,17 @@ func (a *App) getContextualHints() []string {
 			key("?") + desc(":help"),
 			key("q") + desc(":quit"),
 		}
+	}
+}
+
+// updateSectionOrderCmd sends an API request to update the section order.
+
+// reorderSectionsCmd updates the section order using the Sync API.
+func (a *App) reorderSectionsCmd(sections []api.Section) tea.Cmd {
+	return func() tea.Msg {
+		if err := a.client.ReorderSections(sections); err != nil {
+			return errMsg{err}
+		}
+		return reorderCompleteMsg{}
 	}
 }
