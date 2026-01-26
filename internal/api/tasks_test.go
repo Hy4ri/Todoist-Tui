@@ -20,7 +20,7 @@ func TestNewClient(t *testing.T) {
 		t.Errorf("expected token %q, got %q", token, client.accessToken)
 	}
 
-	if client.baseURL != "https://api.todoist.com/rest/v2" {
+	if client.baseURL != "https://api.todoist.com/api/v1" {
 		t.Errorf("unexpected base URL: %s", client.baseURL)
 	}
 }

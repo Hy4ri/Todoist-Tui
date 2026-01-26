@@ -169,7 +169,7 @@ todoist-tui/
 │   └── todoist-tui/
 │       └── main.go           # Application entry point
 ├── internal/
-│   ├── api/                  # Todoist REST API v2 client
+│   ├── api/                  # Todoist REST API v1 client
 │   │   ├── client.go         # HTTP client
 │   │   ├── tasks.go          # Task operations
 │   │   ├── projects.go       # Project operations
@@ -234,7 +234,7 @@ The app uses [Bubble Tea](https://github.com/charmbracelet/bubbletea) for the TU
 
 ### API Client
 
-Direct integration with [Todoist REST API v2](https://developer.todoist.com/rest/v2/):
+Direct integration with [Todoist REST API v1](https://developer.todoist.com/rest/v1/):
 
 - Uses standard `net/http` with Bearer token authentication
 - All endpoints return proper error types
@@ -257,7 +257,7 @@ Direct integration with [Todoist REST API v2](https://developer.todoist.com/rest
 
 ```bash
 # Verify your token works
-curl -X GET https://api.todoist.com/rest/v2/tasks \
+curl -X GET https://api.todoist.com/api/v1/tasks \
   -H "Authorization: Bearer YOUR_TOKEN"
 
 # Check config file exists
@@ -329,7 +329,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ## Links
 
-- [Todoist API Documentation](https://developer.todoist.com/rest/v2/)
+- [Todoist API Documentation](https://developer.todoist.com/rest/v1/)
 - [Bubble Tea Documentation](https://github.com/charmbracelet/bubbletea)
 - [Report Issues](https://github.com/hy4ri/todoist-tui/issues)
 

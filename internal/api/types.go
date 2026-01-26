@@ -257,7 +257,8 @@ func (t *Task) IsOverdue() bool {
 		return false
 	}
 
-	today := time.Now().Truncate(24 * time.Hour)
+	today := time.Now()
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
 	return dueDate.Before(today)
 }
 
@@ -273,7 +274,8 @@ func (t *Task) IsDueToday() bool {
 		return false
 	}
 
-	today := time.Now().Truncate(24 * time.Hour)
+	today := time.Now()
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
 	return dueDate.Equal(today)
 }
 
@@ -289,7 +291,8 @@ func (t *Task) DueDisplay() string {
 		return t.Due.String
 	}
 
-	today := time.Now().Truncate(24 * time.Hour)
+	today := time.Now()
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
 	diff := int(dueDate.Sub(today).Hours() / 24)
 
 	switch {
