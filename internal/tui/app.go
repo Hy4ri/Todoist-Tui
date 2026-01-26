@@ -235,6 +235,8 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 		helpComp:    components.NewHelp(),
 	}
 
+	app.helpComp.SetKeymap(app.keymap.HelpItems())
+
 	// Handle initial view override
 	switch initialView {
 	case "upcoming":
