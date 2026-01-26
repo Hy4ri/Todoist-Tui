@@ -87,9 +87,13 @@ func main() {
 func run() error {
 	// Define flags
 	var (
-		showHelp    bool
-		showVersion bool
-		initConfig  bool
+		showHelp     bool
+		showVersion  bool
+		initConfig   bool
+		viewProjects bool
+		viewUpcoming bool
+		viewCalendar bool
+		viewLabels   bool
 	)
 
 	flag.BoolVar(&showHelp, "help", false, "Show help message")
@@ -97,6 +101,10 @@ func run() error {
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.BoolVar(&initConfig, "init", false, "Create template config file")
+	flag.BoolVar(&viewProjects, "projects", false, "Start in projects view")
+	flag.BoolVar(&viewUpcoming, "upcoming", false, "Start in upcoming view")
+	flag.BoolVar(&viewCalendar, "calendar", false, "Start in calendar view")
+	flag.BoolVar(&viewLabels, "labels", false, "Start in labels view")
 
 	flag.Usage = func() {
 		fmt.Print(helpText)
@@ -119,8 +127,20 @@ func run() error {
 		return createConfigTemplate()
 	}
 
+	// determine initial view
+	initialView := ""
+	if viewProjects {
+		initialView = "projects"
+	} else if viewUpcoming {
+		initialView = "upcoming"
+	} else if viewCalendar {
+		initialView = "calendar"
+	} else if viewLabels {
+		initialView = "labels"
+	}
+
 	// Normal application flow
-	return runApp()
+	return runApp(initialView)
 }
 
 // createConfigTemplate creates a template configuration file.
@@ -164,7 +184,7 @@ func createConfigTemplate() error {
 }
 
 // runApp starts the main TUI application.
-func runApp() error {
+func runApp(initialView string) error {
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -205,7 +225,7 @@ func runApp() error {
 	client := api.NewClient(token)
 
 	// Create and run TUI
-	app := tui.NewApp(client, cfg)
+	app := tui.NewApp(client, cfg, initialView)
 	p := tea.NewProgram(app, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	if _, err := p.Run(); err != nil {

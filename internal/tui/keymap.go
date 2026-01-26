@@ -206,13 +206,13 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		return "manage_sections", true
 	case keymap.CompleteTask.Key:
 		return "complete", true
-	case "u":
+	case "ctrl+z":
 		return "undo", true
 	case "m":
 		return "move_task", true
 	case "M":
 		return "move_section", true
-	case "c":
+	case "A": // Remapped from c
 		return "add_comment", true
 	case " ": // Space key for selection
 		return "toggle_select", true
@@ -230,27 +230,29 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
 		return "due_tomorrow", true
 	case keymap.SwitchPane.Key:
 		return "switch_pane", true
-	case keymap.FocusTasks.Key:
-		return "focus_tasks", true
-	case keymap.FocusProjects.Key:
-		return "focus_projects", true
 	case keymap.Search.Key:
 		return "search", true
 	case keymap.CalendarView.Key:
 		return "calendar_view", true
 	case keymap.NewProject.Key:
 		return "new_project", true
-	// Tab navigation shortcuts
-	case "T":
+
+	// Tab navigation shortcuts (Case insensitive t, u, p, l, c)
+	case "t", "T":
 		return "tab_today", true
-	case "U":
+	case "u", "U":
 		return "tab_upcoming", true
-	case "P":
+	case "p", "P":
 		return "tab_projects", true
-	case "L":
+	case "l", "L":
+		// 'l' is also 'right', but we handle priority in app.go
+		if key == "l" {
+			return "right", true
+		}
 		return "tab_labels", true
-	case "C":
+	case "c", "C":
 		return "tab_calendar", true
+
 	// Hints toggle
 	case "f1":
 		return "toggle_hints", true

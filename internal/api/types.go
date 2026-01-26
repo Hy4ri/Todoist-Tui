@@ -63,7 +63,7 @@ type Project struct {
 	ID                                  string  `json:"id"`
 	Name                                string  `json:"name"`
 	Description                         string  `json:"description"`
-	WorkspaceID                         *int    `json:"workspace_id"`
+	WorkspaceID                         *string `json:"workspace_id"`
 	Color                               string  `json:"color"`
 	ParentID                            *string `json:"parent_id"`
 	ChildOrder                          int     `json:"child_order"`

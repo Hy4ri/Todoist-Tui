@@ -10,7 +10,7 @@ import (
 // Use GetTasksByFilter for filter-based queries (e.g., "today | overdue").
 // Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetTasks(filter TaskFilter) ([]Task, error) {
-	var allTasks []Task
+	allTasks := make([]Task, 0)
 	query := buildFilterQuery(filter)
 
 	for {
@@ -39,7 +39,7 @@ func (c *Client) GetTasksByFilter(filterQuery string) ([]Task, error) {
 		return nil, fmt.Errorf("filter query cannot be empty")
 	}
 
-	var allTasks []Task
+	allTasks := make([]Task, 0)
 	query := url.Values{}
 	query.Set("query", filterQuery)
 

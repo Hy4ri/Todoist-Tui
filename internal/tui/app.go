@@ -196,7 +196,8 @@ type App struct {
 }
 
 // NewApp creates a new App instance.
-func NewApp(client *api.Client, cfg *config.Config) *App {
+// NewApp creates a new App instance.
+func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = styles.Spinner
@@ -212,7 +213,7 @@ func NewApp(client *api.Client, cfg *config.Config) *App {
 		calViewMode = CalendarViewCompact
 	}
 
-	return &App{
+	app := &App{
 		client:           client,
 		config:           cfg,
 		currentView:      ViewToday,
@@ -232,6 +233,25 @@ func NewApp(client *api.Client, cfg *config.Config) *App {
 		detailComp:  components.NewDetail(),
 		helpComp:    components.NewHelp(),
 	}
+
+	// Handle initial view override
+	switch initialView {
+	case "upcoming":
+		app.currentView = ViewUpcoming
+		app.currentTab = TabUpcoming
+	case "projects":
+		app.currentView = ViewProject
+		app.currentTab = TabProjects
+		app.focusedPane = PaneSidebar
+	case "calendar":
+		app.currentView = ViewCalendar
+		app.currentTab = TabCalendar
+	case "labels":
+		app.currentView = ViewLabels
+		app.currentTab = TabLabels
+	}
+
+	return app
 }
 
 // Init implements tea.Model.
@@ -821,6 +841,7 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Tab switching with number keys (1-5) - only when not in form/input modes
+	// Tab switching with number keys (1-5) and letters - only when not in form/input modes
 	switch msg.String() {
 	case "1":
 		return a.switchToTab(TabToday)
@@ -832,6 +853,17 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.switchToTab(TabCalendar)
 	case "5":
 		return a.switchToTab(TabProjects)
+	case "t", "T":
+		return a.switchToTab(TabToday)
+	case "u", "U":
+		return a.switchToTab(TabUpcoming)
+	case "p", "P":
+		return a.switchToTab(TabProjects)
+	case "c", "C":
+		return a.switchToTab(TabCalendar)
+	// 'l' is excluded here to preserve navigation in Calendar/Projects, handled in "right" action
+	case "L":
+		return a.switchToTab(TabLabels)
 	}
 
 	// Sections view routing
@@ -881,6 +913,9 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// l key - move to main pane in Projects tab
 		if a.currentTab == TabProjects && a.focusedPane == PaneSidebar {
 			a.focusedPane = PaneMain
+		} else if a.currentView != ViewCalendar {
+			// If not navigating projects or calendar, 'l' switches to Labels
+			return a.switchToTab(TabLabels)
 		}
 	case "switch_pane":
 		a.switchPane()
