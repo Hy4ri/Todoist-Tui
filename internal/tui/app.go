@@ -1904,7 +1904,7 @@ func (a *App) handleDelete() (tea.Model, tea.Cmd) {
 func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 	a.previousView = a.currentView
 	a.currentView = ViewTaskForm
-	a.taskForm = NewTaskForm(a.projects)
+	a.taskForm = NewTaskForm(a.projects, a.labels)
 	a.taskForm.SetWidth(a.width)
 
 	// If in project view, default to that project
@@ -1981,6 +1981,29 @@ func (a *App) handleAdd() (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Set default due date based on view context
+	switch a.previousView {
+	case ViewToday:
+		a.taskForm.SetDue(time.Now().Format("2006-01-02"))
+		a.taskForm.SetContext("Today")
+	case ViewUpcoming:
+		a.taskForm.SetDue(time.Now().Format("2006-01-02"))
+		a.taskForm.SetContext("Upcoming")
+	case ViewCalendar, ViewCalendarDay:
+		selectedDate := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), a.calendarDay, 0, 0, 0, 0, time.Local)
+		a.taskForm.SetDue(selectedDate.Format("2006-01-02"))
+		a.taskForm.SetContext(selectedDate.Format("Jan 2"))
+	case ViewProject:
+		a.taskForm.SetDue("")
+		a.taskForm.SetContext("Project")
+	case ViewLabels:
+		a.taskForm.SetDue("")
+		a.taskForm.SetContext("Labels")
+	default:
+		a.taskForm.SetDue("")
+		a.taskForm.SetContext("")
+	}
+
 	return a, nil
 }
 
@@ -2046,7 +2069,7 @@ func (a *App) handleEdit() (tea.Model, tea.Cmd) {
 	task := &a.tasks[taskIndex]
 	a.previousView = a.currentView
 	a.currentView = ViewTaskForm
-	a.taskForm = NewEditTaskForm(task, a.projects)
+	a.taskForm = NewEditTaskForm(task, a.projects, a.labels)
 	a.taskForm.SetWidth(a.width)
 
 	return a, nil
@@ -2775,6 +2798,16 @@ func (a *App) handleFormKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case "enter":
+		// Submit on Enter if a text input is focused (and not in project selection dropdown)
+		if !a.taskForm.showProjectList && a.taskForm.IsValid() &&
+			(a.taskForm.FocusedField == FormFieldContent ||
+				a.taskForm.FocusedField == FormFieldDescription ||
+				a.taskForm.FocusedField == FormFieldDue ||
+				a.taskForm.FocusedField == FormFieldLabels ||
+				a.taskForm.FocusedField == FormFieldSubmit) {
+			return a.submitForm()
+		}
+
 		// If on submit button or Ctrl+Enter from any field, submit form
 		if a.taskForm.FocusedField == FormFieldSubmit || msg.String() == "ctrl+enter" {
 			return a.submitForm()

@@ -21,10 +21,11 @@ const (
 	FormFieldDue
 	FormFieldPriority
 	FormFieldProject
+	FormFieldLabels
 	FormFieldSubmit
 )
 
-const formFieldCount = 6
+const formFieldCount = 7
 
 // TaskForm manages the state of the add/edit task form.
 type TaskForm struct {
@@ -36,6 +37,7 @@ type TaskForm struct {
 	ContentInput     textinput.Model
 	DescriptionInput textinput.Model
 	DueInput         textinput.Model
+	LabelsInput      textinput.Model
 
 	// Selections
 	Priority        int    // 1-4 (Todoist priority, 4=highest)
@@ -49,11 +51,13 @@ type TaskForm struct {
 	// Form state
 	FocusedField FormField
 	Projects     []api.Project
+	Labels       []api.Label
+	ContextHint  string
 	width        int
 }
 
 // NewTaskForm creates a new task form for adding a task.
-func NewTaskForm(projects []api.Project) *TaskForm {
+func NewTaskForm(projects []api.Project, labels []api.Label) *TaskForm {
 	contentInput := textinput.New()
 	contentInput.Placeholder = "Task name"
 	contentInput.Focus()
@@ -70,6 +74,11 @@ func NewTaskForm(projects []api.Project) *TaskForm {
 	dueInput.CharLimit = 100
 	dueInput.Width = 50
 
+	labelsInput := textinput.New()
+	labelsInput.Placeholder = "Labels (e.g., urgent work)"
+	labelsInput.CharLimit = 500
+	labelsInput.Width = 50
+
 	// Find inbox project as default
 	var inboxID, inboxName string
 	for _, p := range projects {
@@ -85,17 +94,19 @@ func NewTaskForm(projects []api.Project) *TaskForm {
 		ContentInput:     contentInput,
 		DescriptionInput: descInput,
 		DueInput:         dueInput,
+		LabelsInput:      labelsInput,
 		Priority:         1, // Default to P4 (lowest)
 		ProjectID:        inboxID,
 		ProjectName:      inboxName,
 		FocusedField:     FormFieldContent,
 		Projects:         projects,
+		Labels:           labels,
 	}
 }
 
 // NewEditTaskForm creates a new task form pre-populated for editing.
-func NewEditTaskForm(task *api.Task, projects []api.Project) *TaskForm {
-	form := NewTaskForm(projects)
+func NewEditTaskForm(task *api.Task, projects []api.Project, labels []api.Label) *TaskForm {
+	form := NewTaskForm(projects, labels)
 	form.Mode = "edit"
 	form.TaskID = task.ID
 
@@ -105,6 +116,7 @@ func NewEditTaskForm(task *api.Task, projects []api.Project) *TaskForm {
 	if task.Due != nil {
 		form.DueInput.SetValue(task.Due.String)
 	}
+	form.LabelsInput.SetValue(strings.Join(task.Labels, " "))
 	form.Priority = task.Priority
 
 	// Set project
@@ -132,6 +144,17 @@ func (f *TaskForm) SetWidth(width int) {
 	f.ContentInput.Width = inputWidth
 	f.DescriptionInput.Width = inputWidth
 	f.DueInput.Width = inputWidth
+	f.LabelsInput.Width = inputWidth
+}
+
+// SetContext sets a context hint for the form (e.g., "Today", "Calendar").
+func (f *TaskForm) SetDue(due string) {
+	f.DueInput.SetValue(due)
+	f.DueInput.CursorEnd()
+}
+
+func (f *TaskForm) SetContext(hint string) {
+	f.ContextHint = hint
 }
 
 // Update handles input for the form.
@@ -146,10 +169,10 @@ func (f *TaskForm) Update(msg tea.Msg) (*TaskForm, tea.Cmd) {
 		}
 
 		switch msg.String() {
-		case "tab":
+		case "tab", "down":
 			f.nextField()
 			return f, nil
-		case "shift+tab":
+		case "shift+tab", "up":
 			f.prevField()
 			return f, nil
 		case "ctrl+p":
@@ -209,6 +232,10 @@ func (f *TaskForm) Update(msg tea.Msg) (*TaskForm, tea.Cmd) {
 		var cmd tea.Cmd
 		f.DueInput, cmd = f.DueInput.Update(msg)
 		cmds = append(cmds, cmd)
+	case FormFieldLabels:
+		var cmd tea.Cmd
+		f.LabelsInput, cmd = f.LabelsInput.Update(msg)
+		cmds = append(cmds, cmd)
 	}
 
 	return f, tea.Batch(cmds...)
@@ -261,6 +288,8 @@ func (f *TaskForm) blurCurrent() {
 		f.DescriptionInput.Blur()
 	case FormFieldDue:
 		f.DueInput.Blur()
+	case FormFieldLabels:
+		f.LabelsInput.Blur()
 	}
 }
 
@@ -273,6 +302,8 @@ func (f *TaskForm) focusCurrent() {
 		f.DescriptionInput.Focus()
 	case FormFieldDue:
 		f.DueInput.Focus()
+	case FormFieldLabels:
+		f.LabelsInput.Focus()
 	}
 }
 
@@ -301,6 +332,10 @@ func (f *TaskForm) ToCreateRequest() api.CreateTaskRequest {
 		req.DueString = due
 	}
 
+	if labels := strings.TrimSpace(f.LabelsInput.Value()); labels != "" {
+		req.Labels = strings.Fields(labels)
+	}
+
 	return req
 }
 
@@ -321,6 +356,10 @@ func (f *TaskForm) ToUpdateRequest() api.UpdateTaskRequest {
 		req.DueString = &due
 	}
 
+	if labels := strings.TrimSpace(f.LabelsInput.Value()); labels != "" {
+		req.Labels = strings.Fields(labels)
+	}
+
 	return req
 }
 
@@ -329,11 +368,14 @@ func (f *TaskForm) View() string {
 	var b strings.Builder
 
 	// Title
-	title := "Add Task"
+	title := "➕ Add Task"
 	if f.Mode == "edit" {
-		title = "Edit Task"
+		title = "✏️ Edit Task"
 	}
-	b.WriteString(styles.DialogTitle.Render(title))
+	if f.ContextHint != "" {
+		title += fmt.Sprintf(" (%s)", f.ContextHint)
+	}
+	b.WriteString(styles.Title.Render(title))
 	b.WriteString("\n\n")
 
 	// Content field
@@ -354,6 +396,20 @@ func (f *TaskForm) View() string {
 
 	// Project field
 	b.WriteString(f.renderProjectField())
+	b.WriteString("\n")
+
+	// Labels field
+	b.WriteString(f.renderField("Labels", f.LabelsInput.View(), FormFieldLabels))
+	if f.FocusedField == FormFieldLabels && len(f.Labels) > 0 {
+		b.WriteString("\n")
+		var labels []string
+		for _, l := range f.Labels {
+			labels = append(labels, "@"+l.Name)
+		}
+		// Use a more distinct style for labels hint
+		hintStyle := styles.HelpDesc.Foreground(styles.Highlight).Italic(true)
+		b.WriteString(hintStyle.Render("Available: " + strings.Join(labels, " ")))
+	}
 	b.WriteString("\n\n")
 
 	// Submit button
@@ -369,7 +425,7 @@ func (f *TaskForm) View() string {
 	b.WriteString("\n\n")
 
 	// Help
-	helpText := "Tab: next field | Shift+Tab: previous | Enter: submit | Esc: cancel"
+	helpText := "Arrows/Tab: next field | Enter: submit | Esc: cancel"
 	if f.FocusedField == FormFieldPriority {
 		helpText = "1-4: set priority | h/l: adjust | Tab: next field"
 	} else if f.FocusedField == FormFieldProject {
@@ -387,7 +443,7 @@ func (f *TaskForm) renderField(label, input string, field FormField) string {
 		labelStyle = labelStyle.Foreground(styles.Highlight)
 	}
 
-	return fmt.Sprintf("%s\n%s", labelStyle.Render(label), input)
+	return fmt.Sprintf("%s: %s", labelStyle.Render(label), input)
 }
 
 // renderPriorityField renders the priority selector.
@@ -415,7 +471,7 @@ func (f *TaskForm) renderPriorityField() string {
 		selector = "[ " + selector + " ]"
 	}
 
-	return fmt.Sprintf("%s\n%s", labelStyle.Render("Priority"), selector)
+	return fmt.Sprintf("%s: %s", labelStyle.Render("Priority"), selector)
 }
 
 // renderProjectField renders the project selector.
@@ -461,5 +517,5 @@ func (f *TaskForm) renderProjectField() string {
 		}
 	}
 
-	return fmt.Sprintf("%s\n%s", labelStyle.Render("Project"), content)
+	return fmt.Sprintf("%s: %s", labelStyle.Render("Project"), content)
 }
