@@ -2,9 +2,11 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
@@ -13,7 +15,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/tui"
 )
 
-const version = "0.1.0"
+const version = "0.7.0"
 
 const helpText = `todoist-tui - Terminal-based Todoist client with Vim keybindings
 
@@ -24,6 +26,7 @@ OPTIONS:
     -h, --help      Show this help message
     -v, --version   Show version information
     --init          Create a template config file
+    --json          Output today's and overdue tasks in JSON format
 
 CONFIGURATION:
     Config file: ~/.config/todoist-tui/config.yaml
@@ -94,6 +97,7 @@ func run() error {
 		viewUpcoming bool
 		viewCalendar bool
 		viewLabels   bool
+		outputJSON   bool
 	)
 
 	flag.BoolVar(&showHelp, "help", false, "Show help message")
@@ -105,6 +109,7 @@ func run() error {
 	flag.BoolVar(&viewUpcoming, "upcoming", false, "Start in upcoming view")
 	flag.BoolVar(&viewCalendar, "calendar", false, "Start in calendar view")
 	flag.BoolVar(&viewLabels, "labels", false, "Start in labels view")
+	flag.BoolVar(&outputJSON, "json", false, "Output tasks in JSON format")
 
 	flag.Usage = func() {
 		fmt.Print(helpText)
@@ -125,6 +130,10 @@ func run() error {
 
 	if initConfig {
 		return createConfigTemplate()
+	}
+
+	if outputJSON {
+		return runJSONOutput()
 	}
 
 	// determine initial view
@@ -232,5 +241,99 @@ func runApp(initialView string) error {
 		return fmt.Errorf("failed to run TUI: %w", err)
 	}
 
+	return nil
+}
+
+// runJSONOutput fetches today's and overdue tasks and outputs them as JSON.
+func runJSONOutput() error {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Check if config exists and has auth
+	if !cfg.HasValidAuth() && !cfg.HasOAuthCredentials() {
+		return fmt.Errorf("no authentication configured. Run 'todoist-tui --init' first")
+	}
+
+	// Get access token
+	token, err := auth.GetAccessToken(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to authenticate: %w", err)
+	}
+
+	// Create API client
+	client := api.NewClient(token)
+
+	// Fetch tasks
+	tasks, err := client.GetTasksByFilter("today | overdue")
+	if err != nil {
+		return fmt.Errorf("failed to fetch tasks: %w", err)
+	}
+
+	// Simplified output structure
+	type simpleTask struct {
+		Name     string `json:"name"`
+		Date     string `json:"date"`
+		Priority int    `json:"priority"`
+	}
+
+	type jsonOutput struct {
+		// Waybar specific fields
+		Text    string `json:"text"`    // What shows on the bar
+		Tooltip string `json:"tooltip"` // What shows on hover
+		Class   string `json:"class"`   // For CSS styling
+
+		// Data fields
+		Tasks          []simpleTask `json:"tasks"`
+		PriorityCounts map[int]int  `json:"priority_counts"`
+		Total          int          `json:"total"`
+	}
+
+	res := jsonOutput{
+		Tasks:          make([]simpleTask, 0, len(tasks)),
+		PriorityCounts: make(map[int]int),
+		Total:          len(tasks),
+	}
+
+	var tooltipLines []string
+	maxPriority := 1 // Todoist P1 is 1 (natural), P4 is 4 (urgent)
+
+	for _, t := range tasks {
+		date := ""
+		if t.Due != nil {
+			date = t.Due.Date
+		}
+
+		res.Tasks = append(res.Tasks, simpleTask{
+			Name:     t.Content,
+			Date:     date,
+			Priority: t.Priority,
+		})
+
+		res.PriorityCounts[t.Priority]++
+
+		// Track highest priority for styling
+		if t.Priority > maxPriority {
+			maxPriority = t.Priority
+		}
+
+		// Build a nice tooltip line for each task with priority
+		tooltipLines = append(tooltipLines, fmt.Sprintf("P%d: %s", 5-t.Priority, t.Content))
+	}
+
+	// Map the logic to Waybar fields
+	res.Text = fmt.Sprintf("%d", res.Total)
+	res.Tooltip = strings.Join(tooltipLines, "\n")
+	res.Class = fmt.Sprintf("p%d", maxPriority)
+
+	// Output as single-line JSON (better for Waybar exec)
+	output, err := json.Marshal(res)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+
+	fmt.Println(string(output))
 	return nil
 }
