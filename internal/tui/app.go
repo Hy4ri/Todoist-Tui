@@ -1045,7 +1045,7 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// l key - move to main pane in Projects tab
 		if a.currentTab == TabProjects && a.focusedPane == PaneSidebar {
 			a.focusedPane = PaneMain
-		} else if a.currentView != ViewCalendar {
+		} else if a.currentView != ViewCalendar && msg.String() == "l" {
 			// If not navigating projects or calendar, 'l' switches to Labels
 			return a.switchToTab(TabLabels)
 		}
