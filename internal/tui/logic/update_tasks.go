@@ -611,3 +611,37 @@ func (h *Handler) submitForm() tea.Cmd {
 		return taskCreatedMsg{}
 	}
 }
+
+// filterInboxTasks filters tasks for the inbox project.
+func (h *Handler) filterInboxTasks() tea.Cmd {
+	var inboxID string
+	for _, p := range h.Projects {
+		if p.InboxProject {
+			inboxID = p.ID
+			break
+		}
+	}
+
+	if inboxID == "" {
+		h.StatusMsg = "Inbox not found"
+		return nil
+	}
+
+	// Filter tasks by project ID
+	var tasks []api.Task
+	// Us allTasks if available
+	tasksToFilter := h.AllTasks
+	if len(tasksToFilter) == 0 {
+		tasksToFilter = h.Tasks
+	}
+
+	for _, t := range tasksToFilter {
+		if t.ProjectID == inboxID && !t.Checked && !t.IsDeleted {
+			tasks = append(tasks, t)
+		}
+	}
+
+	h.Tasks = tasks
+	h.sortTasks()
+	return nil
+}

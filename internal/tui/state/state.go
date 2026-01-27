@@ -15,7 +15,8 @@ import (
 type View int
 
 const (
-	ViewToday View = iota
+	ViewInbox View = iota
+	ViewToday
 	ViewUpcoming
 	ViewLabels
 	ViewCalendar
@@ -32,7 +33,8 @@ const (
 type Tab int
 
 const (
-	TabToday Tab = iota
+	TabInbox Tab = iota
+	TabToday
 	TabUpcoming
 	TabLabels
 	TabCalendar
@@ -204,6 +206,7 @@ type TabInfo struct {
 // GetTabDefinitions returns the tab definitions.
 func GetTabDefinitions() []TabInfo {
 	return []TabInfo{
+		{TabInbox, "[I]", "Inbox", "Inb"},
 		{TabToday, "[T]", "Today", "Tdy"},
 		{TabUpcoming, "[U]", "Upcoming", "Up"},
 		{TabLabels, "[L]", "Labels", "Lbl"},

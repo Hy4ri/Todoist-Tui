@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -221,6 +222,11 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	h.CurrentLabel = nil
 
 	switch tab {
+	case state.TabInbox:
+		h.CurrentView = state.ViewInbox
+		h.CurrentProject = nil
+		h.FocusedPane = state.PaneMain
+		return h.filterInboxTasks()
 	case state.TabToday:
 		h.CurrentView = state.ViewToday
 		h.CurrentProject = nil
@@ -329,27 +335,20 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	// state.Tab switching with number keys (1-5) - only when not in form/input modes
 	// state.Tab switching with number keys (1-5) and letters - only when not in form/input modes
 	switch msg.String() {
-	case "1":
+	case "1", "i", "I":
+		return h.switchToTab(state.TabInbox)
+	case "2", "t", "T":
 		return h.switchToTab(state.TabToday)
-	case "2":
+	case "3", "u", "U":
 		return h.switchToTab(state.TabUpcoming)
-	case "3":
+	case "4", "L": // Shift+l to avoid calendar Nav conflict if any, or used to be 4
 		return h.switchToTab(state.TabLabels)
-	case "4":
+	case "5", "c", "C":
 		return h.switchToTab(state.TabCalendar)
-	case "5":
+	case "6", "p", "P":
 		return h.switchToTab(state.TabProjects)
-	case "t", "T":
-		return h.switchToTab(state.TabToday)
-	case "u", "U":
-		return h.switchToTab(state.TabUpcoming)
-	case "p", "P":
-		return h.switchToTab(state.TabProjects)
-	case "c", "C":
-		return h.switchToTab(state.TabCalendar)
-	// 'l' is excluded here to preserve navigation in Calendar/Projects, handled in "right" action
-	case "L":
-		return h.switchToTab(state.TabLabels)
+	case "D": // Shift+d
+		return h.setDefaultView()
 	}
 
 	// Sections view routing
@@ -657,4 +656,33 @@ func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 	// Forward to form
 	return h.TaskForm.Update(msg)
+}
+
+// setDefaultView saves the current view as the default.
+func (h *Handler) setDefaultView() tea.Cmd {
+	var viewName string
+	switch h.CurrentTab {
+	case state.TabInbox:
+		viewName = "inbox"
+	case state.TabToday:
+		viewName = "today"
+	case state.TabUpcoming:
+		viewName = "upcoming"
+	case state.TabLabels:
+		viewName = "labels"
+	case state.TabCalendar:
+		viewName = "calendar"
+	case state.TabProjects:
+		viewName = "projects"
+	}
+
+	if viewName != "" {
+		h.Config.UI.DefaultView = viewName
+		if err := config.Save(h.Config); err != nil {
+			h.StatusMsg = fmt.Sprintf("Failed to save config: %v", err)
+		} else {
+			h.StatusMsg = fmt.Sprintf("Default view set to: %s", viewName)
+		}
+	}
+	return nil
 }

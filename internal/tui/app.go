@@ -53,14 +53,42 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 	s.SearchInput = searchInput
 
 	// Set initial view
-	s.CurrentView = state.ViewToday
-	s.CurrentTab = state.TabToday
-	if initialView == "projects" {
-		s.CurrentView = state.ViewProject
-		s.CurrentTab = state.TabProjects
-	} else if initialView == "upcoming" {
-		s.CurrentView = state.ViewUpcoming
-		s.CurrentTab = state.TabUpcoming
+	// Set initial view based on config or argument
+	s.CurrentView = state.ViewInbox
+	s.CurrentTab = state.TabInbox
+
+	// Helper to set view/tab
+	setView := func(v string) {
+		switch v {
+		case "projects":
+			s.CurrentView = state.ViewProject
+			s.CurrentTab = state.TabProjects
+		case "upcoming":
+			s.CurrentView = state.ViewUpcoming
+			s.CurrentTab = state.TabUpcoming
+		case "labels":
+			s.CurrentView = state.ViewLabels
+			s.CurrentTab = state.TabLabels
+		case "calendar":
+			s.CurrentView = state.ViewCalendar
+			s.CurrentTab = state.TabCalendar
+		case "today":
+			s.CurrentView = state.ViewToday
+			s.CurrentTab = state.TabToday
+		case "inbox":
+			s.CurrentView = state.ViewInbox
+			s.CurrentTab = state.TabInbox
+		}
+	}
+
+	// Default from config first
+	if cfg.UI.DefaultView != "" {
+		setView(cfg.UI.DefaultView)
+	}
+
+	// CLI argument overrides config
+	if initialView != "" {
+		setView(initialView)
 	}
 
 	app := &App{

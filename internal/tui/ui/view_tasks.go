@@ -26,6 +26,9 @@ func (r *Renderer) renderTaskList(width, height int) string {
 
 	var content string
 	switch r.CurrentView {
+	case state.ViewInbox:
+		// Inbox behaves like a project view but we'll ensure title is set correctly
+		content = r.renderDefaultTaskList(innerWidth, innerHeight)
 	case state.ViewUpcoming:
 		content = r.renderUpcoming(innerWidth, innerHeight)
 	case state.ViewLabels:
@@ -54,6 +57,8 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 	switch r.CurrentView {
 	case state.ViewToday:
 		title = time.Now().Format("Monday 2 Jan")
+	case state.ViewInbox:
+		title = "Inbox"
 	case state.ViewProject:
 		if r.CurrentProject != nil {
 			title = r.CurrentProject.Name
@@ -81,7 +86,7 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 		// Title uses 2 lines (title + newline)
 		if r.CurrentView == state.ViewToday {
 			b.WriteString(r.renderGroupedTasks(width, maxHeight-2))
-		} else if r.CurrentView == state.ViewProject {
+		} else if r.CurrentView == state.ViewProject || r.CurrentView == state.ViewInbox {
 			b.WriteString(r.renderProjectTasks(width, maxHeight-2))
 		} else {
 			b.WriteString(r.renderFlatTasks(width, maxHeight-2))

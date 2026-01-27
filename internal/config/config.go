@@ -32,6 +32,7 @@ type AuthConfig struct {
 // UIConfig holds UI-related settings.
 type UIConfig struct {
 	VimMode             bool   `yaml:"vim_mode"`
+	DefaultView         string `yaml:"default_view,omitempty"`          // "inbox", "today", "upcoming", "projects", "calendar"
 	CalendarDefaultView string `yaml:"calendar_default_view,omitempty"` // "compact" or "expanded"
 }
 

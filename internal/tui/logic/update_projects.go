@@ -1222,11 +1222,13 @@ func (h *Handler) buildSidebarItems() {
 
 	// Add favorite projects first
 	for _, p := range h.Projects {
+		// Skip inbox project (it has its own tab)
+		if p.InboxProject {
+			continue
+		}
 		if p.IsFavorite {
 			icon := "⭐"
-			if p.InboxProject {
-				icon = "📥"
-			}
+
 			h.SidebarItems = append(h.SidebarItems, components.SidebarItem{
 				Type:       "project",
 				ID:         p.ID,
@@ -1253,11 +1255,13 @@ func (h *Handler) buildSidebarItems() {
 
 	// Add remaining projects (non-favorites)
 	for _, p := range h.Projects {
+		// Skip inbox project
+		if p.InboxProject {
+			continue
+		}
 		if !p.IsFavorite {
 			icon := "📁"
-			if p.InboxProject {
-				icon = "📥"
-			}
+
 			h.SidebarItems = append(h.SidebarItems, components.SidebarItem{
 				Type:     "project",
 				ID:       p.ID,
