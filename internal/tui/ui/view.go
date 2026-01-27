@@ -1,6 +1,13 @@
 package ui
 
-import "github.com/hy4ri/todoist-tui/internal/tui/state"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+)
 
 type Renderer struct {
 	*state.State
@@ -9,14 +16,6 @@ type Renderer struct {
 func NewRenderer(s *state.State) *Renderer {
 	return &Renderer{State: s}
 }
-
-import (
-	"fmt"
-	"strings"
-
-	"github.com/charmbracelet/lipgloss"
-	"github.com/hy4ri/todoist-tui/internal/tui/styles"
-)
 
 func (r *Renderer) View() string {
 	if r.Width == 0 {
@@ -632,7 +631,7 @@ func (r *Renderer) renderMainView() string {
 			} else {
 				r.DetailComp.Blur()
 			}
-			rightPane := r.DetailComp.state.ViewPanel()
+			rightPane := r.DetailComp.ViewPanel()
 
 			// Enforce strict dimensions for top alignment and stable layout
 			sidebarPane = lipgloss.Place(sidebarWidth, contentHeight, lipgloss.Left, lipgloss.Top, sidebarPane)
@@ -655,7 +654,7 @@ func (r *Renderer) renderMainView() string {
 			} else {
 				r.DetailComp.Blur()
 			}
-			rightPane := r.DetailComp.state.ViewPanel()
+			rightPane := r.DetailComp.ViewPanel()
 
 			// Enforce strict dimensions
 			leftPane = lipgloss.Place(listWidth, contentHeight, lipgloss.Left, lipgloss.Top, leftPane)
@@ -680,28 +679,9 @@ func (r *Renderer) renderMainView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, mainContent, statusBar)
 }
 
-// tabInfo holds tab metadata for rendering and click handling.
-type tabInfo struct {
-	tab       Tab
-	icon      string
-	name      string
-	shortName string
-}
-
-// getTabDefinitions returns the tab definitions.
-func getTabDefinitions() []tabInfo {
-	return []tabInfo{
-		{state.TabToday, "[T]", "Today", "Tdy"},
-		{state.TabUpcoming, "[U]", "Upcoming", "Up"},
-		{state.TabLabels, "[L]", "Labels", "Lbl"},
-		{state.TabCalendar, "[C]", "Calendar", "Cal"},
-		{state.TabProjects, "[P]", "Projects", "Prj"},
-	}
-}
-
 // renderTabBar renders the top tab bar.
 func (r *Renderer) renderTabBar() string {
-	tabs := getTabDefinitions()
+	tabs := state.GetTabDefinitions()
 
 	// Determine label style based on available width
 	// Full: "T Today" (~9 chars rendered), Short: "T Tdy" (~7 chars), Minimal: "T" (~3 chars)
@@ -714,15 +694,15 @@ func (r *Renderer) renderTabBar() string {
 	for _, t := range tabs {
 		var label string
 		if useMinimalLabels {
-			label = t.icon
+			label = t.Icon
 		} else if useShortLabels {
-			label = fmt.Sprintf("%s %s", t.icon, t.shortName)
+			label = fmt.Sprintf("%s %s", t.Icon, t.ShortName)
 		} else {
-			label = fmt.Sprintf("%s %s", t.icon, t.name)
+			label = fmt.Sprintf("%s %s", t.Icon, t.Name)
 		}
 
-		if r.CurrentTab == t.tab {
-			tabStrs = append(tabStrs, styles.state.TabActive.Render(label))
+		if r.CurrentTab == t.Tab {
+			tabStrs = append(tabStrs, styles.TabActive.Render(label))
 		} else {
 			tabStrs = append(tabStrs, styles.Tab.Render(label))
 		}
@@ -736,5 +716,5 @@ func (r *Renderer) renderTabBar() string {
 		tabLine = lipgloss.NewStyle().MaxWidth(maxWidth).Render(tabLine)
 	}
 
-	return styles.state.TabBar.Width(r.Width).Render(tabLine)
+	return styles.TabBar.Width(r.Width).Render(tabLine)
 }

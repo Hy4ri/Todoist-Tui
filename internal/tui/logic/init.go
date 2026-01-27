@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 )
@@ -9,7 +10,7 @@ import (
 func (h *Handler) Init() tea.Cmd {
 	return tea.Batch(
 		h.Spinner.Tick,
-		h.loadInitialData(),
+		h.LoadInitialData(),
 	)
 }
 

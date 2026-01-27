@@ -1,9 +1,11 @@
 package logic
 
 import (
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
-	"github.com/hy4ri/todoist-tui/internal/api"
+	"unicode/utf8"
+
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/api"
 )
 
 // extractLabelsFromTasks extracts unique labels from all tasks.
@@ -23,6 +25,13 @@ func (h *Handler) extractLabelsFromTasks() []api.Label {
 				labelSet[labelName] = true
 				labels = append(labels, api.Label{
 					Name: labelName,
+				})
+			}
+		}
+	}
+	return labels
+}
+
 // reorderSectionsCmd updates the section order using the Sync API.
 func (h *Handler) reorderSectionsCmd(sections []api.Section) tea.Cmd {
 	return func() tea.Msg {
@@ -54,3 +63,4 @@ func truncateString(s string, width int) string {
 		res = res[:len(res)-size]
 	}
 	return res + "…"
+}

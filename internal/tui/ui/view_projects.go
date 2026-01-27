@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )

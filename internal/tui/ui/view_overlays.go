@@ -13,7 +13,44 @@ func (r *Renderer) renderTaskForm() string {
 		return styles.Dialog.Width(r.Width - 4).Render("Form not initialized")
 	}
 
-	return styles.Dialog.Width(r.Width - 4).Render(r.TaskForm.View())
+	var b strings.Builder
+	f := r.TaskForm
+
+	// Header
+	title := "Add Task"
+	if f.Original != nil {
+		title = "Edit Task"
+	}
+	b.WriteString(styles.Title.Render(title) + "\n\n")
+
+	// Content
+	b.WriteString(styles.InputLabel.Render("Content") + "\n")
+	b.WriteString(f.Content.View() + "\n\n")
+
+	// Description
+	b.WriteString(styles.InputLabel.Render("Description") + "\n")
+	b.WriteString(f.Description.View() + "\n\n")
+
+	// Priority & Due Date Row
+	b.WriteString(styles.InputLabel.Render("Priority (1-4)") + "   " + styles.InputLabel.Render("Due Date") + "\n")
+	pStyle := styles.GetPriorityStyle(f.Priority)
+	pLabel := fmt.Sprintf("P%d", 5-f.Priority) // Display as P1-P4
+	b.WriteString(pStyle.Render(pLabel) + "           " + f.DueString.View() + "\n\n")
+
+	// Project Selector (if showing)
+	if f.ShowProjectList {
+		b.WriteString(styles.InputLabel.Render("Select Project") + "\n")
+		// In a real implementation we'd show a list here.
+		// For now just show selected project name.
+		b.WriteString(styles.TaskSelected.Render(f.ProjectName) + "\n\n")
+	} else {
+		b.WriteString(styles.InputLabel.Render("Project: ") + styles.TaskContent.Render(f.ProjectName) + "\n\n")
+	}
+
+	// Help
+	b.WriteString(styles.HelpDesc.Render("Enter: save | Esc: cancel | Tab: next field"))
+
+	return styles.Dialog.Width(r.Width - 4).Render(b.String())
 }
 
 // renderSearch renders the search view.

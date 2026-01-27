@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"fmt"
 	"sort"
 	"strings"
@@ -134,9 +135,9 @@ func (h *Handler) handleComplete() tea.Cmd {
 
 	// Store last action for undo
 	if task.Checked {
-		h.state.LastAction = &state.LastAction{Type: "uncomplete", TaskID: task.ID}
+		h.State.LastAction = &state.LastAction{Type: "uncomplete", TaskID: task.ID}
 	} else {
-		h.state.LastAction = &state.LastAction{Type: "complete", TaskID: task.ID}
+		h.State.LastAction = &state.LastAction{Type: "complete", TaskID: task.ID}
 	}
 
 	h.Loading = true
@@ -157,13 +158,13 @@ func (h *Handler) handleComplete() tea.Cmd {
 
 // handleUndo reverses the last undoable action.
 func (h *Handler) handleUndo() tea.Cmd {
-	if h.state.LastAction == nil {
+	if h.State.LastAction == nil {
 		h.StatusMsg = "Nothing to undo"
 		return nil
 	}
 
-	action := h.state.LastAction
-	h.state.LastAction = nil
+	action := h.State.LastAction
+	h.State.LastAction = nil
 	h.Loading = true
 
 	return func() tea.Msg {
@@ -418,7 +419,7 @@ func (h *Handler) handleAdd() tea.Cmd {
 		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
 			taskIndex := h.TaskOrderedIndices[h.TaskCursor]
 			// Find which viewport line this task is on
-			for i, vTaskIdx := range h.state.ViewportLines {
+			for i, vTaskIdx := range h.State.ViewportLines {
 				if vTaskIdx == taskIndex {
 					cursorViewportLine = i
 					break
@@ -427,12 +428,12 @@ func (h *Handler) handleAdd() tea.Cmd {
 		}
 
 		// Check if cursor is on an empty section header (taskIndex <= -100)
-		if cursorViewportLine >= 0 && cursorViewportLine < len(h.state.ViewportLines) {
-			taskIdx := h.state.ViewportLines[cursorViewportLine]
+		if cursorViewportLine >= 0 && cursorViewportLine < len(h.State.ViewportLines) {
+			taskIdx := h.State.ViewportLines[cursorViewportLine]
 			if taskIdx <= -100 {
 				// Cursor is on an empty section header, get the section ID
-				if cursorViewportLine < len(h.state.ViewportSections) {
-					sectionID := h.state.ViewportSections[cursorViewportLine]
+				if cursorViewportLine < len(h.State.ViewportSections) {
+					sectionID := h.State.ViewportSections[cursorViewportLine]
 					if sectionID != "" {
 						h.TaskForm.SectionID = sectionID
 						// Find section name

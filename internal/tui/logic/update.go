@@ -1,15 +1,5 @@
 package logic
 
-import "github.com/hy4ri/todoist-tui/internal/tui/state"
-
-type Handler struct {
-	*state.State
-}
-
-func NewHandler(s *state.State) *Handler {
-	return &Handler{State: s}
-}
-
 import (
 	"fmt"
 	"sort"
@@ -18,7 +8,16 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
+
+type Handler struct {
+	*state.State
+}
+
+func NewHandler(s *state.State) *Handler {
+	return &Handler{State: s}
+}
 
 func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
@@ -41,11 +40,11 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		if vpWidth < 20 {
 			vpWidth = 20
 		}
-		if !h.state.ViewportReady {
+		if !h.State.ViewportReady {
 			h.TaskViewport = viewport.New(vpWidth, vpHeight)
 			h.TaskViewport.Style = lipgloss.NewStyle()
 			h.TaskViewport.MouseWheelEnabled = true
-			h.state.ViewportReady = true
+			h.State.ViewportReady = true
 		} else {
 			h.TaskViewport.Width = vpWidth
 			h.TaskViewport.Height = vpHeight

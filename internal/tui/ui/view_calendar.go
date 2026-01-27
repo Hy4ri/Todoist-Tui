@@ -6,7 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
@@ -14,7 +15,7 @@ import (
 
 // renderCalendar renders the calendar view (dispatches based on view mode).
 func (r *Renderer) renderCalendar(maxHeight int) string {
-	if r.state.CalendarViewMode == state.CalendarViewExpanded {
+	if r.State.CalendarViewMode == state.CalendarViewExpanded {
 		return r.renderCalendarExpanded(maxHeight)
 	}
 	return r.renderCalendarCompact(maxHeight)
@@ -550,7 +551,7 @@ func (r *Renderer) getContextualHints() []string {
 			return []string{
 				key("j/k") + desc(":nav"),
 				key("Enter") + desc(":select"),
-				key("Tab") + desc(":pane"),
+				key("state.Tab") + desc(":pane"),
 				key("?") + desc(":help"),
 			}
 		}
@@ -558,7 +559,7 @@ func (r *Renderer) getContextualHints() []string {
 			key("j/k") + desc(":nav"),
 			key("x") + desc(":done"),
 			key("e") + desc(":edit"),
-			key("Tab") + desc(":pane"),
+			key("state.Tab") + desc(":pane"),
 			key("?") + desc(":help"),
 		}
 	default:
@@ -571,16 +572,6 @@ func (r *Renderer) getContextualHints() []string {
 }
 
 // updateSectionOrderCmd sends an API request to update the section order.
-
-// reorderSectionsCmd updates the section order using the Sync API.
-func (r *Renderer) reorderSectionsCmd(sections []api.Section) tea.Cmd {
-	return func() tea.Msg {
-		if err := r.Client.ReorderSections(sections); err != nil {
-			return errMsg{err}
-		}
-		return reorderCompleteMsg{}
-	}
-}
 
 // truncateString truncates a string to a given width and adds an ellipsis if truncated.
 func truncateString(s string, width int) string {

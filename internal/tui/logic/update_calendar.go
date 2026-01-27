@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -95,11 +96,11 @@ func (h *Handler) handleCalendarKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		h.CalendarDay = time.Now().Day()
 	case "v":
 		// Toggle calendar view mode and save preference
-		if h.state.CalendarViewMode == state.CalendarViewCompact {
-			h.state.CalendarViewMode = state.CalendarViewExpanded
+		if h.State.CalendarViewMode == state.CalendarViewCompact {
+			h.State.CalendarViewMode = state.CalendarViewExpanded
 			h.Config.UI.CalendarDefaultView = "expanded"
 		} else {
-			h.state.CalendarViewMode = state.CalendarViewCompact
+			h.State.CalendarViewMode = state.CalendarViewCompact
 			h.Config.UI.CalendarDefaultView = "compact"
 		}
 		// Save config in background (ignore errors)
@@ -211,7 +212,7 @@ func (h *Handler) moveCursorToEnd() {
 
 // syncViewportToCursor ensures the viewport is scrolled to show the cursor line.
 func (h *Handler) syncViewportToCursor(cursorLine int) {
-	if !h.state.ViewportReady {
+	if !h.State.ViewportReady {
 		return
 	}
 	visibleStart := h.TaskViewport.YOffset

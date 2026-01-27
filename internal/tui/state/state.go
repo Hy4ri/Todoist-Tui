@@ -72,18 +72,6 @@ type Keymap interface {
 	// Add other necessary methods or struct definition
 }
 
-// TaskForm is the form model.
-type TaskForm struct {
-	Content     textinput.Model
-	Description textinput.Model
-	Priority    int
-	DueString   textinput.Model
-	ProjectID   string
-	SectionID   string
-	Labels      []string
-	Original    *api.Task
-}
-
 // State holds the application state.
 // All fields are exported to allow access from logic and ui packages.
 type State struct {
@@ -200,4 +188,23 @@ type State struct {
 
 	// Cursor restoration
 	RestoreCursorToTaskID string
+}
+
+// TabInfo holds tab metadata.
+type TabInfo struct {
+	Tab       Tab
+	Icon      string
+	Name      string
+	ShortName string
+}
+
+// GetTabDefinitions returns the tab definitions.
+func GetTabDefinitions() []TabInfo {
+	return []TabInfo{
+		{TabToday, "[T]", "Today", "Tdy"},
+		{TabUpcoming, "[U]", "Upcoming", "Up"},
+		{TabLabels, "[L]", "Labels", "Lbl"},
+		{TabCalendar, "[C]", "Calendar", "Cal"},
+		{TabProjects, "[P]", "Projects", "Prj"},
+	}
 }

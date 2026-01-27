@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"fmt"
 	"time"
 
@@ -40,7 +41,7 @@ func (h *Handler) handleMouseMsg(msg tea.MouseMsg) tea.Cmd {
 
 // handleTabClick handles mouse clicks on the tab bar.
 func (h *Handler) handleTabClick(x int) tea.Cmd {
-	tabs := getTabDefinitions()
+	tabs := state.GetTabDefinitions()
 
 	// Determine label style based on available width (same logic as renderTabBar)
 	useShortLabels := h.Width < 80
@@ -52,19 +53,19 @@ func (h *Handler) handleTabClick(x int) tea.Cmd {
 	for _, t := range tabs {
 		var label string
 		if useMinimalLabels {
-			label = t.icon
+			label = t.Icon
 		} else if useShortLabels {
-			label = fmt.Sprintf("%s %s", t.icon, t.shortName)
+			label = fmt.Sprintf("%s %s", t.Icon, t.ShortName)
 		} else {
-			label = fmt.Sprintf("%s %s", t.icon, t.name)
+			label = fmt.Sprintf("%s %s", t.Icon, t.Name)
 		}
 
-		// Render the tab to get its actual width (includes padding from Tab/state.TabActive style)
+		// Render the tab to get its actual width (includes padding from state.Tab/state.TabActive style)
 		var renderedTab string
-		if h.CurrentTab == t.tab {
+		if h.CurrentTab == t.Tab {
 			renderedTab = styles.state.TabActive.Render(label)
 		} else {
-			renderedTab = styles.Tab.Render(label)
+			renderedTab = styles.state.Tab.Render(label)
 		}
 
 		tabWidth := lipgloss.Width(renderedTab)
@@ -72,11 +73,11 @@ func (h *Handler) handleTabClick(x int) tea.Cmd {
 
 		// Check if click is within this tab
 		if x >= currentPos && x < endPos {
-			h.CurrentTab = t.tab
+			h.CurrentTab = t.Tab
 			h.TaskCursor = 0
 			h.CurrentLabel = nil
 
-			switch t.tab {
+			switch t.Tab {
 			case state.TabToday:
 				h.CurrentView = state.ViewToday
 				h.CurrentProject = nil
@@ -171,10 +172,10 @@ func (h *Handler) handleTaskClick(y int) tea.Cmd {
 	// viewportLines maps viewport line number to task index (-1 for headers)
 	viewportLine := y - headerOffset + h.ScrollOffset
 
-	if len(h.state.ViewportLines) > 0 {
+	if len(h.State.ViewportLines) > 0 {
 		// Use the viewport line mapping for accurate click handling
-		if viewportLine >= 0 && viewportLine < len(h.state.ViewportLines) {
-			taskIndex := h.state.ViewportLines[viewportLine]
+		if viewportLine >= 0 && viewportLine < len(h.State.ViewportLines) {
+			taskIndex := h.State.ViewportLines[viewportLine]
 			if taskIndex >= 0 {
 				// Find the display position (cursor) for this task index
 				for displayPos, idx := range h.TaskOrderedIndices {
@@ -197,7 +198,7 @@ func (h *Handler) handleTaskClick(y int) tea.Cmd {
 }
 
 // switchToTab switches to a specific tab.
-func (h *Handler) switchToTab(tab Tab) tea.Cmd {
+func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	// Reset detail panel state when switching tabs
 	if h.ShowDetailPanel {
 		h.ShowDetailPanel = false
@@ -322,8 +323,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleMoveTaskKeyMsg(msg)
 	}
 
-	// Tab switching with number keys (1-5) - only when not in form/input modes
-	// Tab switching with number keys (1-5) and letters - only when not in form/input modes
+	// state.Tab switching with number keys (1-5) - only when not in form/input modes
+	// state.Tab switching with number keys (1-5) and letters - only when not in form/input modes
 	switch msg.String() {
 	case "1":
 		return h.switchToTab(state.TabToday)
@@ -428,7 +429,7 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		} else if h.CurrentTab == state.TabLabels {
 			return h.handleNewLabel()
 		}
-	// Tab shortcuts (Shift + letter)
+	// state.Tab shortcuts (Shift + letter)
 	case "tab_today":
 		return h.switchToTab(state.TabToday)
 	case "tab_upcoming":

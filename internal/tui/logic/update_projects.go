@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"sort"
 	"strings"
 	"time"
@@ -736,7 +737,7 @@ func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 	case "enter":
 		// Submit on Enter if a text input is focused (and not in project selection dropdown)
-		if !h.TaskForm.showProjectList && h.TaskForm.IsValid() &&
+		if !h.TaskForm.ShowProjectList && h.TaskForm.IsValid() &&
 			(h.TaskForm.FocusedField == FormFieldContent ||
 				h.TaskForm.FocusedField == FormFieldDescription ||
 				h.TaskForm.FocusedField == FormFieldDue ||

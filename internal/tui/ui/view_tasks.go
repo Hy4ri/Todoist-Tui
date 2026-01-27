@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"fmt"
 	"sort"
 	"strings"
@@ -385,15 +386,15 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 
 	if len(lines) == 0 {
 		r.ScrollOffset = 0
-		r.state.ViewportLines = nil
-		r.state.ViewportSections = nil
+		r.State.ViewportLines = nil
+		r.State.ViewportSections = nil
 		return ""
 	}
 
 	// Build content string and track line->task mapping and section mapping
 	var content strings.Builder
-	r.state.ViewportLines = make([]int, 0, len(lines))
-	r.state.ViewportSections = make([]string, 0, len(lines))
+	r.State.ViewportLines = make([]int, 0, len(lines))
+	r.State.ViewportSections = make([]string, 0, len(lines))
 
 	for i, line := range lines {
 		content.WriteString(line.content)
@@ -401,9 +402,9 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 			content.WriteString("\n")
 		}
 		// Map this viewport line to its task index (-1 for headers, -2 for section headers)
-		r.state.ViewportLines = append(r.state.ViewportLines, line.taskIndex)
+		r.State.ViewportLines = append(r.State.ViewportLines, line.taskIndex)
 		// Map this viewport line to its section ID (empty string for non-section lines)
-		r.state.ViewportSections = append(r.state.ViewportSections, line.sectionID)
+		r.State.ViewportSections = append(r.State.ViewportSections, line.sectionID)
 	}
 
 	// Find which line the cursor is on
@@ -419,7 +420,7 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 	}
 
 	// If viewport is ready, use it for scrolling
-	if r.state.ViewportReady {
+	if r.State.ViewportReady {
 		// Update viewport height if needed (maxHeight is the available height)
 		if r.TaskViewport.Height != maxHeight && maxHeight > 0 {
 			r.TaskViewport.Height = maxHeight
