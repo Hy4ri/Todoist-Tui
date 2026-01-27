@@ -138,6 +138,8 @@ func (h *Handler) handleContentClick(x, y int) tea.Cmd {
 			h.FocusedPane = state.PaneMain
 			return h.handleTaskClick(y)
 		}
+	} else if h.CurrentView == state.ViewCalendar {
+		return h.handleCalendarClick(x, y)
 	} else {
 		// Other tabs - click directly on tasks
 		return h.handleTaskClick(y)
@@ -689,5 +691,125 @@ func (h *Handler) setDefaultView() tea.Cmd {
 			h.StatusMsg = fmt.Sprintf("Default view set to: %s", viewName)
 		}
 	}
+	return nil
+}
+
+// handleCalendarClick handles clicks in the calendar view.
+func (h *Handler) handleCalendarClick(x, y int) tea.Cmd {
+	if h.State.CalendarViewMode == state.CalendarViewCompact {
+		return h.handleCalendarCompactClick(x, y)
+	}
+	return h.handleCalendarExpandedClick(x, y)
+}
+
+func (h *Handler) handleCalendarCompactClick(x, y int) tea.Cmd {
+	// Compact view layout:
+	// y=0: Title
+	// y=1: Empty
+	// y=2: Help
+	// y=3: Empty
+	// y=4: Weekdays
+	// y=5+: Grid
+
+	if y < 5 {
+		return nil
+	}
+
+	// Grid calculations
+	firstOfMonth := time.Date(h.CalendarDate.Year(), h.CalendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+	startWeekday := int(firstOfMonth.Weekday())
+	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+	daysInMonth := lastOfMonth.Day()
+
+	row := y - 5
+	col := x / 5 // Cell width is 5 in compact view
+
+	if col < 0 || col > 6 {
+		return nil
+	}
+
+	// Check if click is on the task list below the calendar
+	weeksNeeded := (daysInMonth + startWeekday + 6) / 7
+	if row >= weeksNeeded {
+		// Offset for tasks: Grid rows + 2 context lines (date title + blank)
+		return h.handleTaskClick(y)
+	}
+
+	day := row*7 + col - startWeekday + 1
+	if day >= 1 && day <= daysInMonth {
+		h.CalendarDay = day
+		return nil
+	}
+
+	return nil
+}
+
+func (h *Handler) handleCalendarExpandedClick(x, y int) tea.Cmd {
+	// Expanded view layout:
+	// y=0: Title
+	// y=1: Empty
+	// y=2: Help
+	// y=3: Empty
+	// y=4: Weekdays
+	// y=5: Top Border
+	// y=6+: Rows
+
+	if y < 6 {
+		return nil
+	}
+
+	// Calculate cell dimensions exactly as in renderCalendarExpanded
+	availableWidth := h.Width - 8
+	if availableWidth < 35 {
+		availableWidth = 35
+	}
+	cellWidth := availableWidth / 7
+	if cellWidth < 5 {
+		cellWidth = 5
+	}
+	if cellWidth > 20 {
+		cellWidth = 20
+	}
+
+	// Row height calculations
+	firstOfMonth := time.Date(h.CalendarDate.Year(), h.CalendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
+	startWeekday := int(firstOfMonth.Weekday())
+	daysInMonth := lastOfMonth.Day()
+	weeksNeeded := (daysInMonth + startWeekday + 6) / 7
+
+	maxHeight := h.Height - 7 // Matches renderer innerHeight (r.Height - 5 - 2)
+	availableForWeeks := maxHeight - 6
+	if availableForWeeks < weeksNeeded*3 {
+		availableForWeeks = weeksNeeded * 3
+	}
+	maxTasksPerCell := (availableForWeeks+1)/weeksNeeded - 2
+	if maxTasksPerCell < 2 {
+		maxTasksPerCell = 2
+	}
+	if maxTasksPerCell > 6 {
+		maxTasksPerCell = 6
+	}
+
+	rowHeight := maxTasksPerCell + 2 // 1 (day) + maxTasksPerCell + 1 (separator/border)
+
+	// Determine which row and column
+	gridY := y - 6
+	row := gridY / rowHeight
+	// Column with borders: │ Col0 │ Col1 ...
+	// Cell: 1 (│) + cellWidth chars
+	col := (x - 1) / (cellWidth + 1)
+
+	if col < 0 || col > 6 || row < 0 || row >= weeksNeeded {
+		return nil
+	}
+
+	// Calculate day
+	day := row*7 + col - startWeekday + 1
+	if day >= 1 && day <= daysInMonth {
+		h.CalendarDay = day
+		return nil
+	}
+
 	return nil
 }
