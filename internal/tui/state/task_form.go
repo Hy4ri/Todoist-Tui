@@ -7,6 +7,16 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 )
 
+// FormField constants for focus management
+const (
+	FormFieldContent = iota
+	FormFieldDescription
+	FormFieldDue
+	FormFieldLabels
+	FormFieldShowProject
+	FormFieldSubmit
+)
+
 // TaskForm represents the state of the task creation/editing form.
 type TaskForm struct {
 	Content     textinput.Model

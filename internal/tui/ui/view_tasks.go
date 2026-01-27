@@ -683,3 +683,17 @@ func (r *Renderer) extractLabelsFromTasks() []api.Label {
 
 	return labels
 }
+
+// syncViewportToCursor ensures the cursor is visible in the viewport.
+func (r *Renderer) syncViewportToCursor() {
+	height := r.Height - 4 // Approximate content height
+	if height < 1 {
+		height = 1
+	}
+
+	if r.TaskCursor < r.ScrollOffset {
+		r.ScrollOffset = r.TaskCursor
+	} else if r.TaskCursor >= r.ScrollOffset+height {
+		r.ScrollOffset = r.TaskCursor - height + 1
+	}
+}

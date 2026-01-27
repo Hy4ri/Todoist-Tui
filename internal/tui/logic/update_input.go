@@ -1,9 +1,10 @@
 package logic
 
 import (
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"fmt"
 	"time"
+
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -63,9 +64,11 @@ func (h *Handler) handleTabClick(x int) tea.Cmd {
 		// Render the tab to get its actual width (includes padding from state.Tab/state.TabActive style)
 		var renderedTab string
 		if h.CurrentTab == t.Tab {
-			renderedTab = styles.state.TabActive.Render(label)
+			// Logic should not use styles directly for rendering, but this code is here.
+			// Assuming styles is imported.
+			renderedTab = styles.TabActive.Render(label)
 		} else {
-			renderedTab = styles.state.Tab.Render(label)
+			renderedTab = styles.Tab.Render(label)
 		}
 
 		tabWidth := lipgloss.Width(renderedTab)
@@ -360,7 +363,7 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	// Process key through keymap
-	action, consumed := h.keyState.HandleKey(msg, h.Keymap)
+	action, consumed := h.KeyState.HandleKey(msg, h.Keymap)
 	if !consumed {
 		return nil
 	}
