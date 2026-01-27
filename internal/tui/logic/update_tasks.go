@@ -557,6 +557,75 @@ func (h *Handler) handleAdd() tea.Cmd {
 	return nil
 }
 
+// handleMoveTaskDate moves the task due date by the specified number of days.
+func (h *Handler) handleMoveTaskDate(days int) tea.Cmd {
+	var taskID string
+	var currentDateStr string
+
+	// Determine task and current date
+	if h.SelectedTask != nil {
+		taskID = h.SelectedTask.ID
+		if h.SelectedTask.Due != nil {
+			currentDateStr = h.SelectedTask.Due.Date
+		}
+	} else if len(h.Tasks) > 0 {
+		var task *api.Task
+		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+			idx := h.TaskOrderedIndices[h.TaskCursor]
+			if idx >= 0 && idx < len(h.Tasks) {
+				task = &h.Tasks[idx]
+			}
+		} else if h.TaskCursor < len(h.Tasks) {
+			task = &h.Tasks[h.TaskCursor]
+		}
+
+		if task != nil {
+			taskID = task.ID
+			if task.Due != nil {
+				currentDateStr = task.Due.Date
+			}
+		}
+	}
+
+	if taskID == "" {
+		return nil
+	}
+
+	// Calculate new date
+	var newDate time.Time
+	if currentDateStr != "" {
+		parsedDate, err := time.Parse("2006-01-02", currentDateStr)
+		if err == nil {
+			newDate = parsedDate.AddDate(0, 0, days)
+		} else {
+			// Try parsing as datetime if needed, or fallback to today
+			newDate = time.Now().AddDate(0, 0, days)
+		}
+	} else {
+		// No due date? Set to today + days
+		newDate = time.Now().AddDate(0, 0, days)
+	}
+
+	newDateStr := newDate.Format("2006-01-02")
+	h.StatusMsg = fmt.Sprintf("Moving task to %s...", newDateStr)
+	h.Loading = true
+
+	// Prepare UpdateReq: explicitly verify DueString is NOT set to preserve recurrence
+	updateReq := api.UpdateTaskRequest{
+		DueDate: &newDateStr,
+		// DueString must be nil to avoid overwriting recurrence
+	}
+
+	return func() tea.Msg {
+		_, err := h.Client.UpdateTask(taskID, updateReq)
+		if err != nil {
+			return errMsg{err}
+		}
+		// Refresh tasks
+		return taskCreatedMsg{} // Reuse for refresh
+	}
+}
+
 // handleEdit opens the edit task form for the selected task, or edit project dialog.
 func (h *Handler) handleEdit() tea.Cmd {
 	// Handle project editing when sidebar is focused

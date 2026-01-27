@@ -29,16 +29,18 @@ type KeymapData struct {
 	Refresh Key
 
 	// Task actions
-	AddTask      Key
-	EditTask     Key
-	DeleteTask   Key
-	CompleteTask Key
-	Priority1    Key
-	Priority2    Key
-	Priority3    Key
-	Priority4    Key
-	DueToday     Key
-	DueTomorrow  Key
+	AddTask         Key
+	EditTask        Key
+	DeleteTask      Key
+	CompleteTask    Key
+	Priority1       Key
+	Priority2       Key
+	Priority3       Key
+	Priority4       Key
+	DueToday        Key
+	DueTomorrow     Key
+	MoveTaskPrevDay Key
+	MoveTaskNextDay Key
 
 	// Navigation between panes
 	SwitchPane    Key
@@ -80,16 +82,18 @@ func DefaultKeymap() KeymapData {
 		Refresh: Key{Key: "r", Help: "refresh"},
 
 		// Task actions
-		AddTask:      Key{Key: "a", Help: "add task"},
-		EditTask:     Key{Key: "e", Help: "edit task"},
-		DeleteTask:   Key{Key: "d", Help: "delete (dd)"},
-		CompleteTask: Key{Key: "x", Help: "complete/uncomplete"},
-		Priority1:    Key{Key: "1", Help: "priority 1 (highest)"},
-		Priority2:    Key{Key: "2", Help: "priority 2"},
-		Priority3:    Key{Key: "3", Help: "priority 3"},
-		Priority4:    Key{Key: "4", Help: "priority 4 (lowest)"},
-		DueToday:     Key{Key: "<", Help: "due today"},
-		DueTomorrow:  Key{Key: ">", Help: "due tomorrow"},
+		AddTask:         Key{Key: "a", Help: "add task"},
+		EditTask:        Key{Key: "e", Help: "edit task"},
+		DeleteTask:      Key{Key: "d", Help: "delete (dd)"},
+		CompleteTask:    Key{Key: "x", Help: "complete/uncomplete"},
+		Priority1:       Key{Key: "1", Help: "priority 1 (highest)"},
+		Priority2:       Key{Key: "2", Help: "priority 2"},
+		Priority3:       Key{Key: "3", Help: "priority 3"},
+		Priority4:       Key{Key: "4", Help: "priority 4 (lowest)"},
+		DueToday:        Key{Key: "<", Help: "due today"},
+		DueTomorrow:     Key{Key: ">", Help: "due tomorrow"},
+		MoveTaskPrevDay: Key{Key: "H", Help: "move -1 day"},
+		MoveTaskNextDay: Key{Key: "L", Help: "move +1 day"},
 
 		// Navigation between panes
 		SwitchPane:    Key{Key: "tab", Help: "switch pane"},
@@ -253,12 +257,12 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "tab_upcoming", true
 	case "p", "P":
 		return "tab_projects", true
-	case "l", "L":
-		// 'l' is also 'right', but we handle priority in app.go
-		if key == "l" {
-			return "right", true
-		}
-		return "tab_labels", true
+	case "l":
+		return "right", true
+	case "L":
+		return "move_task_next_day", true
+	case "H":
+		return "move_task_prev_day", true
 	case "c", "C":
 		return "tab_calendar", true
 
@@ -286,12 +290,14 @@ func (k KeymapData) HelpItems() [][]string {
 		{"gg/G", "Go to top/bottom"},
 		{k.HalfUp.Key + "/" + k.HalfDown.Key, "Half page up/down"},
 		{k.SwitchPane.Key, "Switch pane (Sidebar/Main)"},
+		{"H/L", "Move task -1/+1 day"},
 		{"", ""},
 		{"View Switching", ""},
 		{"i/1", "Inbox"},
 		{"t/2", "Today's tasks"},
 		{"u/3", "Upcoming tasks"},
-		{"L/4", "Labels"},
+		{"u/3", "Upcoming tasks"},
+		{"4", "Labels"},
 		{"c/5", "Calendar"},
 		{"p/6", "Projects"},
 		{"", ""},

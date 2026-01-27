@@ -427,10 +427,12 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleSearch()
 	case "priority1", "priority2", "priority3", "priority4":
 		return h.handlePriority(action)
-	case "due_today":
-		return h.handleDueToday()
 	case "due_tomorrow":
 		return h.handleDueTomorrow()
+	case "move_task_prev_day":
+		return h.handleMoveTaskDate(-1)
+	case "move_task_next_day":
+		return h.handleMoveTaskDate(1)
 	case "new_project":
 		// 'n' key creates project or label depending on current tab
 		if h.CurrentTab == state.TabProjects {
