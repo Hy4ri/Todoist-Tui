@@ -9,6 +9,7 @@ bin/
 # Test binary, built with `go test -c`
 *.test
 
+# Documentation
 docs/*
 
 # Output of the go coverage tool
@@ -18,12 +19,11 @@ coverage.html
 # Dependency directories
 vendor/
 
-.agent/*
-AGENTS.md
-
 # IDE
 .idea/
+.agent/
 .vscode/
+AGENTS.md
 *.swp
 *.swo
 *~
@@ -35,6 +35,7 @@ Thumbs.db
 # Debug
 debug
 *.log
+*.txt
 
 # Environment
 .env

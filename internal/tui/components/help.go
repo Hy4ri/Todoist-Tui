@@ -8,6 +8,12 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
+// HelpItem represents a single help entry.
+type HelpItem struct {
+	Key  string
+	Desc string
+}
+
 // HelpModel renders the help view with keyboard shortcuts.
 type HelpModel struct {
 	width, height int
