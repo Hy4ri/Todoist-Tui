@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/config"
+	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/logic"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
@@ -30,7 +31,16 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 	}
 
 	// Initialize UI components
-	// TODO: These were in app.go, need to ensure type compatibility
+	s.SidebarComp = components.NewSidebar()
+	s.DetailComp = components.NewDetail()
+	s.HelpComp = components.NewHelp()
+
+	km := state.DefaultKeymap()
+	s.Keymap = km
+	s.HelpComp.SetKeymap(km.HelpItems())
+	s.KeyState = &state.KeyState{}
+
+	// Initialize other components
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	spin.Style = styles.Spinner

@@ -1,5 +1,4 @@
-// Package tui provides the terminal user interface for Todoist.
-package tui
+package state
 
 import tea "github.com/charmbracelet/bubbletea"
 
@@ -9,8 +8,9 @@ type Key struct {
 	Help string
 }
 
-// Keymap contains all key bindings for the application.
-type Keymap struct {
+// KeymapData contains all key bindings for the application.
+// Renamed from Keymap to KeymapData to avoid conflict with interface if any
+type KeymapData struct {
 	// Navigation
 	Up       Key
 	Down     Key
@@ -60,8 +60,8 @@ type Keymap struct {
 }
 
 // DefaultKeymap returns the default Vim-style key bindings.
-func DefaultKeymap() Keymap {
-	return Keymap{
+func DefaultKeymap() KeymapData {
+	return KeymapData{
 		// Navigation
 		Up:       Key{Key: "k", Help: "up"},
 		Down:     Key{Key: "j", Help: "down"},
@@ -121,7 +121,16 @@ type KeyState struct {
 
 // HandleKey processes a key press and returns the action to take.
 // Returns the action name and whether the key was consumed.
-func (ks *KeyState) HandleKey(msg tea.KeyMsg, keymap Keymap) (string, bool) {
+func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
+	keymap, ok := km.(KeymapData)
+	if !ok {
+		// Fallback or log error? safely return false
+		if msg.String() == "?" {
+			return "help", true
+		}
+		return "", false
+	}
+
 	key := msg.String()
 
 	// Handle 'gg' sequence (go to top)
@@ -270,7 +279,7 @@ func (ks *KeyState) Reset() {
 }
 
 // HelpItems returns a slice of key-description pairs for the help view.
-func (k Keymap) HelpItems() [][]string {
+func (k KeymapData) HelpItems() [][]string {
 	return [][]string{
 		{"Navigation", ""},
 		{k.Up.Key + "/" + k.Down.Key, "Move up/down"},

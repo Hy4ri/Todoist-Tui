@@ -6,7 +6,6 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
@@ -62,34 +61,9 @@ type LastAction struct {
 	TaskID string
 }
 
-// KeyState tracks key presses.
-type KeyState struct {
-	// Add fields if needed from original app definition, assumed empty or trivial
-	// Maybe buffer for chords?
-}
-
-// HandleKey processes a key message and returns an action.
-func (k *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
-	// This is a simplified version since we lost the original.
-	// Ideally it should use keybubble or similar if that was used.
-	// For now, let's assume direct keymap lookup if possible or return false to let default handler work.
-	// The original code passed 'h.Keymap' which is interface{}.
-
-	// If we can't restore the complex logic easily, let's make it a pass-through for now
-	// or implement basic key translation if we know the keymap structure.
-
-	// Check if HelpItems() is the only method known.
-	// If the user presses '?', return "help".
-	if msg.String() == "?" {
-		return "help", true
-	}
-
-	return "", false
-}
-
 // Keymap defines keybindings.
 type Keymap interface {
-	HelpItems() []components.HelpItem
+	HelpItems() [][]string
 }
 
 // State holds the application state.
