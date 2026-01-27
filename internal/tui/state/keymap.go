@@ -90,10 +90,10 @@ func DefaultKeymap() KeymapData {
 		Priority2:       Key{Key: "2", Help: "priority 2"},
 		Priority3:       Key{Key: "3", Help: "priority 3"},
 		Priority4:       Key{Key: "4", Help: "priority 4 (lowest)"},
-		DueToday:        Key{Key: "<", Help: "due today"},
-		DueTomorrow:     Key{Key: ">", Help: "due tomorrow"},
-		MoveTaskPrevDay: Key{Key: "H", Help: "move -1 day"},
-		MoveTaskNextDay: Key{Key: "L", Help: "move +1 day"},
+		DueToday:        Key{Key: "<", Help: "move -1 day"},
+		DueTomorrow:     Key{Key: ">", Help: "move +1 day"},
+		MoveTaskPrevDay: Key{Key: "<", Help: "move -1 day"},
+		MoveTaskNextDay: Key{Key: ">", Help: "move +1 day"},
 
 		// Navigation between panes
 		SwitchPane:    Key{Key: "tab", Help: "switch pane"},
@@ -238,9 +238,9 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 	case keymap.Priority4.Key, "$":
 		return "priority4", true
 	case keymap.DueToday.Key:
-		return "due_today", true
+		return "move_task_prev_day", true
 	case keymap.DueTomorrow.Key:
-		return "due_tomorrow", true
+		return "move_task_next_day", true
 	case keymap.SwitchPane.Key:
 		return "switch_pane", true
 	case keymap.Search.Key:
@@ -254,11 +254,13 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 	// Actually, 1-6 keys are NOT in keymap struct explicitly, they are likely handled via "1", "2" etc cases.
 	// But let's check HandleKey implementation.
 
-	// L for next day (already done). Labels is now 4.
-	case "L":
-		return "move_task_next_day", true
-	case "H":
-		return "move_task_prev_day", true
+	// But let's check HandleKey implementation.
+
+	// L for next day (REMOVED: now using > and <)
+	// case "L":
+	// 	return "move_task_next_day", true
+	// case "H":
+	// 	return "move_task_prev_day", true
 
 	// Hints toggle
 	case "f1":
@@ -284,7 +286,7 @@ func (k KeymapData) HelpItems() [][]string {
 		{"gg/G", "Go to top/bottom"},
 		{k.HalfUp.Key + "/" + k.HalfDown.Key, "Half page up/down"},
 		{k.SwitchPane.Key, "Switch pane (Sidebar/Main)"},
-		{"H/L", "Move task -1/+1 day"},
+		{k.SwitchPane.Key, "Switch pane (Sidebar/Main)"},
 		{"", ""},
 		{"View Switching", ""},
 		{"1", "Inbox"},
@@ -303,7 +305,9 @@ func (k KeymapData) HelpItems() [][]string {
 		{"yy", "Copy task(s) to clipboard"},
 		{"Space", "Toggle task selection"},
 		{"1-4", "Set priority"},
-		{k.DueToday.Key + "/" + k.DueTomorrow.Key, "Due today/tomorrow"},
+		{"Space", "Toggle task selection"},
+		{"1-4", "Set priority"},
+		{k.MoveTaskPrevDay.Key + "/" + k.MoveTaskNextDay.Key, "Move task -1/+1 day"},
 		{"s", "Add subtask"},
 		{"m", "Move task to section"},
 		{"A", "Add comment"},
