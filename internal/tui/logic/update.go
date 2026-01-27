@@ -122,6 +122,11 @@ func (h *Handler) handleWindowSizeMsg(msg tea.WindowSizeMsg) tea.Cmd {
 	}
 
 	h.HelpComp.SetSize(msg.Width, msg.Height)
+
+	if h.TaskForm != nil {
+		h.TaskForm.SetWidth(msg.Width)
+	}
+
 	return nil
 }
 

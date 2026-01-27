@@ -631,4 +631,30 @@ func (h *Handler) handleBack() tea.Cmd {
 	return nil
 }
 
-// handleComplete toggles task completion.
+// handleFormKeyMsg handles keyboard input when the form is active.
+func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	if h.TaskForm == nil {
+		return nil
+	}
+
+	switch msg.String() {
+	case "esc":
+		// Cancel form and go back
+		h.CurrentView = h.PreviousView
+		h.TaskForm = nil
+		return nil
+
+	case "ctrl+enter":
+		return h.submitForm()
+
+	case "enter":
+		// If on submit button, submit form
+		if h.TaskForm.FocusIndex == state.FormFieldSubmit {
+			return h.submitForm()
+		}
+		// Otherwise, let form handle enter (e.g. for opening project list)
+	}
+
+	// Forward to form
+	return h.TaskForm.Update(msg)
+}

@@ -14,6 +14,8 @@ func (r *Renderer) renderSections() string {
 	b.WriteString(styles.Title.Render("Manage Sections"))
 	b.WriteString("\n\n")
 
+	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SECTIONS LIST") + "\n\n")
+
 	if len(r.Sections) == 0 {
 		b.WriteString(styles.HelpDesc.Render("No sections found. Press 'a' to add one."))
 		b.WriteString("\n\n")
@@ -27,15 +29,15 @@ func (r *Renderer) renderSections() string {
 		style := lipgloss.NewStyle()
 
 		if i == r.TaskCursor {
-			cursor = "> "
+			cursor = "✓ "
 			style = lipgloss.NewStyle().Foreground(styles.Highlight)
 		}
 
-		b.WriteString(cursor + style.Render(section.Name) + "\n")
+		b.WriteString(style.Render(cursor+section.Name) + "\n")
 	}
 
 	b.WriteString("\n")
-	b.WriteString(styles.HelpDesc.Render("j/k: nav • a: add • e: edit • d: delete • Esc: back"))
+	b.WriteString(styles.HelpDesc.Render("j/k: select • a: add • e: edit • d: delete • Esc: back"))
 
-	return b.String()
+	return styles.Dialog.Width(r.Width - 4).Render(b.String())
 }

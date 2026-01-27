@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
@@ -22,34 +23,190 @@ func (r *Renderer) renderTaskForm() string {
 	if f.Original != nil {
 		title = "Edit Task"
 	}
+	if f.Context != "" {
+		title += fmt.Sprintf(" (%s)", f.Context)
+	}
 	b.WriteString(styles.Title.Render(title) + "\n\n")
 
+	// Helper for metadata bar items
+	renderMetaItem := func(field int, icon, value, label string) string {
+		style := lipgloss.NewStyle().
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Subtle).
+			Padding(0, 1).
+			MarginRight(1)
+
+		if f.FocusIndex == field {
+			style = style.BorderForeground(styles.Highlight).Foreground(styles.Highlight)
+		}
+
+		content := fmt.Sprintf("%s %s", icon, value)
+		if value == "" {
+			content = fmt.Sprintf("%s %s", icon, label)
+		}
+
+		return style.Render(content)
+	}
+
 	// Content
-	b.WriteString(styles.InputLabel.Render("Content") + "\n")
+	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("TASK CONTENT") + "\n")
 	b.WriteString(f.Content.View() + "\n\n")
 
 	// Description
-	b.WriteString(styles.InputLabel.Render("Description") + "\n")
+	b.WriteString(styles.InputLabel.Render("description") + "\n")
 	b.WriteString(f.Description.View() + "\n\n")
 
-	// Priority & Due Date Row
-	b.WriteString(styles.InputLabel.Render("Priority (1-4)") + "   " + styles.InputLabel.Render("Due Date") + "\n")
-	pStyle := styles.GetPriorityStyle(f.Priority)
-	pLabel := fmt.Sprintf("P%d", 5-f.Priority) // Display as P1-P4
-	b.WriteString(pStyle.Render(pLabel) + "           " + f.DueString.View() + "\n\n")
+	// 1. Due Date (On its own line as requested)
+	b.WriteString(styles.InputLabel.Render("due date") + "\n")
+	dueStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Subtle).
+		Padding(0, 1).
+		Width(20) // Give it some width
 
-	// Project Selector (if showing)
+	if f.FocusIndex == state.FormFieldDue {
+		dueStyle = dueStyle.BorderForeground(styles.Highlight)
+	}
+	b.WriteString(dueStyle.Render("📅 "+f.DueString.View()) + "\n\n")
+
+	// Metadata Bar (Priority, Project, Labels)
+
+	// Priority
+	pLabel := fmt.Sprintf("P%d", 5-f.Priority)
+	pIcon := "🚩"
+	pStyle := styles.GetPriorityStyle(f.Priority)
+	pItemContent := pStyle.Render(fmt.Sprintf("%s %s", pIcon, pLabel))
+
+	pContainerStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Subtle).
+		Padding(0, 1).
+		MarginRight(1)
+
+	if f.FocusIndex == state.FormFieldPriority {
+		pContainerStyle = pContainerStyle.BorderForeground(styles.Highlight)
+		pItemContent = pStyle.Render(fmt.Sprintf("◀ %s %s ▶", pIcon, pLabel))
+	}
+	priorityItem := pContainerStyle.Render(pItemContent)
+
+	// Project
+	projName := f.ProjectName
+	if projName == "" {
+		projName = "Inbox"
+	}
+	projectItem := renderMetaItem(state.FormFieldShowProject, "📁", projName, "Project")
+
+	// Labels
+	// Calculate label string
+	labelStr := "Labels"
+	if len(f.Labels) > 0 {
+		labelStr = strings.Join(f.Labels, ", ")
+		// If too long, truncate?
+		if len(labelStr) > 20 {
+			labelStr = fmt.Sprintf("%d Labels", len(f.Labels))
+		}
+	}
+	labelItem := renderMetaItem(state.FormFieldLabels, "🏷️", labelStr, "Labels")
+
+	// Construct the bar
+	bar := lipgloss.JoinHorizontal(lipgloss.Top, priorityItem, projectItem, labelItem)
+	b.WriteString(bar + "\n\n")
+
+	// Project Selector Dropdown
 	if f.ShowProjectList {
-		b.WriteString(styles.InputLabel.Render("Select Project") + "\n")
-		// In a real implementation we'd show a list here.
-		// For now just show selected project name.
-		b.WriteString(styles.TaskSelected.Render(f.ProjectName) + "\n\n")
-	} else {
-		b.WriteString(styles.InputLabel.Render("Project: ") + styles.TaskContent.Render(f.ProjectName) + "\n\n")
+		b.WriteString(styles.Subtitle.Render("Select Project:") + "\n")
+		var lines []string
+		count := 0
+		for _, p := range f.AvailableProjects {
+			if count > 5 {
+				break
+			}
+			cursor := "  "
+			style := styles.ProjectItem
+			if p.ID == f.ProjectID {
+				cursor = "✓ "
+				style = styles.ProjectSelected
+			}
+			lines = append(lines, style.Render(cursor+p.Name))
+			count++
+		}
+		if len(f.AvailableProjects) > 5 {
+			remaining := len(f.AvailableProjects) - 5
+			lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("...and %d more", remaining)))
+		}
+		list := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(0, 1).
+			Render(strings.Join(lines, "\n"))
+		b.WriteString(list + "\n\n")
 	}
 
-	// Help
-	b.WriteString(styles.HelpDesc.Render("Enter: save | Esc: cancel | Tab: next field"))
+	// Label Selector Dropdown
+	if f.ShowLabelList {
+		b.WriteString(styles.Subtitle.Render("Select Labels:") + "\n")
+		var lines []string
+		count := 0
+
+		if len(f.AvailableLabels) == 0 {
+			lines = append(lines, styles.HelpDesc.Render("No labels available"))
+		} else {
+			for _, l := range f.AvailableLabels {
+				if count > 5 {
+					break
+				}
+				cursor := "  "
+				style := styles.LabelItem
+
+				// Check if label is selected in f.Labels
+				isSelected := false
+				for _, selectedLabelName := range f.Labels {
+					if selectedLabelName == l.Name {
+						isSelected = true
+						break
+					}
+				}
+
+				if isSelected {
+					cursor = "✓ "
+					style = styles.LabelSelected
+				}
+				lines = append(lines, style.Render(cursor+l.Name))
+				count++
+			}
+			if len(f.AvailableLabels) > 5 {
+				remaining := len(f.AvailableLabels) - 5
+				lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("...and %d more", remaining)))
+			}
+		}
+
+		list := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(styles.Highlight).
+			Padding(0, 1).
+			Render(strings.Join(lines, "\n"))
+		b.WriteString(list + "\n\n")
+	}
+
+	// Submit Button
+	submitStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(styles.Highlight).
+		Padding(0, 2).
+		MarginTop(1)
+
+	if f.FocusIndex == state.FormFieldSubmit {
+		// Invert colors for highlight effect if we could, but highlight is adaptive.
+		// Let's just use consistent highlight background.
+		// If focused, maybe add a border?
+		submitStyle = submitStyle.Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("#FFFFFF"))
+		b.WriteString(submitStyle.Render("[ Submit Task ]"))
+	} else {
+		// Dimmed/Different style if not focused
+		b.WriteString(styles.HelpDesc.Render("[ Submit Task ]"))
+	}
+	b.WriteString("\n")
 
 	return styles.Dialog.Width(r.Width - 4).Render(b.String())
 }
@@ -173,6 +330,7 @@ func (r *Renderer) overlayContent(background string, dialog string) string {
 // renderProjectDialog renders the new project dialog.
 func (r *Renderer) renderProjectDialog() string {
 	content := styles.Title.Render("📁 New Project") + "\n\n" +
+		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME") + "\n" +
 		r.ProjectInput.View() + "\n\n" +
 		styles.HelpDesc.Render("Enter: create • Esc: cancel")
 
@@ -182,6 +340,7 @@ func (r *Renderer) renderProjectDialog() string {
 // renderProjectEditDialog renders the edit project dialog.
 func (r *Renderer) renderProjectEditDialog() string {
 	content := styles.Title.Render("✏️ Edit Project") + "\n\n" +
+		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME") + "\n" +
 		r.ProjectInput.View() + "\n\n" +
 		styles.HelpDesc.Render("Enter: save • Esc: cancel")
 
@@ -243,6 +402,7 @@ func (r *Renderer) renderSubtaskDialog() string {
 // renderSectionDialog renders the new section dialog.
 func (r *Renderer) renderSectionDialog() string {
 	content := styles.Title.Render("📂 New Section") + "\n\n" +
+		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SECTION NAME") + "\n" +
 		r.SectionInput.View() + "\n\n" +
 		styles.HelpDesc.Render("Enter: create • Esc: cancel")
 
@@ -252,6 +412,7 @@ func (r *Renderer) renderSectionDialog() string {
 // renderSectionEditDialog renders the edit section dialog.
 func (r *Renderer) renderSectionEditDialog() string {
 	content := styles.Title.Render("✏️ Edit Section") + "\n\n" +
+		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SECTION NAME") + "\n" +
 		r.SectionInput.View() + "\n\n" +
 		styles.HelpDesc.Render("Enter: save • Esc: cancel")
 
@@ -276,6 +437,8 @@ func (r *Renderer) renderMoveTaskDialog() string {
 	var b strings.Builder
 	b.WriteString(styles.Title.Render("➡️ Move Task to Section") + "\n\n")
 
+	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SELECT DESTINATION") + "\n\n")
+
 	if len(r.Sections) == 0 {
 		b.WriteString(styles.HelpDesc.Render("No sections in this project."))
 	} else {
@@ -283,14 +446,14 @@ func (r *Renderer) renderMoveTaskDialog() string {
 			cursor := "  "
 			style := lipgloss.NewStyle()
 			if i == r.MoveSectionCursor {
-				cursor = "> "
+				cursor = "✓ "
 				style = lipgloss.NewStyle().Foreground(styles.Highlight)
 			}
-			b.WriteString(cursor + style.Render(section.Name) + "\n")
+			b.WriteString(style.Render(cursor+section.Name) + "\n")
 		}
 	}
 
-	b.WriteString("\n" + styles.HelpDesc.Render("j/k: select • Enter: move • Esc: cancel"))
+	b.WriteString("\n\n" + styles.HelpDesc.Render("j/k: select • Enter: move • Esc: cancel"))
 
 	return r.renderCenteredDialog(b.String(), 50)
 }

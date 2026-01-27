@@ -578,3 +578,36 @@ func (h *Handler) handleEdit() tea.Cmd {
 }
 
 // handleNewProject opens the project creation input.
+
+// submitForm submits the task form (create or update).
+func (h *Handler) submitForm() tea.Cmd {
+	if h.TaskForm == nil || !h.TaskForm.IsValid() {
+		h.StatusMsg = "Task name is required"
+		return nil
+	}
+
+	h.Loading = true
+
+	if h.TaskForm.Mode == "edit" {
+		// Update existing task
+		taskID := h.TaskForm.TaskID
+		req := h.TaskForm.ToUpdateRequest()
+		return func() tea.Msg {
+			_, err := h.Client.UpdateTask(taskID, req)
+			if err != nil {
+				return errMsg{err}
+			}
+			return taskCreatedMsg{} // Reuse message type for refresh
+		}
+	}
+
+	// Create new task
+	req := h.TaskForm.ToCreateRequest()
+	return func() tea.Msg {
+		_, err := h.Client.CreateTask(req)
+		if err != nil {
+			return errMsg{err}
+		}
+		return taskCreatedMsg{}
+	}
+}
