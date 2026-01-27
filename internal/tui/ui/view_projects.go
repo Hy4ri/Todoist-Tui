@@ -1,10 +1,12 @@
+package ui
+
 import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
 // renderProjectsTabContent renders content for the Projects tab (sidebar + tasks).
-func (a *App) renderProjectsTabContent(width, height int) string {
+func (r *Renderer) renderProjectsTabContent(width, height int) string {
 	sidebarWidth := 30 // Wider sidebar for full project names
 	if width < 70 {
 		sidebarWidth = 20
@@ -18,21 +20,21 @@ func (a *App) renderProjectsTabContent(width, height int) string {
 	}
 
 	// Render sidebar (project list) - using component
-	a.sidebarComp.SetSize(sidebarWidth, height)
-	a.sidebarComp.SetItems(a.sidebarItems)
-	a.sidebarComp.SetCursor(a.sidebarCursor) // Sync cursor from App state
-	if a.focusedPane == PaneSidebar {
-		a.sidebarComp.Focus()
+	r.SidebarComp.SetSize(sidebarWidth, height)
+	r.SidebarComp.SetItems(r.SidebarItems)
+	r.SidebarComp.SetCursor(r.SidebarCursor) // Sync cursor from App state
+	if r.FocusedPane == state.PaneSidebar {
+		r.SidebarComp.Focus()
 	} else {
-		a.sidebarComp.Blur()
+		r.SidebarComp.Blur()
 	}
-	if a.currentProject != nil {
-		a.sidebarComp.SetActiveProject(a.currentProject.ID)
+	if r.CurrentProject != nil {
+		r.SidebarComp.SetActiveProject(r.CurrentProject.ID)
 	}
-	sidebar := a.sidebarComp.View()
+	sidebar := r.SidebarComp.View()
 
 	// Render main content (tasks for selected project)
-	main := a.renderProjectTaskList(mainWidth, height)
+	main := r.renderProjectTaskList(mainWidth, height)
 
 	// Enforce strict dimensions
 	sidebar = lipgloss.Place(sidebarWidth, height, lipgloss.Left, lipgloss.Top, sidebar)
@@ -42,7 +44,7 @@ func (a *App) renderProjectsTabContent(width, height int) string {
 }
 
 // renderProjectTaskList renders the task list for the selected project.
-func (a *App) renderProjectTaskList(width, height int) string {
+func (r *Renderer) renderProjectTaskList(width, height int) string {
 	var content string
 
 	// Reserve space for borders (top + bottom = 2 lines)
@@ -54,14 +56,14 @@ func (a *App) renderProjectTaskList(width, height int) string {
 	// Calculate inner width for the content
 	innerWidth := width - styles.MainContent.GetHorizontalFrameSize()
 
-	if a.currentProject == nil {
+	if r.CurrentProject == nil {
 		content = styles.HelpDesc.Render("Select a project from the sidebar")
 	} else {
-		content = a.renderDefaultTaskList(innerWidth, innerHeight)
+		content = r.renderDefaultTaskList(innerWidth, innerHeight)
 	}
 
 	containerStyle := styles.MainContent
-	if a.focusedPane == PaneMain {
+	if r.FocusedPane == state.PaneMain {
 		containerStyle = styles.MainContentFocused
 	}
 

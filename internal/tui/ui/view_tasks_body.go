@@ -10,7 +10,7 @@ import (
 )
 
 // renderTaskList renders the task list for Today/Upcoming/Labels views.
-func (a *App) renderTaskList(width, height int) string {
+func (r *Renderer) renderTaskList(width, height int) string {
 	// Calculate viewport height (subtract title and padding)
 	innerHeight := height - 2
 	if innerHeight < 5 {
@@ -21,20 +21,20 @@ func (a *App) renderTaskList(width, height int) string {
 	innerWidth := width - styles.MainContent.GetHorizontalFrameSize()
 
 	var content string
-	switch a.currentView {
-	case ViewUpcoming:
-		content = a.renderUpcoming(innerWidth, innerHeight)
-	case ViewLabels:
-		content = a.renderLabelsView(innerWidth, innerHeight)
-	case ViewCalendar:
-		content = a.renderCalendar(innerHeight) // Calendar handles own sizing
+	switch r.CurrentView {
+	case state.ViewUpcoming:
+		content = r.renderUpcoming(innerWidth, innerHeight)
+	case state.ViewLabels:
+		content = r.renderLabelsView(innerWidth, innerHeight)
+	case state.ViewCalendar:
+		content = r.renderCalendar(innerHeight) // Calendar handles own sizing
 	default:
-		content = a.renderDefaultTaskList(innerWidth, innerHeight)
+		content = r.renderDefaultTaskList(innerWidth, innerHeight)
 	}
 
 	// Apply container style with fixed height
 	containerStyle := styles.MainContent
-	if a.focusedPane == PaneMain {
+	if r.FocusedPane == state.PaneMain {
 		containerStyle = styles.MainContentFocused
 	}
 
@@ -42,17 +42,17 @@ func (a *App) renderTaskList(width, height int) string {
 }
 
 // renderDefaultTaskList renders the default task list for Today/Project views.
-func (a *App) renderDefaultTaskList(width, maxHeight int) string {
+func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 	var b strings.Builder
 
 	// Title
 	var title string
-	switch a.currentView {
-	case ViewToday:
+	switch r.CurrentView {
+	case state.ViewToday:
 		title = time.Now().Format("Monday 2 Jan")
-	case ViewProject:
-		if a.currentProject != nil {
-			title = a.currentProject.Name
+	case state.ViewProject:
+		if r.CurrentProject != nil {
+			title = r.CurrentProject.Name
 		}
 	default:
 		title = "Tasks"
@@ -60,14 +60,14 @@ func (a *App) renderDefaultTaskList(width, maxHeight int) string {
 	b.WriteString(styles.Title.Render(title))
 	b.WriteString("\n\n")
 
-	if a.loading {
-		b.WriteString(a.spinner.View())
+	if r.Loading {
+		b.WriteString(r.Spinner.View())
 		b.WriteString(" Loading...")
-	} else if a.err != nil {
-		b.WriteString(styles.StatusBarError.Render(fmt.Sprintf("Error: %v", a.err)))
-	} else if len(a.tasks) == 0 {
+	} else if r.Err != nil {
+		b.WriteString(styles.StatusBarError.Render(fmt.Sprintf("Error: %v", r.Err)))
+	} else if len(r.Tasks) == 0 {
 		msg := "No tasks found"
-		if a.currentView == ViewToday {
+		if r.CurrentView == state.ViewToday {
 			msg = "All done for today! \n" + styles.HelpDesc.Render("Enjoy your day off 🏝️")
 		} else {
 			msg = "No tasks here.\n" + styles.HelpDesc.Render("Press 'a' to add one.")
@@ -76,12 +76,12 @@ func (a *App) renderDefaultTaskList(width, maxHeight int) string {
 	} else {
 		// Group tasks by due status for Today view
 		// Title uses 2 lines (title + newline)
-		if a.currentView == ViewToday {
-			b.WriteString(a.renderGroupedTasks(width, maxHeight-2))
-		} else if a.currentView == ViewProject {
-			b.WriteString(a.renderProjectTasks(width, maxHeight-2))
+		if r.CurrentView == state.ViewToday {
+			b.WriteString(r.renderGroupedTasks(width, maxHeight-2))
+		} else if r.CurrentView == state.ViewProject {
+			b.WriteString(r.renderProjectTasks(width, maxHeight-2))
 		} else {
-			b.WriteString(a.renderFlatTasks(width, maxHeight-2))
+			b.WriteString(r.renderFlatTasks(width, maxHeight-2))
 		}
 	}
 
@@ -96,7 +96,7 @@ type lineInfo struct {
 }
 
 // renderProjectTasks renders tasks grouped by section for a project.
-func (a *App) renderProjectTasks(width, maxHeight int) string {
+func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 	// Build ordered list of task indices matching display order
 	var orderedIndices []int
 
@@ -104,7 +104,7 @@ func (a *App) renderProjectTasks(width, maxHeight int) string {
 	tasksBySection := make(map[string][]int)
 	var noSectionTasks []int
 
-	for i, t := range a.tasks {
+	for i, t := range r.Tasks {
 		if t.SectionID != nil && *t.SectionID != "" {
 			tasksBySection[*t.SectionID] = append(tasksBySection[*t.SectionID], i)
 		} else {
@@ -118,17 +118,17 @@ func (a *App) renderProjectTasks(width, maxHeight int) string {
 	if len(noSectionTasks) > 0 {
 		for _, i := range noSectionTasks {
 			orderedIndices = append(orderedIndices, i)
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 		}
 		// Add spacer if there are sections following
-		if len(a.sections) > 0 {
+		if len(r.Sections) > 0 {
 			lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		}
 	}
 
 	// 2. Then, tasks by section (in order)
-	if len(a.sections) > 0 {
-		for _, section := range a.sections {
+	if len(r.Sections) > 0 {
+		for _, section := range r.Sections {
 			taskIndices := tasksBySection[section.ID]
 
 			// Create section header index (unique negative value)
@@ -137,19 +137,19 @@ func (a *App) renderProjectTasks(width, maxHeight int) string {
 
 			if len(taskIndices) == 0 {
 				lines = append(lines, lineInfo{
-					content:   a.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
+					content:   r.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
 					taskIndex: headerIndex,
 					sectionID: section.ID,
 				})
 			} else {
 				lines = append(lines, lineInfo{
-					content:   a.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
+					content:   r.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
 					taskIndex: headerIndex,
 					sectionID: section.ID,
 				})
 				for _, i := range taskIndices {
 					orderedIndices = append(orderedIndices, i)
-					lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+					lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 				}
 			}
 			// Add blank line after section for spacing
@@ -157,15 +157,15 @@ func (a *App) renderProjectTasks(width, maxHeight int) string {
 		}
 	}
 
-	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
+	return r.renderScrollableLines(lines, orderedIndices, maxHeight)
 }
 
 // renderGroupedTasks renders tasks grouped by due status.
-func (a *App) renderGroupedTasks(width, maxHeight int) string {
+func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 	var overdue, today, other []int
 
 	// Group tasks
-	for i, t := range a.tasks {
+	for i, t := range r.Tasks {
 		if t.IsOverdue() {
 			overdue = append(overdue, i)
 		} else if t.IsDueToday() {
@@ -187,7 +187,7 @@ func (a *App) renderGroupedTasks(width, maxHeight int) string {
 	if len(overdue) > 0 {
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("OVERDUE"), taskIndex: -1})
 		for _, i := range overdue {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 		}
 	}
 
@@ -196,7 +196,7 @@ func (a *App) renderGroupedTasks(width, maxHeight int) string {
 			lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		}
 		for _, i := range today {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 		}
 	}
 
@@ -206,28 +206,28 @@ func (a *App) renderGroupedTasks(width, maxHeight int) string {
 		}
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("NO DUE DATE"), taskIndex: -1})
 		for _, i := range other {
-			lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 		}
 	}
 
-	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
+	return r.renderScrollableLines(lines, orderedIndices, maxHeight)
 }
 
 // renderFlatTasks renders tasks in a flat list.
-func (a *App) renderFlatTasks(width, maxHeight int) string {
+func (r *Renderer) renderFlatTasks(width, maxHeight int) string {
 	var lines []lineInfo
 	var orderedIndices []int
 
-	for i := range a.tasks {
+	for i := range r.Tasks {
 		orderedIndices = append(orderedIndices, i)
-		lines = append(lines, lineInfo{content: a.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+		lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
 	}
 
-	return a.renderScrollableLines(lines, orderedIndices, maxHeight)
+	return r.renderScrollableLines(lines, orderedIndices, maxHeight)
 }
 
 // renderSectionHeaderByIndex renders a section header with cursor highlighting for empty sections.
-func (a *App) renderSectionHeaderByIndex(sectionName string, headerIndex int, orderedIndices []int) string {
+func (r *Renderer) renderSectionHeaderByIndex(sectionName string, headerIndex int, orderedIndices []int) string {
 	// Find display position for cursor
 	displayPos := 0
 	for i, idx := range orderedIndices {
@@ -238,7 +238,7 @@ func (a *App) renderSectionHeaderByIndex(sectionName string, headerIndex int, or
 	}
 
 	// Check if cursor is on this empty section header
-	isCursorHere := displayPos == a.taskCursor && a.focusedPane == PaneMain
+	isCursorHere := displayPos == r.TaskCursor && r.FocusedPane == state.PaneMain
 
 	// Cursor indicator
 	cursor := "  "
@@ -271,8 +271,8 @@ func (a *App) renderSectionHeaderByIndex(sectionName string, headerIndex int, or
 }
 
 // renderTaskByDisplayIndex renders a task with cursor based on display order.
-func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, width int) string {
-	t := a.tasks[taskIndex]
+func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, width int) string {
+	t := r.Tasks[taskIndex]
 
 	// Find display position for cursor
 	displayPos := 0
@@ -285,13 +285,13 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, widt
 
 	// Cursor
 	cursor := "  "
-	if displayPos == a.taskCursor && a.focusedPane == PaneMain {
+	if displayPos == r.TaskCursor && r.FocusedPane == state.PaneMain {
 		cursor = "> "
 	}
 
 	// Selection indicator
 	selectionMark := " "
-	if a.selectedTaskIDs[t.ID] {
+	if r.SelectedTaskIDs[t.ID] {
 		selectionMark = "●"
 	}
 
@@ -365,7 +365,7 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, widt
 
 	// Apply base style
 	style := styles.TaskItem
-	if displayPos == a.taskCursor && a.focusedPane == PaneMain {
+	if displayPos == r.TaskCursor && r.FocusedPane == state.PaneMain {
 		style = styles.TaskSelected
 	}
 	if t.Checked {
@@ -377,21 +377,21 @@ func (a *App) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, widt
 }
 
 // renderScrollableLines renders lines with scrolling support using viewport.
-func (a *App) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxHeight int) string {
+func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxHeight int) string {
 	// Store ordered indices for use in handleSelect
-	a.taskOrderedIndices = orderedIndices
+	r.TaskOrderedIndices = orderedIndices
 
 	if len(lines) == 0 {
-		a.scrollOffset = 0
-		a.viewportLines = nil
-		a.viewportSections = nil
+		r.ScrollOffset = 0
+		r.state.ViewportLines = nil
+		r.state.ViewportSections = nil
 		return ""
 	}
 
 	// Build content string and track line->task mapping and section mapping
 	var content strings.Builder
-	a.viewportLines = make([]int, 0, len(lines))
-	a.viewportSections = make([]string, 0, len(lines))
+	r.state.ViewportLines = make([]int, 0, len(lines))
+	r.state.ViewportSections = make([]string, 0, len(lines))
 
 	for i, line := range lines {
 		content.WriteString(line.content)
@@ -399,15 +399,15 @@ func (a *App) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxH
 			content.WriteString("\n")
 		}
 		// Map this viewport line to its task index (-1 for headers, -2 for section headers)
-		a.viewportLines = append(a.viewportLines, line.taskIndex)
+		r.state.ViewportLines = append(r.state.ViewportLines, line.taskIndex)
 		// Map this viewport line to its section ID (empty string for non-section lines)
-		a.viewportSections = append(a.viewportSections, line.sectionID)
+		r.state.ViewportSections = append(r.state.ViewportSections, line.sectionID)
 	}
 
 	// Find which line the cursor is on
 	cursorLine := 0
-	if a.taskCursor >= 0 && a.taskCursor < len(orderedIndices) {
-		targetTaskIndex := orderedIndices[a.taskCursor]
+	if r.TaskCursor >= 0 && r.TaskCursor < len(orderedIndices) {
+		targetTaskIndex := orderedIndices[r.TaskCursor]
 		for i, line := range lines {
 			if line.taskIndex == targetTaskIndex {
 				cursorLine = i
@@ -417,43 +417,43 @@ func (a *App) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxH
 	}
 
 	// If viewport is ready, use it for scrolling
-	if a.viewportReady {
+	if r.state.ViewportReady {
 		// Update viewport height if needed (maxHeight is the available height)
-		if a.taskViewport.Height != maxHeight && maxHeight > 0 {
-			a.taskViewport.Height = maxHeight
+		if r.TaskViewport.Height != maxHeight && maxHeight > 0 {
+			r.TaskViewport.Height = maxHeight
 		}
 
 		// Set content to viewport
-		a.taskViewport.SetContent(content.String())
+		r.TaskViewport.SetContent(content.String())
 
 		// Sync viewport to show cursor
-		a.syncViewportToCursor(cursorLine)
+		r.syncViewportToCursor(cursorLine)
 
 		// Store scroll offset for click handling
-		a.scrollOffset = a.taskViewport.YOffset
+		r.ScrollOffset = r.TaskViewport.YOffset
 
-		return a.taskViewport.View()
+		return r.TaskViewport.View()
 	}
 
 	// Fallback: viewport not ready, just return raw content (truncated)
-	a.scrollOffset = 0
+	r.ScrollOffset = 0
 	return content.String()
 }
 
 // renderUpcoming renders the upcoming view with tasks grouped by date.
-func (a *App) renderUpcoming(width, maxHeight int) string {
+func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 	var b strings.Builder
 
 	b.WriteString(styles.Title.Render("Upcoming"))
 	b.WriteString("\n")
 
-	if a.loading {
-		b.WriteString(a.spinner.View())
+	if r.Loading {
+		b.WriteString(r.Spinner.View())
 		b.WriteString(" Loading...")
 		return b.String()
 	}
 
-	if len(a.tasks) == 0 {
+	if len(r.Tasks) == 0 {
 		b.WriteString("\n")
 		b.WriteString(styles.HelpDesc.Render("No upcoming tasks"))
 		return b.String()
@@ -463,7 +463,7 @@ func (a *App) renderUpcoming(width, maxHeight int) string {
 	tasksByDate := make(map[string][]int)
 	var dates []string
 
-	for i, t := range a.tasks {
+	for i, t := range r.Tasks {
 		if t.Due == nil {
 			continue
 		}
@@ -514,7 +514,7 @@ func (a *App) renderUpcoming(width, maxHeight int) string {
 
 		for _, i := range tasksByDate[date] {
 			lines = append(lines, lineInfo{
-				content:   a.renderTaskByDisplayIndex(i, orderedIndices, width),
+				content:   r.renderTaskByDisplayIndex(i, orderedIndices, width),
 				taskIndex: i,
 			})
 		}
@@ -522,14 +522,14 @@ func (a *App) renderUpcoming(width, maxHeight int) string {
 
 	// Use common scrollable rendering - maxHeight already accounts for borders
 	// Subtract 2 for Title line + newline
-	result := a.renderScrollableLines(lines, orderedIndices, maxHeight-2)
+	result := r.renderScrollableLines(lines, orderedIndices, maxHeight-2)
 	b.WriteString(result)
 
 	return b.String()
 }
 
 // renderLabelsView renders the labels view.
-func (a *App) renderLabelsView(width, maxHeight int) string {
+func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 	var b strings.Builder
 
 	b.WriteString(styles.Title.Render("Labels"))
@@ -538,11 +538,11 @@ func (a *App) renderLabelsView(width, maxHeight int) string {
 	// Account for title + blank line (2 lines used)
 	contentHeight := maxHeight - 2
 
-	if a.currentLabel != nil {
+	if r.CurrentLabel != nil {
 		// Show tasks for selected label
-		labelTitle := "@" + a.currentLabel.Name
-		if a.currentLabel.Color != "" {
-			labelTitle = lipgloss.NewStyle().Foreground(lipgloss.Color(a.currentLabel.Color)).Render(labelTitle)
+		labelTitle := "@" + r.CurrentLabel.Name
+		if r.CurrentLabel.Color != "" {
+			labelTitle = lipgloss.NewStyle().Foreground(lipgloss.Color(r.CurrentLabel.Color)).Render(labelTitle)
 		}
 		b.WriteString(styles.Subtitle.Render(labelTitle))
 		b.WriteString("\n\n")
@@ -550,35 +550,35 @@ func (a *App) renderLabelsView(width, maxHeight int) string {
 		// Account for subtitle + blank line + footer (4 more lines)
 		taskHeight := contentHeight - 4
 
-		if len(a.tasks) == 0 {
+		if len(r.Tasks) == 0 {
 			b.WriteString(styles.HelpDesc.Render("No tasks with this label"))
 		} else {
 			// Build lines and ordered indices for scrolling
 			var lines []lineInfo
 			var orderedIndices []int
-			for i := range a.tasks {
+			for i := range r.Tasks {
 				orderedIndices = append(orderedIndices, i)
 			}
-			for i := range a.tasks {
+			for i := range r.Tasks {
 				lines = append(lines, lineInfo{
-					content:   a.renderTaskByDisplayIndex(i, orderedIndices, width),
+					content:   r.renderTaskByDisplayIndex(i, orderedIndices, width),
 					taskIndex: i,
 				})
 			}
-			b.WriteString(a.renderScrollableLines(lines, orderedIndices, taskHeight))
+			b.WriteString(r.renderScrollableLines(lines, orderedIndices, taskHeight))
 		}
 
 		b.WriteString("\n")
 		b.WriteString(styles.HelpDesc.Render("Press ESC to go back to labels list"))
 	} else {
 		// Extract unique labels from all tasks if personal labels are empty
-		labelsToShow := a.labels
+		labelsToShow := r.Labels
 		if len(labelsToShow) == 0 {
-			labelsToShow = a.extractLabelsFromTasks()
+			labelsToShow = r.extractLabelsFromTasks()
 		}
 
 		// Build task count map for labels
-		taskCountMap := a.getLabelTaskCounts()
+		taskCountMap := r.getLabelTaskCounts()
 
 		// Account for footer (2 lines)
 		labelHeight := contentHeight - 2
@@ -589,8 +589,8 @@ func (a *App) renderLabelsView(width, maxHeight int) string {
 		} else {
 			// Calculate scroll window for labels
 			startIdx := 0
-			if a.taskCursor >= labelHeight {
-				startIdx = a.taskCursor - labelHeight + 1
+			if r.TaskCursor >= labelHeight {
+				startIdx = r.TaskCursor - labelHeight + 1
 			}
 			endIdx := startIdx + labelHeight
 			if endIdx > len(labelsToShow) {
@@ -601,7 +601,7 @@ func (a *App) renderLabelsView(width, maxHeight int) string {
 				label := labelsToShow[i]
 				cursor := "  "
 				style := styles.LabelItem
-				if i == a.taskCursor && a.focusedPane == PaneMain {
+				if i == r.TaskCursor && r.FocusedPane == state.PaneMain {
 					cursor = "> "
 					style = styles.LabelSelected
 				}
@@ -633,13 +633,13 @@ func (a *App) renderLabelsView(width, maxHeight int) string {
 }
 
 // getLabelTaskCounts returns a map of label name to task count.
-func (a *App) getLabelTaskCounts() map[string]int {
+func (r *Renderer) getLabelTaskCounts() map[string]int {
 	counts := make(map[string]int)
 
 	// Use allTasks if available, otherwise fall back to tasks
-	tasksToScan := a.allTasks
+	tasksToScan := r.AllTasks
 	if len(tasksToScan) == 0 {
-		tasksToScan = a.tasks
+		tasksToScan = r.Tasks
 	}
 
 	for _, t := range tasksToScan {
@@ -652,14 +652,14 @@ func (a *App) getLabelTaskCounts() map[string]int {
 }
 
 // extractLabelsFromTasks extracts unique labels from all tasks.
-func (a *App) extractLabelsFromTasks() []api.Label {
+func (r *Renderer) extractLabelsFromTasks() []api.Label {
 	labelSet := make(map[string]bool)
 	var labels []api.Label
 
 	// Check allTasks first, fall back to tasks
-	tasksToScan := a.allTasks
+	tasksToScan := r.AllTasks
 	if len(tasksToScan) == 0 {
-		tasksToScan = a.tasks
+		tasksToScan = r.Tasks
 	}
 
 	for _, t := range tasksToScan {

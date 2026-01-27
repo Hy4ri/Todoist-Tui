@@ -1,5 +1,3 @@
-package tui
-
 import (
 	"fmt"
 	"strings"
@@ -8,16 +6,16 @@ import (
 )
 
 // renderTaskForm renders the add/edit task form.
-func (a *App) renderTaskForm() string {
-	if a.taskForm == nil {
-		return styles.Dialog.Width(a.width - 4).Render("Form not initialized")
+func (r *Renderer) renderTaskForm() string {
+	if r.TaskForm == nil {
+		return styles.Dialog.Width(r.Width - 4).Render("Form not initialized")
 	}
 
-	return styles.Dialog.Width(a.width - 4).Render(a.taskForm.View())
+	return styles.Dialog.Width(r.Width - 4).Render(r.TaskForm.View())
 }
 
 // renderSearch renders the search view.
-func (a *App) renderSearch() string {
+func (r *Renderer) renderSearch() string {
 	var b strings.Builder
 
 	// Title
@@ -27,23 +25,23 @@ func (a *App) renderSearch() string {
 	// Search input
 	b.WriteString(styles.InputLabel.Render("Query"))
 	b.WriteString("\n")
-	b.WriteString(a.searchInput.View())
+	b.WriteString(r.SearchInput.View())
 	b.WriteString("\n\n")
 
 	// Results
-	if a.searchQuery == "" {
+	if r.SearchQuery == "" {
 		b.WriteString(styles.HelpDesc.Render("Type to search..."))
-	} else if len(a.searchResults) == 0 {
+	} else if len(r.SearchResults) == 0 {
 		b.WriteString(styles.StatusBarError.Render("No results found"))
 	} else {
-		b.WriteString(styles.Subtitle.Render(fmt.Sprintf("Found %d task(s)", len(a.searchResults))))
+		b.WriteString(styles.Subtitle.Render(fmt.Sprintf("Found %d task(s)", len(r.SearchResults))))
 		b.WriteString("\n\n")
 
 		// Render search results
-		for i, task := range a.searchResults {
+		for i, task := range r.SearchResults {
 			cursor := "  "
 			itemStyle := styles.TaskItem
-			if i == a.taskCursor {
+			if i == r.TaskCursor {
 				cursor = "> "
 				itemStyle = styles.TaskSelected
 			}
@@ -79,5 +77,5 @@ func (a *App) renderSearch() string {
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("j/k: navigate | Enter: view | x: complete | Esc: back"))
 
-	return styles.Dialog.Width(a.width - 4).Render(b.String())
+	return styles.Dialog.Width(r.Width - 4).Render(b.String())
 }

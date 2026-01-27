@@ -1,3 +1,5 @@
+package ui
+
 import (
 	"fmt"
 	"strings"
@@ -8,12 +10,12 @@ import (
 )
 
 // renderDetailPanel renders task details in the right panel for split view.
-func (a *App) renderDetailPanel(width, height int) string {
-	if a.selectedTask == nil {
+func (r *Renderer) renderDetailPanel(width, height int) string {
+	if r.SelectedTask == nil {
 		return ""
 	}
 
-	t := a.selectedTask
+	t := r.SelectedTask
 
 	// Create border style
 	panelStyle := lipgloss.NewStyle().
@@ -48,9 +50,9 @@ func (a *App) renderDetailPanel(width, height int) string {
 	}
 
 	// Comments
-	if len(a.comments) > 0 {
-		content.WriteString("\n" + styles.StatusBarKey.Render(fmt.Sprintf("Comments (%d):", len(a.comments))) + "\n")
-		for _, c := range a.comments {
+	if len(r.Comments) > 0 {
+		content.WriteString("\n" + styles.StatusBarKey.Render(fmt.Sprintf("Comments (%d):", len(r.Comments))) + "\n")
+		for _, c := range r.Comments {
 			content.WriteString("• " + c.Content + "\n")
 		}
 	}
@@ -62,12 +64,12 @@ func (a *App) renderDetailPanel(width, height int) string {
 }
 
 // renderTaskDetail renders the task detail view.
-func (a *App) renderTaskDetail() string {
-	if a.selectedTask == nil {
+func (r *Renderer) renderTaskDetail() string {
+	if r.SelectedTask == nil {
 		return "No task selected"
 	}
 
-	t := a.selectedTask
+	t := r.SelectedTask
 	var b strings.Builder
 
 	// Title with checkbox status
@@ -150,7 +152,7 @@ func (a *App) renderTaskDetail() string {
 	// Project (find name)
 	if t.ProjectID != "" {
 		projectName := t.ProjectID
-		for _, p := range a.projects {
+		for _, p := range r.Projects {
 			if p.ID == t.ProjectID {
 				projectName = p.Name
 				break
@@ -171,14 +173,14 @@ func (a *App) renderTaskDetail() string {
 	}
 
 	// Comments section
-	if len(a.comments) > 0 {
+	if len(r.Comments) > 0 {
 		b.WriteString("\n")
 		b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", 40)))
 		b.WriteString("\n")
 		b.WriteString(styles.Subtitle.Render("  Comments"))
 		b.WriteString("\n\n")
 
-		for _, c := range a.comments {
+		for _, c := range r.Comments {
 			// Parse and format timestamp
 			timestamp := c.PostedAt
 			if t, err := time.Parse(time.RFC3339, c.PostedAt); err == nil {
@@ -206,5 +208,5 @@ func (a *App) renderTaskDetail() string {
 	b.WriteString(styles.HelpKey.Render("s"))
 	b.WriteString(styles.HelpDesc.Render(" add subtask"))
 
-	return styles.Dialog.Width(a.width - 4).Render(b.String())
+	return styles.Dialog.Width(r.Width - 4).Render(b.String())
 }

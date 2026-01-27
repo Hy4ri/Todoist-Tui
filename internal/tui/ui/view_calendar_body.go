@@ -11,19 +11,19 @@ import (
 )
 
 // renderCalendar renders the calendar view (dispatches based on view mode).
-func (a *App) renderCalendar(maxHeight int) string {
-	if a.calendarViewMode == CalendarViewExpanded {
-		return a.renderCalendarExpanded(maxHeight)
+func (r *Renderer) renderCalendar(maxHeight int) string {
+	if r.state.CalendarViewMode == state.CalendarViewExpanded {
+		return r.renderCalendarExpanded(maxHeight)
 	}
-	return a.renderCalendarCompact(maxHeight)
+	return r.renderCalendarCompact(maxHeight)
 }
 
 // renderCalendarCompact renders the compact calendar view.
-func (a *App) renderCalendarCompact(maxHeight int) string {
+func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 	var b strings.Builder
 
 	// Header with month/year and navigation hints
-	monthYear := a.calendarDate.Format("January 2006")
+	monthYear := r.CalendarDate.Format("January 2006")
 	b.WriteString(styles.Title.Render(monthYear))
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
@@ -37,7 +37,7 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 	b.WriteString("\n")
 
 	// Calculate first day and number of days in month
-	firstOfMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+	firstOfMonth := time.Date(r.CalendarDate.Year(), r.CalendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
 	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
 	startWeekday := int(firstOfMonth.Weekday())
 	daysInMonth := lastOfMonth.Day()
@@ -45,12 +45,12 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 
 	// Build map of tasks by day
 	tasksByDay := make(map[int]int) // day -> count
-	for _, t := range a.allTasks {
+	for _, t := range r.AllTasks {
 		if t.Due == nil {
 			continue
 		}
 		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
-			if parsed.Year() == a.calendarDate.Year() && parsed.Month() == a.calendarDate.Month() {
+			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
 				tasksByDay[parsed.Day()]++
 			}
 		}
@@ -80,15 +80,15 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 			style := styles.CalendarDay
 
 			// Check if this is today
-			isToday := today.Year() == a.calendarDate.Year() &&
-				today.Month() == a.calendarDate.Month() &&
+			isToday := today.Year() == r.CalendarDate.Year() &&
+				today.Month() == r.CalendarDate.Month() &&
 				today.Day() == day
 
 			// Check if this day has tasks
 			hasTasks := tasksByDay[day] > 0
 
 			// Check if this is the selected day
-			isSelected := day == a.calendarDay && a.focusedPane == PaneMain
+			isSelected := day == r.CalendarDay && r.FocusedPane == state.PaneMain
 
 			// Check if this is a weekend (Friday=5, Saturday=6 in Jordan)
 			isWeekend := weekday == 5 || weekday == 6
@@ -117,14 +117,14 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 
 	// Show tasks for selected day
 	b.WriteString("\n")
-	selectedDate := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), a.calendarDay, 0, 0, 0, 0, time.Local)
+	selectedDate := time.Date(r.CalendarDate.Year(), r.CalendarDate.Month(), r.CalendarDay, 0, 0, 0, 0, time.Local)
 	b.WriteString(styles.Subtitle.Render(selectedDate.Format("Monday, January 2")))
 	b.WriteString("\n\n")
 
 	// Find tasks for selected day
 	var dayTasks []api.Task
 	selectedDateStr := selectedDate.Format("2006-01-02")
-	for _, t := range a.allTasks {
+	for _, t := range r.AllTasks {
 		if t.Due != nil && t.Due.Date == selectedDateStr {
 			dayTasks = append(dayTasks, t)
 		}
@@ -143,8 +143,8 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 	} else {
 		// Calculate scroll window
 		startIdx := 0
-		if a.taskCursor >= taskListHeight {
-			startIdx = a.taskCursor - taskListHeight + 1
+		if r.TaskCursor >= taskListHeight {
+			startIdx = r.TaskCursor - taskListHeight + 1
 		}
 		endIdx := startIdx + taskListHeight
 		if endIdx > len(dayTasks) {
@@ -161,7 +161,7 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 			content := priorityStyle.Render(t.Content)
 
 			cursor := "  "
-			if i == a.taskCursor && a.focusedPane == PaneMain {
+			if i == r.TaskCursor && r.FocusedPane == state.PaneMain {
 				cursor = "> "
 			}
 			b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, content))
@@ -172,11 +172,11 @@ func (a *App) renderCalendarCompact(maxHeight int) string {
 }
 
 // renderCalendarExpanded renders the expanded calendar view with task names in cells.
-func (a *App) renderCalendarExpanded(maxHeight int) string {
+func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 	var b strings.Builder
 
 	// Header with month/year and navigation hints
-	monthYear := a.calendarDate.Format("January 2006")
+	monthYear := r.CalendarDate.Format("January 2006")
 	b.WriteString(styles.Title.Render(monthYear))
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
@@ -184,7 +184,7 @@ func (a *App) renderCalendarExpanded(maxHeight int) string {
 
 	// Calculate cell dimensions based on terminal width
 	// 7 columns + borders (8 vertical lines)
-	availableWidth := a.width - 8 // Subtract for borders
+	availableWidth := r.Width - 8 // Subtract for borders
 	if availableWidth < 35 {
 		availableWidth = 35 // Minimum width
 	}
@@ -214,7 +214,7 @@ func (a *App) renderCalendarExpanded(maxHeight int) string {
 	b.WriteString(topBorder)
 
 	// Calculate first day and number of days in month
-	firstOfMonth := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
+	firstOfMonth := time.Date(r.CalendarDate.Year(), r.CalendarDate.Month(), 1, 0, 0, 0, 0, time.Local)
 	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
 	startWeekday := int(firstOfMonth.Weekday())
 	daysInMonth := lastOfMonth.Day()
@@ -222,12 +222,12 @@ func (a *App) renderCalendarExpanded(maxHeight int) string {
 
 	// Build map of tasks by day
 	tasksByDay := make(map[int][]api.Task) // day -> tasks
-	for _, t := range a.allTasks {
+	for _, t := range r.AllTasks {
 		if t.Due == nil {
 			continue
 		}
 		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
-			if parsed.Year() == a.calendarDate.Year() && parsed.Month() == a.calendarDate.Month() {
+			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
 				tasksByDay[parsed.Day()] = append(tasksByDay[parsed.Day()], t)
 			}
 		}
@@ -277,10 +277,10 @@ func (a *App) renderCalendarExpanded(maxHeight int) string {
 			dayStr := fmt.Sprintf(" %2d", day)
 			style := styles.CalendarDay
 
-			isToday := today.Year() == a.calendarDate.Year() &&
-				today.Month() == a.calendarDate.Month() &&
+			isToday := today.Year() == r.CalendarDate.Year() &&
+				today.Month() == r.CalendarDate.Month() &&
 				today.Day() == day
-			isSelected := day == a.calendarDay && a.focusedPane == PaneMain
+			isSelected := day == r.CalendarDay && r.FocusedPane == state.PaneMain
 			isWeekend := weekday == 5 || weekday == 6
 			hasTasks := len(tasksByDay[day]) > 0
 
@@ -389,11 +389,11 @@ func (a *App) renderCalendarExpanded(maxHeight int) string {
 }
 
 // renderCalendarDay renders the day detail view showing all tasks for the selected calendar day.
-func (a *App) renderCalendarDay() string {
+func (r *Renderer) renderCalendarDay() string {
 	var b strings.Builder
 
 	// Header with date - styled nicely
-	selectedDate := time.Date(a.calendarDate.Year(), a.calendarDate.Month(), a.calendarDay, 0, 0, 0, 0, time.Local)
+	selectedDate := time.Date(r.CalendarDate.Year(), r.CalendarDate.Month(), r.CalendarDay, 0, 0, 0, 0, time.Local)
 
 	// Title bar
 	titleStyle := lipgloss.NewStyle().
@@ -401,27 +401,27 @@ func (a *App) renderCalendarDay() string {
 		Foreground(styles.Highlight).
 		Background(lipgloss.Color("#1a1a2e")).
 		Padding(0, 1).
-		Width(a.width - 4)
+		Width(r.Width - 4)
 
 	b.WriteString(titleStyle.Render("📅 " + selectedDate.Format("Monday, January 2, 2006")))
 	b.WriteString("\n\n")
 
-	if a.loading {
-		b.WriteString(a.spinner.View())
+	if r.Loading {
+		b.WriteString(r.Spinner.View())
 		b.WriteString(" Loading tasks...")
 		return b.String()
 	}
 
 	// Content area with border
-	contentWidth := a.width - 4
-	contentHeight := a.height - 6 // title + padding + status bar
+	contentWidth := r.Width - 4
+	contentHeight := r.Height - 6 // title + padding + status bar
 	if contentHeight < 5 {
 		contentHeight = 5
 	}
 
 	var content strings.Builder
 
-	if len(a.tasks) == 0 {
+	if len(r.Tasks) == 0 {
 		emptyStyle := lipgloss.NewStyle().
 			Foreground(styles.Subtle).
 			Italic(true).
@@ -436,7 +436,7 @@ func (a *App) renderCalendarDay() string {
 		// Task count header
 		countStyle := lipgloss.NewStyle().
 			Foreground(styles.Subtle)
-		content.WriteString(countStyle.Render(fmt.Sprintf("%d task(s)", len(a.tasks))))
+		content.WriteString(countStyle.Render(fmt.Sprintf("%d task(s)", len(r.Tasks))))
 		content.WriteString("\n\n")
 
 		// Build task lines
@@ -447,15 +447,15 @@ func (a *App) renderCalendarDay() string {
 
 		var lines []lineInfo
 		var orderedIndices []int
-		for i := range a.tasks {
+		for i := range r.Tasks {
 			orderedIndices = append(orderedIndices, i)
 			lines = append(lines, lineInfo{
-				content:   a.renderTaskByDisplayIndex(i, orderedIndices, contentWidth),
+				content:   r.renderTaskByDisplayIndex(i, orderedIndices, contentWidth),
 				taskIndex: i,
 			})
 		}
 
-		content.WriteString(a.renderScrollableLines(lines, orderedIndices, taskHeight))
+		content.WriteString(r.renderScrollableLines(lines, orderedIndices, taskHeight))
 	}
 
 	// Wrap in a nice container with good padding
@@ -473,19 +473,19 @@ func (a *App) renderCalendarDay() string {
 }
 
 // renderStatusBar renders the bottom status bar.
-func (a *App) renderStatusBar() string {
+func (r *Renderer) renderStatusBar() string {
 	// Left side: status message or error
 	left := ""
-	if a.err != nil {
-		left = styles.StatusBarError.Render(fmt.Sprintf("Error: %v", a.err))
-	} else if a.statusMsg != "" {
-		left = styles.StatusBarSuccess.Render(a.statusMsg)
+	if r.Err != nil {
+		left = styles.StatusBarError.Render(fmt.Sprintf("Error: %v", r.Err))
+	} else if r.StatusMsg != "" {
+		left = styles.StatusBarSuccess.Render(r.StatusMsg)
 	}
 
 	// Right side: context-specific key hints (or just toggle hint if hidden)
 	var right string
-	if a.showHints {
-		hints := a.getContextualHints()
+	if r.ShowHints {
+		hints := r.getContextualHints()
 		hints = append(hints, styles.StatusBarKey.Render("F1")+styles.StatusBarText.Render(":hide"))
 		right = strings.Join(hints, " ")
 	} else {
@@ -496,21 +496,21 @@ func (a *App) renderStatusBar() string {
 	leftWidth := lipgloss.Width(left)
 	rightWidth := lipgloss.Width(right)
 	padding := styles.StatusBar.GetHorizontalFrameSize()
-	spacing := a.width - leftWidth - rightWidth - padding
+	spacing := r.Width - leftWidth - rightWidth - padding
 	if spacing < 0 {
 		spacing = 0
 	}
 
-	return styles.StatusBar.Width(a.width - padding).Render(left + strings.Repeat(" ", spacing) + right)
+	return styles.StatusBar.Width(r.Width - padding).Render(left + strings.Repeat(" ", spacing) + right)
 }
 
 // getContextualHints returns context-specific key hints for the status bar.
-func (a *App) getContextualHints() []string {
+func (r *Renderer) getContextualHints() []string {
 	key := func(k string) string { return styles.StatusBarKey.Render(k) }
 	desc := func(d string) string { return styles.StatusBarText.Render(d) }
 
-	switch a.currentTab {
-	case TabToday, TabUpcoming:
+	switch r.CurrentTab {
+	case state.TabToday, state.TabUpcoming:
 		return []string{
 			key("j/k") + desc(":nav"),
 			key("x") + desc(":done"),
@@ -519,8 +519,8 @@ func (a *App) getContextualHints() []string {
 			key("r") + desc(":refresh"),
 			key("?") + desc(":help"),
 		}
-	case TabLabels:
-		if a.currentLabel != nil {
+	case state.TabLabels:
+		if r.CurrentLabel != nil {
 			return []string{
 				key("j/k") + desc(":nav"),
 				key("x") + desc(":done"),
@@ -535,7 +535,7 @@ func (a *App) getContextualHints() []string {
 			key("?") + desc(":help"),
 			key("q") + desc(":quit"),
 		}
-	case TabCalendar:
+	case state.TabCalendar:
 		return []string{
 			key("h/l") + desc(":day"),
 			key("←/→") + desc(":month"),
@@ -543,8 +543,8 @@ func (a *App) getContextualHints() []string {
 			key("Enter") + desc(":select"),
 			key("?") + desc(":help"),
 		}
-	case TabProjects:
-		if a.focusedPane == PaneSidebar {
+	case state.TabProjects:
+		if r.FocusedPane == state.PaneSidebar {
 			return []string{
 				key("j/k") + desc(":nav"),
 				key("Enter") + desc(":select"),
@@ -571,9 +571,9 @@ func (a *App) getContextualHints() []string {
 // updateSectionOrderCmd sends an API request to update the section order.
 
 // reorderSectionsCmd updates the section order using the Sync API.
-func (a *App) reorderSectionsCmd(sections []api.Section) tea.Cmd {
+func (r *Renderer) reorderSectionsCmd(sections []api.Section) tea.Cmd {
 	return func() tea.Msg {
-		if err := a.client.ReorderSections(sections); err != nil {
+		if err := r.Client.ReorderSections(sections); err != nil {
 			return errMsg{err}
 		}
 		return reorderCompleteMsg{}

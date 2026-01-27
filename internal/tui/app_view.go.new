@@ -2,9 +2,14 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
@@ -669,6 +674,7 @@ func (a *App) renderMainView() string {
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, mainContent, statusBar)
 }
+
 
 // tabInfo holds tab metadata for rendering and click handling.
 type tabInfo struct {
