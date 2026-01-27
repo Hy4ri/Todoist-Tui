@@ -1,8 +1,9 @@
 package logic
 
 import (
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"time"
+
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/config"
@@ -207,23 +208,6 @@ func (h *Handler) moveCursorToEnd() {
 		} else if len(h.Tasks) > 0 {
 			h.TaskCursor = len(h.Tasks) - 1
 		}
-	}
-}
-
-// syncViewportToCursor ensures the viewport is scrolled to show the cursor line.
-func (h *Handler) syncViewportToCursor(cursorLine int) {
-	if !h.State.ViewportReady {
-		return
-	}
-	visibleStart := h.TaskViewport.YOffset
-	visibleEnd := visibleStart + h.TaskViewport.Height
-
-	if cursorLine < visibleStart {
-		// Cursor above viewport - scroll up
-		h.TaskViewport.SetYOffset(cursorLine)
-	} else if cursorLine >= visibleEnd {
-		// Cursor below viewport - scroll down to show cursor at bottom
-		h.TaskViewport.SetYOffset(cursorLine - h.TaskViewport.Height + 1)
 	}
 }
 

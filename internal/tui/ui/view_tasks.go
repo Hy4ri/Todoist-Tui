@@ -435,7 +435,7 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 		r.TaskViewport.SetContent(content.String())
 
 		// Sync viewport to show cursor
-		r.syncViewportToCursor(cursorLine)
+		r.syncViewportToCursor(cursorLine, maxHeight)
 
 		// Store scroll offset for click handling
 		r.ScrollOffset = r.TaskViewport.YOffset
@@ -687,26 +687,20 @@ func (r *Renderer) extractLabelsFromTasks() []api.Label {
 	return labels
 }
 
-// syncViewportToCursor ensures the cursor is visible in the viewport.
-func (r *Renderer) syncViewportToCursor(targetLine int) {
-	height := r.Height - 4 // Approximate content height
-	if height < 1 {
-		height = 1
+// syncViewportToCursor ensures the cursor line is visible in the viewport.
+func (r *Renderer) syncViewportToCursor(cursorLine int, height int) {
+	if !r.ViewportReady {
+		return
 	}
 
-	// If targetLine is provided use it, otherwise use TaskCursor
-	// But logic below uses TaskCursor.
-	// The previous error said "have (int)".
-	// Let's accept the int and update ScrollOffset based on it if appropriate,
-	// or just ignore it if TaskCursor is the source of truth.
-	// Given the previous call `r.syncViewportToCursor(cursorLine)`, it seems we want to sync to `cursorLine`.
+	visibleStart := r.TaskViewport.YOffset
+	visibleEnd := visibleStart + height
 
-	// Check if we should use targetLine instead of r.TaskCursor
-	// r.TaskCursor is the logic cursor, match it.
-
-	if r.TaskCursor < r.ScrollOffset {
-		r.ScrollOffset = r.TaskCursor
-	} else if r.TaskCursor >= r.ScrollOffset+height {
-		r.ScrollOffset = r.TaskCursor - height + 1
+	if cursorLine < visibleStart {
+		// Cursor above viewport - scroll up
+		r.TaskViewport.SetYOffset(cursorLine)
+	} else if cursorLine >= visibleEnd {
+		// Cursor below viewport - scroll down to show cursor at bottom
+		r.TaskViewport.SetYOffset(cursorLine - height + 1)
 	}
 }

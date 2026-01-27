@@ -1215,7 +1215,7 @@ func (h *Handler) buildSidebarItems() {
 	// Map projects for easy count lookup
 	counts := make(map[string]int)
 	for _, t := range h.AllTasks {
-		if !t.Checked && t.ProjectID != "" {
+		if !t.Checked && !t.IsDeleted && t.ProjectID != "" {
 			counts[t.ProjectID]++
 		}
 	}

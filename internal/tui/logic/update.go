@@ -139,6 +139,10 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 
 	if len(msg.projects) > 0 {
 		h.Projects = msg.projects
+	}
+
+	// Always rebuild sidebar items and update counts if we have projects
+	if len(h.Projects) > 0 {
 		h.buildSidebarItems()
 
 		// Calculate task counts
@@ -150,7 +154,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 		}
 
 		// Sync sidebar component with counts
-		h.SidebarComp.SetProjects(msg.projects, counts)
+		h.SidebarComp.SetProjects(h.Projects, counts)
 	}
 	if msg.tasks != nil {
 		h.Tasks = msg.tasks
