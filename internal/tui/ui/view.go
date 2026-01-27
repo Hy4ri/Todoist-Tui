@@ -50,529 +50,62 @@ func (r *Renderer) View() string {
 
 	// Overlay project creation dialog if active
 	if r.IsCreatingProject {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("📁 New Project") + "\n\n" +
-			r.ProjectInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: create • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderProjectDialog())
 	}
-
-	// Overlay active overlays...
-	// (Skipping project/label overlays replication for brevity... waiting for replace_file_content to handle context correctly)
-	// I should probably target specific blocks instead of replcaing huge chunks unless necessary.
-	// But I will append section overlays at the END of overlays list.
 
 	// Overlay project edit dialog if active
 	if r.IsEditingProject {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("✏️ Edit Project") + "\n\n" +
-			r.ProjectInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: save • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderProjectEditDialog())
 	}
 
 	// Overlay project delete confirmation dialog if active
 	if r.ConfirmDeleteProject && r.EditingProject != nil {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.ErrorColor).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.StatusBarError.Render("⚠️ Delete Project?") + "\n\n" +
-			fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", r.EditingProject.Name) +
-			styles.HelpDesc.Render("This will delete all tasks in this project.") + "\n\n" +
-			styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderProjectDeleteDialog())
 	}
 
 	// Overlay label creation dialog if active
 	if r.IsCreatingLabel {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("🏷️ New Label") + "\n\n" +
-			r.LabelInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: create • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderLabelDialog())
 	}
 
 	// Overlay label edit dialog if active
 	if r.IsEditingLabel {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("✏️ Edit Label") + "\n\n" +
-			r.LabelInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: save • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderLabelEditDialog())
 	}
 
 	// Overlay label delete confirmation dialog if active
 	if r.ConfirmDeleteLabel && r.EditingLabel != nil {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.ErrorColor).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.StatusBarError.Render("⚠️ Delete Label?") + "\n\n" +
-			fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", r.EditingLabel.Name) +
-			styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderLabelDeleteDialog())
 	}
 
 	// Overlay subtask creation dialog if active
 	if r.IsCreatingSubtask {
-		dialogWidth := 60
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("➕ Add Subtask") + "\n\n" +
-			r.SubtaskInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: create • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderSubtaskDialog())
 	}
 
 	// Overlay section creation dialog if active
 	if r.IsCreatingSection {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("📂 New Section") + "\n\n" +
-			r.SectionInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: create • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderSectionDialog())
 	}
 
 	// Overlay section edit dialog if active
 	if r.IsEditingSection {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("✏️ Edit Section") + "\n\n" +
-			r.SectionInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: save • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderSectionEditDialog())
 	}
 
 	// Overlay section delete confirmation dialog if active
 	if r.ConfirmDeleteSection && r.EditingSection != nil {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.ErrorColor).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.StatusBarError.Render("⚠️ Delete Section?") + "\n\n" +
-			fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", r.EditingSection.Name) +
-			styles.HelpDesc.Render("This will likely delete/move tasks inside.") + "\n\n" +
-			styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderSectionDeleteDialog())
 	}
 
 	// Overlay move task dialog if active
 	if r.IsMovingTask {
-		dialogWidth := 50
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		var b strings.Builder
-		b.WriteString(styles.Title.Render("➡️ Move Task to Section") + "\n\n")
-
-		if len(r.Sections) == 0 {
-			b.WriteString(styles.HelpDesc.Render("No sections in this project."))
-		} else {
-			for i, section := range r.Sections {
-				cursor := "  "
-				style := lipgloss.NewStyle()
-				if i == r.MoveSectionCursor {
-					cursor = "> "
-					style = lipgloss.NewStyle().Foreground(styles.Highlight)
-				}
-				b.WriteString(cursor + style.Render(section.Name) + "\n")
-			}
-		}
-
-		b.WriteString("\n" + styles.HelpDesc.Render("j/k: select • Enter: move • Esc: cancel"))
-
-		dialog := dialogStyle.Render(b.String())
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderMoveTaskDialog())
 	}
 
 	// Overlay add comment dialog if active
 	if r.IsAddingComment {
-		dialogWidth := 60
-		dialogStyle := lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(styles.Highlight).
-			Padding(1, 2).
-			Width(dialogWidth)
-
-		dialogContent := styles.Title.Render("💬 Add Comment") + "\n\n" +
-			r.CommentInput.View() + "\n\n" +
-			styles.HelpDesc.Render("Enter: submit • Esc: cancel")
-
-		dialog := dialogStyle.Render(dialogContent)
-
-		// Center the dialog
-		dialogLines := strings.Split(dialog, "\n")
-		centeredDialog := ""
-		leftPad := (r.Width - dialogWidth - 4) / 2
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		for _, line := range dialogLines {
-			centeredDialog += strings.Repeat(" ", leftPad) + line + "\n"
-		}
-
-		// Overlay on content
-		contentLines := strings.Split(content, "\n")
-		dialogLineCount := len(dialogLines)
-		startLine := (len(contentLines) - dialogLineCount) / 2
-		if startLine < 0 {
-			startLine = 0
-		}
-
-		// Replace content lines with dialog
-		dialogSplit := strings.Split(centeredDialog, "\n")
-		for i := 0; i < len(dialogSplit) && startLine+i < len(contentLines); i++ {
-			contentLines[startLine+i] = dialogSplit[i]
-		}
-		content = strings.Join(contentLines, "\n")
+		content = r.overlayContent(content, r.renderCommentDialog())
 	}
 
 	return content
