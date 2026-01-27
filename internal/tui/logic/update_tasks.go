@@ -1,11 +1,12 @@
 package logic
 
 import (
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
 	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -405,7 +406,7 @@ func (h *Handler) handleDelete() tea.Cmd {
 func (h *Handler) handleAdd() tea.Cmd {
 	h.PreviousView = h.CurrentView
 	h.CurrentView = state.ViewTaskForm
-	h.TaskForm = NewTaskForm(h.Projects, h.Labels)
+	h.TaskForm = state.NewTaskForm(h.Projects, h.Labels)
 	h.TaskForm.SetWidth(h.Width)
 
 	// If in project view, default to that project
@@ -570,7 +571,7 @@ func (h *Handler) handleEdit() tea.Cmd {
 	task := &h.Tasks[taskIndex]
 	h.PreviousView = h.CurrentView
 	h.CurrentView = state.ViewTaskForm
-	h.TaskForm = NewEditTaskForm(task, h.Projects, h.Labels)
+	h.TaskForm = state.NewEditTaskForm(task, h.Projects, h.Labels)
 	h.TaskForm.SetWidth(h.Width)
 
 	return nil

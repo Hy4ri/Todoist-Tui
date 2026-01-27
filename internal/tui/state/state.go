@@ -106,8 +106,13 @@ type State struct {
 	FocusedPane  Pane
 
 	// Data
-	Projects       []api.Project
-	Tasks          []api.Task
+	// Data
+	Projects []api.Project
+	Tasks    []api.Task
+
+	// UI Elements
+	SidebarItems []components.SidebarItem
+
 	AllTasks       []api.Task
 	Sections       []api.Section
 	AllSections    []api.Section
@@ -118,7 +123,7 @@ type State struct {
 	CurrentLabel   *api.Label
 
 	// Sidebar items
-	SidebarItems  []components.SidebarItem
+
 	SidebarCursor int
 
 	// List state

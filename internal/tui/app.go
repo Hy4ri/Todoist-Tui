@@ -22,9 +22,9 @@ type App struct {
 // NewApp creates a new App instance.
 func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 	s := &state.State{
-		Client:          client,
-		Config:          cfg,
-		SidebarItems:    []state.SidebarItem{}, // Fix: SidebarItem is in components? No, state check keys
+		Client: client,
+		Config: cfg,
+
 		SearchResults:   []api.Task{},
 		SelectedTaskIDs: make(map[string]bool),
 	}
@@ -70,7 +70,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Delegate to handler
 	// The handler returns (tea.Model, tea.Cmd) but the model is the handler itself.
 	// We discard the returned model and return 'a'.
-	_, cmd := a.handler.Update(msg)
+	cmd := a.handler.Update(msg)
 	return a, cmd
 }
 

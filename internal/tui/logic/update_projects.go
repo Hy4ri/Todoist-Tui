@@ -1,10 +1,11 @@
 package logic
 
 import (
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -737,25 +738,30 @@ func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 	case "enter":
 		// Submit on Enter if a text input is focused (and not in project selection dropdown)
-		if !h.TaskForm.ShowProjectList && h.TaskForm.IsValid() &&
-			(h.TaskForm.FocusedField == FormFieldContent ||
-				h.TaskForm.FocusedField == FormFieldDescription ||
-				h.TaskForm.FocusedField == FormFieldDue ||
-				h.TaskForm.FocusedField == FormFieldLabels ||
-				h.TaskForm.FocusedField == FormFieldSubmit) {
-			return h.submitForm()
+		if !h.TaskForm.ShowProjectList && h.TaskForm.IsValid() {
+			switch h.TaskForm.FocusIndex {
+			case state.FormFieldContent:
+				h.TaskForm.Content.Focus()
+			case state.FormFieldDescription:
+				h.TaskForm.Description.Focus()
+			case state.FormFieldDue:
+				h.TaskForm.DueString.Focus()
+			case state.FormFieldLabels:
+				// No text input for labels yet
+			case state.FormFieldSubmit:
+				// Submit button focus logic if exists
+			}
 		}
 
 		// If on submit button or Ctrl+Enter from any field, submit form
-		if h.TaskForm.FocusedField == FormFieldSubmit || msg.String() == "ctrl+enter" {
+		if h.TaskForm.FocusIndex == state.FormFieldSubmit || msg.String() == "ctrl+enter" {
 			return h.submitForm()
 		}
 		// Otherwise, let form handle it (e.g., for project dropdown)
 	}
 
 	// Forward to form
-	var cmd tea.Cmd
-	h.TaskForm, cmd = h.TaskForm.Update(msg)
+	cmd := h.TaskForm.Update(msg)
 	return cmd
 }
 

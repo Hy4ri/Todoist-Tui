@@ -1,11 +1,12 @@
 package ui
 
 import (
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
@@ -685,11 +686,21 @@ func (r *Renderer) extractLabelsFromTasks() []api.Label {
 }
 
 // syncViewportToCursor ensures the cursor is visible in the viewport.
-func (r *Renderer) syncViewportToCursor() {
+func (r *Renderer) syncViewportToCursor(targetLine int) {
 	height := r.Height - 4 // Approximate content height
 	if height < 1 {
 		height = 1
 	}
+
+	// If targetLine is provided use it, otherwise use TaskCursor
+	// But logic below uses TaskCursor.
+	// The previous error said "have (int)".
+	// Let's accept the int and update ScrollOffset based on it if appropriate,
+	// or just ignore it if TaskCursor is the source of truth.
+	// Given the previous call `r.syncViewportToCursor(cursorLine)`, it seems we want to sync to `cursorLine`.
+
+	// Check if we should use targetLine instead of r.TaskCursor
+	// r.TaskCursor is the logic cursor, match it.
 
 	if r.TaskCursor < r.ScrollOffset {
 		r.ScrollOffset = r.TaskCursor

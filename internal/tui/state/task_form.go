@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 )
 
@@ -31,13 +32,34 @@ type TaskForm struct {
 	// Helpers for logic/ui
 	ShowProjectList bool
 	FocusIndex      int
-	ProjectName     string // Field, not method
-	SectionName     string // Field, not method
-	Context         string // For "Today", "Upcoming", etc.
+	ProjectName     string
+	SectionName     string
+	Context         string
+
+	// Mode tracking
+	Mode   string // "create" or "edit"
+	TaskID string // ID of task being edited
 
 	// Data for completion/selection
 	AvailableProjects []api.Project
 	AvailableLabels   []api.Label
+}
+
+// Update updates the form models.
+func (f *TaskForm) Update(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+	var cmds []tea.Cmd
+
+	f.Content, cmd = f.Content.Update(msg)
+	cmds = append(cmds, cmd)
+
+	f.Description, cmd = f.Description.Update(msg)
+	cmds = append(cmds, cmd)
+
+	f.DueString, cmd = f.DueString.Update(msg)
+	cmds = append(cmds, cmd)
+
+	return tea.Batch(cmds...)
 }
 
 // NewTaskForm creates a new task form.
@@ -187,12 +209,15 @@ func (f *TaskForm) SetDue(due string) {
 	f.DueString.SetValue(due)
 }
 
-// SetContext sets the project and section context.
-func (f *TaskForm) SetContext(projectID, sectionID string) {
+// SetProjectSection sets the project and section IDs.
+func (f *TaskForm) SetProjectSection(projectID, sectionID string) {
 	f.ProjectID = projectID
 	f.SectionID = sectionID
-	// Also need to update names if possible, but logic usually handles that content loading.
-	// For now just set IDs.
+}
+
+// SetContext sets the context label (e.g. "Today").
+func (f *TaskForm) SetContext(context string) {
+	f.Context = context
 }
 
 // SetWidth sets width of inputs
