@@ -127,6 +127,9 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 		for _, i := range noSectionTasks {
 			orderedIndices = append(orderedIndices, i)
 			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			if r.Tasks[i].Description != "" {
+				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+			}
 		}
 		// Add spacer if there are sections following
 		if len(r.Sections) > 0 {
@@ -158,6 +161,9 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 				for _, i := range taskIndices {
 					orderedIndices = append(orderedIndices, i)
 					lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+					if r.Tasks[i].Description != "" {
+						lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+					}
 				}
 			}
 			// Add blank line after section for spacing
@@ -196,6 +202,9 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("OVERDUE"), taskIndex: -1})
 		for _, i := range overdue {
 			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			if r.Tasks[i].Description != "" {
+				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+			}
 		}
 	}
 
@@ -205,6 +214,9 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 		}
 		for _, i := range today {
 			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			if r.Tasks[i].Description != "" {
+				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+			}
 		}
 	}
 
@@ -215,6 +227,9 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("NO DUE DATE"), taskIndex: -1})
 		for _, i := range other {
 			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			if r.Tasks[i].Description != "" {
+				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+			}
 		}
 	}
 
@@ -229,6 +244,9 @@ func (r *Renderer) renderFlatTasks(width, maxHeight int) string {
 	for i := range r.Tasks {
 		orderedIndices = append(orderedIndices, i)
 		lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+		if r.Tasks[i].Description != "" {
+			lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+		}
 	}
 
 	return r.renderScrollableLines(lines, orderedIndices, maxHeight)
@@ -389,6 +407,25 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int,
 	return style.MaxWidth(width - 2).Render(line)
 }
 
+// renderTaskDescription renders a task description for the list view.
+func (r *Renderer) renderTaskDescription(desc string, width int) string {
+	if desc == "" {
+		return ""
+	}
+
+	// Indent matches styles.TaskListDescription (10 spaces)
+	maxDescWidth := width - 12
+	if maxDescWidth < 5 {
+		maxDescWidth = 5
+	}
+
+	// Descriptions can have multiple lines, take just the first one for the list view
+	firstLine := strings.Split(desc, "\n")[0]
+	truncated := truncateString(firstLine, maxDescWidth)
+
+	return styles.TaskListDescription.MaxWidth(width - 2).Render(truncated)
+}
+
 // renderScrollableLines renders lines with scrolling support using viewport.
 func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxHeight int) string {
 	// Store ordered indices for use in handleSelect
@@ -529,6 +566,12 @@ func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 				content:   r.renderTaskByDisplayIndex(i, orderedIndices, width),
 				taskIndex: i,
 			})
+			if r.Tasks[i].Description != "" {
+				lines = append(lines, lineInfo{
+					content:   r.renderTaskDescription(r.Tasks[i].Description, width),
+					taskIndex: i,
+				})
+			}
 		}
 	}
 
@@ -575,6 +618,12 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 					content:   r.renderTaskByDisplayIndex(i, orderedIndices, width),
 					taskIndex: i,
 				})
+				if r.Tasks[i].Description != "" {
+					lines = append(lines, lineInfo{
+						content:   r.renderTaskDescription(r.Tasks[i].Description, width),
+						taskIndex: i,
+					})
+				}
 			}
 			b.WriteString(r.renderScrollableLines(lines, orderedIndices, taskHeight))
 		}

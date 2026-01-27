@@ -92,6 +92,13 @@ var (
 	TaskRecurring = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#00AAAA", Dark: "#00CCCC"}).
 			PaddingLeft(1)
+
+	// TaskListDescription is for descriptions in task lists
+	TaskListDescription = lipgloss.NewStyle().
+				Foreground(Subtle).
+				Faint(true).
+				Italic(true).
+				PaddingLeft(10) // Matches cursor + selection + indent + checkbox margin
 )
 
 // Priority styles
