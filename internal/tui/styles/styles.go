@@ -87,6 +87,11 @@ var (
 	TaskLabel = lipgloss.NewStyle().
 			Foreground(Highlight).
 			PaddingLeft(1)
+
+	// TaskRecurring is for the recurring icon
+	TaskRecurring = lipgloss.NewStyle().
+			Foreground(lipgloss.AdaptiveColor{Light: "#00AAAA", Dark: "#00CCCC"}).
+			PaddingLeft(1)
 )
 
 // Priority styles

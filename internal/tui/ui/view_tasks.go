@@ -368,8 +368,13 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int,
 		styledLabels = styles.TaskLabel.Render(labelStr)
 	}
 
+	styledRecurring := ""
+	if t.Due != nil && t.Due.IsRecurring {
+		styledRecurring = styles.TaskRecurring.Render("↻")
+	}
+
 	// Build line with selection mark
-	line := fmt.Sprintf("%s%s%s%s %s %s %s", cursor, selectionMark, indent, checkbox, styledContent, styledDue, styledLabels)
+	line := fmt.Sprintf("%s%s%s%s %s%s %s %s", cursor, selectionMark, indent, checkbox, styledContent, styledRecurring, styledDue, styledLabels)
 
 	// Apply base style
 	style := styles.TaskItem

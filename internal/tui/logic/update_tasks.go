@@ -248,47 +248,95 @@ func (h *Handler) handleCopy() tea.Cmd {
 			}
 		}
 
-		if len(selectedContents) == 0 {
-			return nil
+		if len(selectedContents) > 0 {
+			// Clear selections after copy
+			h.SelectedTaskIDs = make(map[string]bool)
+
+			return func() tea.Msg {
+				// Join all selected task contents with newlines
+				content := strings.Join(selectedContents, "\n")
+				err := clipboard.WriteAll(content)
+				if err != nil {
+					return statusMsg{msg: "Failed to copy: " + err.Error()}
+				}
+				return statusMsg{msg: fmt.Sprintf("Copied %d tasks", len(selectedContents))}
+			}
+		}
+	}
+
+	// Determine what's under the cursor
+	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+		taskIndex := h.TaskOrderedIndices[h.TaskCursor]
+
+		// 1. Check if it's a section header
+		if taskIndex <= -100 {
+			// Find viewport line to get section ID
+			sectionID := ""
+			for i, vIdx := range h.State.ViewportLines {
+				if vIdx == taskIndex {
+					if i < len(h.State.ViewportSections) {
+						sectionID = h.State.ViewportSections[i]
+					}
+					break
+				}
+			}
+
+			if sectionID != "" {
+				// Get section name
+				sectionName := "Section"
+				for _, s := range h.Sections {
+					if s.ID == sectionID {
+						sectionName = s.Name
+						break
+					}
+				}
+
+				// Get tasks in this section
+				var tasksInSection []string
+				for _, t := range h.Tasks {
+					if t.SectionID != nil && *t.SectionID == sectionID {
+						tasksInSection = append(tasksInSection, "- "+t.Content)
+					}
+				}
+
+				return func() tea.Msg {
+					content := sectionName
+					if len(tasksInSection) > 0 {
+						content += "\n" + strings.Join(tasksInSection, "\n")
+					}
+					err := clipboard.WriteAll(content)
+					if err != nil {
+						return statusMsg{msg: "Failed to copy section: " + err.Error()}
+					}
+					return statusMsg{msg: "Copied section: " + sectionName}
+				}
+			}
 		}
 
-		// Clear selections after copy
-		h.SelectedTaskIDs = make(map[string]bool)
-
+		// 2. Check if it's a normal task
+		if taskIndex >= 0 && taskIndex < len(h.Tasks) {
+			task := &h.Tasks[taskIndex]
+			return func() tea.Msg {
+				err := clipboard.WriteAll(task.Content)
+				if err != nil {
+					return statusMsg{msg: "Failed to copy: " + err.Error()}
+				}
+				return statusMsg{msg: "Copied: " + task.Content}
+			}
+		}
+	} else if h.TaskCursor < len(h.Tasks) {
+		// Fallback for views that don't use ordered indices
+		task := &h.Tasks[h.TaskCursor]
 		return func() tea.Msg {
-			// Join all selected task contents with newlines
-			content := strings.Join(selectedContents, "\n")
-			err := clipboard.WriteAll(content)
+			err := clipboard.WriteAll(task.Content)
 			if err != nil {
 				return statusMsg{msg: "Failed to copy: " + err.Error()}
 			}
-			return statusMsg{msg: fmt.Sprintf("Copied %d tasks", len(selectedContents))}
+			return statusMsg{msg: "Copied: " + task.Content}
 		}
 	}
 
-	// Otherwise, copy just the task at cursor
-	var task *api.Task
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-		if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-			task = &h.Tasks[taskIndex]
-		}
-	} else if h.TaskCursor < len(h.Tasks) {
-		task = &h.Tasks[h.TaskCursor]
-	}
-
-	if task == nil {
-		return nil
-	}
-
-	return func() tea.Msg {
-		// Copy to clipboard
-		err := clipboard.WriteAll(task.Content)
-		if err != nil {
-			return statusMsg{msg: "Failed to copy: " + err.Error()}
-		}
-		return statusMsg{msg: "Copied: " + task.Content}
-	}
+	return nil
 }
 
 // handleDelete deletes the selected task or project.
