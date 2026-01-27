@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
@@ -198,8 +199,19 @@ func (r *Renderer) renderTabBar() string {
 	useShortLabels := r.Width < 80
 	useMinimalLabels := r.Width < 50
 
+	// Calculate dynamic icons
+	today := time.Now()
+	upcoming := today.AddDate(0, 0, 1) // Tomorrow
+
 	var tabStrs []string
 	for _, t := range tabs {
+		// Override icons for dynamic dates
+		if t.Tab == state.TabToday {
+			t.Icon = fmt.Sprintf("📅 %d", today.Day())
+		} else if t.Tab == state.TabUpcoming {
+			t.Icon = fmt.Sprintf("📆 %d", upcoming.Day())
+		}
+
 		var label string
 		if useMinimalLabels {
 			label = t.Icon
