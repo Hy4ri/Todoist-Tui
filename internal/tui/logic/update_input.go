@@ -15,7 +15,12 @@ import (
 )
 
 func (h *Handler) handleMouseMsg(msg tea.MouseMsg) tea.Cmd {
-	// Only handle clicks
+	// Handle wheel scroll
+	if msg.Type == tea.MouseWheelUp || msg.Type == tea.MouseWheelDown {
+		return h.handleMouseScroll(msg)
+	}
+
+	// Only handle left clicks for other actions
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return nil
 	}
@@ -812,4 +817,58 @@ func (h *Handler) handleCalendarExpandedClick(x, y int) tea.Cmd {
 	}
 
 	return nil
+}
+
+// handleMouseScroll handles mouse wheel scrolling.
+func (h *Handler) handleMouseScroll(msg tea.MouseMsg) tea.Cmd {
+	// sidebar click handling logic uses x < 25 for Projects tab
+	isOverSidebar := h.CurrentTab == state.TabProjects && msg.X < 25
+
+	if isOverSidebar {
+		h.FocusedPane = state.PaneSidebar
+		if msg.Type == tea.MouseWheelUp {
+			h.moveSidebarCursor(-1)
+		} else {
+			h.moveSidebarCursor(1)
+		}
+	} else {
+		// Main content scroll
+		h.FocusedPane = state.PaneMain
+		if msg.Type == tea.MouseWheelUp {
+			h.moveCursor(-1)
+		} else {
+			h.moveCursor(1)
+		}
+	}
+
+	return nil
+}
+
+// moveSidebarCursor moves the sidebar cursor and selects the current item.
+func (h *Handler) moveSidebarCursor(delta int) {
+	newIdx := h.SidebarCursor + delta
+	if newIdx < 0 {
+		newIdx = 0
+	}
+	if newIdx >= len(h.SidebarItems) {
+		newIdx = len(h.SidebarItems) - 1
+	}
+
+	// Skip separators when scrolling
+	if newIdx != h.SidebarCursor && h.SidebarItems[newIdx].Type == "separator" {
+		if delta > 0 {
+			newIdx++
+		} else {
+			newIdx--
+		}
+		// Bound check again after skipping
+		if newIdx < 0 {
+			newIdx = 0
+		}
+		if newIdx >= len(h.SidebarItems) {
+			newIdx = len(h.SidebarItems) - 1
+		}
+	}
+
+	h.SidebarCursor = newIdx
 }
