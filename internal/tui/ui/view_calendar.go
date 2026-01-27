@@ -27,7 +27,7 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 
 	// Header with month/year and navigation hints
 	monthYear := r.CalendarDate.Format("January 2006")
-	b.WriteString(styles.Title.Render(monthYear))
+	b.WriteString(styles.Title.Copy().Underline(true).Render(strings.ToUpper(monthYear)) + "\n")
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
 	b.WriteString("\n\n")
@@ -180,7 +180,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 
 	// Header with month/year and navigation hints
 	monthYear := r.CalendarDate.Format("January 2006")
-	b.WriteString(styles.Title.Render(monthYear))
+	b.WriteString(styles.Title.Copy().Underline(true).Render(strings.ToUpper(monthYear)) + "\n")
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
 	b.WriteString("\n\n")

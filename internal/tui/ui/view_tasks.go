@@ -61,8 +61,7 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 	default:
 		title = "Tasks"
 	}
-	b.WriteString(styles.Title.Render(title))
-	b.WriteString("\n\n")
+	b.WriteString(styles.Title.Copy().Underline(true).Render(strings.ToUpper(title)) + "\n\n")
 
 	if r.Loading {
 		b.WriteString(r.Spinner.View())
@@ -448,8 +447,7 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 	var b strings.Builder
 
-	b.WriteString(styles.Title.Render("Upcoming"))
-	b.WriteString("\n")
+	b.WriteString(styles.Title.Copy().Underline(true).Render("UPCOMING TASKS") + "\n\n")
 
 	if r.Loading {
 		b.WriteString(r.Spinner.View())
@@ -536,8 +534,7 @@ func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 	var b strings.Builder
 
-	b.WriteString(styles.Title.Render("Labels"))
-	b.WriteString("\n\n")
+	b.WriteString(styles.Title.Copy().Underline(true).Render("LABELS") + "\n\n")
 
 	// Account for title + blank line (2 lines used)
 	contentHeight := maxHeight - 2
