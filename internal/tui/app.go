@@ -56,6 +56,7 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 	// Set initial view based on config or argument
 	s.CurrentView = state.ViewInbox
 	s.CurrentTab = state.TabInbox
+	s.FocusedPane = state.PaneMain // Ensure main pane is focused by default
 
 	// Helper to set view/tab
 	setView := func(v string) {
