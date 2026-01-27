@@ -654,8 +654,8 @@ func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.submitForm()
 
 	case "enter":
-		// If on task content input, submit immediately with defaults
-		if h.TaskForm.FocusIndex == state.FormFieldContent {
+		// If on task content or description input, submit immediately with defaults
+		if h.TaskForm.FocusIndex == state.FormFieldContent || h.TaskForm.FocusIndex == state.FormFieldDescription {
 			return h.submitForm()
 		}
 

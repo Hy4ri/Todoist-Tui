@@ -175,7 +175,6 @@ func NewTaskForm(projects []api.Project, labels []api.Label) *TaskForm {
 	}
 }
 
-// NewEditTaskForm creates a task form populated with existing task data.
 func NewEditTaskForm(t *api.Task, projects []api.Project, labels []api.Label) *TaskForm {
 	f := NewTaskForm(projects, labels)
 	f.Original = t
@@ -199,6 +198,9 @@ func NewEditTaskForm(t *api.Task, projects []api.Project, labels []api.Label) *T
 			break
 		}
 	}
+
+	f.Mode = "edit"
+	f.TaskID = t.ID
 
 	return f
 }
