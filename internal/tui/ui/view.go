@@ -27,7 +27,13 @@ func (r *Renderer) View() string {
 	case state.ViewHelp:
 		content = r.HelpComp.View()
 	case state.ViewTaskDetail:
-		content = r.renderTaskDetail()
+		// Ensure component has latest data
+		r.DetailComp.SetSize(r.Width, r.Height)
+		r.DetailComp.SetTask(r.SelectedTask)
+		r.DetailComp.SetComments(r.Comments)
+		r.DetailComp.SetProjects(r.Projects) // Ensure projects are set
+		r.DetailComp.Focus()
+		content = r.DetailComp.View()
 	case state.ViewTaskForm:
 		content = r.renderTaskForm()
 	case state.ViewSearch:
@@ -37,6 +43,8 @@ func (r *Renderer) View() string {
 	case state.ViewSections:
 		content = r.renderSections()
 	default:
+		// Update DetailComp projects here too just in case split view needs it
+		r.DetailComp.SetProjects(r.Projects)
 		content = r.renderMainView()
 	}
 
