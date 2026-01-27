@@ -97,6 +97,7 @@ func run() error {
 		viewUpcoming bool
 		viewCalendar bool
 		viewLabels   bool
+		viewInbox    bool
 		outputJSON   bool
 	)
 
@@ -109,6 +110,7 @@ func run() error {
 	flag.BoolVar(&viewUpcoming, "upcoming", false, "Start in upcoming view")
 	flag.BoolVar(&viewCalendar, "calendar", false, "Start in calendar view")
 	flag.BoolVar(&viewLabels, "labels", false, "Start in labels view")
+	flag.BoolVar(&viewInbox, "inbox", false, "Start in inbox view")
 	flag.BoolVar(&outputJSON, "json", false, "Output tasks in JSON format")
 
 	flag.Usage = func() {
@@ -146,6 +148,8 @@ func run() error {
 		initialView = "calendar"
 	} else if viewLabels {
 		initialView = "labels"
+	} else if viewInbox {
+		initialView = "inbox"
 	}
 
 	// Normal application flow
