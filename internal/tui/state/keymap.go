@@ -250,21 +250,15 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 	case keymap.NewProject.Key:
 		return "new_project", true
 
-	// Tab navigation shortcuts (Case insensitive t, u, p, l, c)
-	case "t", "T":
-		return "tab_today", true
-	case "u", "U":
-		return "tab_upcoming", true
-	case "p", "P":
-		return "tab_projects", true
-	case "l":
-		return "right", true
+	// Tab navigation shortcuts (numbers 1-6 are handled in app.go, but we can document or keep placeholders?)
+	// Actually, 1-6 keys are NOT in keymap struct explicitly, they are likely handled via "1", "2" etc cases.
+	// But let's check HandleKey implementation.
+
+	// L for next day (already done). Labels is now 4.
 	case "L":
 		return "move_task_next_day", true
 	case "H":
 		return "move_task_prev_day", true
-	case "c", "C":
-		return "tab_calendar", true
 
 	// Hints toggle
 	case "f1":
@@ -293,13 +287,12 @@ func (k KeymapData) HelpItems() [][]string {
 		{"H/L", "Move task -1/+1 day"},
 		{"", ""},
 		{"View Switching", ""},
-		{"i/1", "Inbox"},
-		{"t/2", "Today's tasks"},
-		{"u/3", "Upcoming tasks"},
-		{"u/3", "Upcoming tasks"},
+		{"1", "Inbox"},
+		{"2", "Today's tasks"},
+		{"3", "Upcoming tasks"},
 		{"4", "Labels"},
-		{"c/5", "Calendar"},
-		{"p/6", "Projects"},
+		{"5", "Calendar"},
+		{"6", "Projects"},
 		{"", ""},
 		{"Task Actions", ""},
 		{k.Select.Key, "Open task details"},

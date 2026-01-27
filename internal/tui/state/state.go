@@ -206,11 +206,11 @@ type TabInfo struct {
 // GetTabDefinitions returns the tab definitions.
 func GetTabDefinitions() []TabInfo {
 	return []TabInfo{
-		{TabInbox, "[I]", "Inbox", "Inb"},
-		{TabToday, "[T]", "Today", "Tdy"},
-		{TabUpcoming, "[U]", "Upcoming", "Up"},
-		{TabLabels, "[L]", "Labels", "Lbl"},
-		{TabCalendar, "[C]", "Calendar", "Cal"},
-		{TabProjects, "[P]", "Projects", "Prj"},
+		{TabInbox, "📥", "Inbox", "Inb"},
+		{TabToday, "📅", "Today", "Tdy"},
+		{TabUpcoming, "📆", "Upcoming", "Up"},
+		{TabLabels, "🏷️", "Labels", "Lbl"},
+		{TabCalendar, "🗓️", "Calendar", "Cal"},
+		{TabProjects, "📂", "Projects", "Prj"},
 	}
 }
