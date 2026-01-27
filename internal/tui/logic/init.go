@@ -1,9 +1,9 @@
 package logic
 
 import (
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
 
 // Init implements tea.Model.

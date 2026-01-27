@@ -48,64 +48,31 @@ func (r *Renderer) View() string {
 		content = r.renderMainView()
 	}
 
-	// Overlay project creation dialog if active
-	if r.IsCreatingProject {
-		content = r.overlayContent(content, r.renderProjectDialog())
+	// Overlay content checks
+	type overlaySpec struct {
+		active bool
+		render func() string
 	}
 
-	// Overlay project edit dialog if active
-	if r.IsEditingProject {
-		content = r.overlayContent(content, r.renderProjectEditDialog())
+	overlays := []overlaySpec{
+		{r.IsCreatingProject, r.renderProjectDialog},
+		{r.IsEditingProject, r.renderProjectEditDialog},
+		{r.ConfirmDeleteProject && r.EditingProject != nil, r.renderProjectDeleteDialog},
+		{r.IsCreatingLabel, r.renderLabelDialog},
+		{r.IsEditingLabel, r.renderLabelEditDialog},
+		{r.ConfirmDeleteLabel && r.EditingLabel != nil, r.renderLabelDeleteDialog},
+		{r.IsCreatingSubtask, r.renderSubtaskDialog},
+		{r.IsCreatingSection, r.renderSectionDialog},
+		{r.IsEditingSection, r.renderSectionEditDialog},
+		{r.ConfirmDeleteSection && r.EditingSection != nil, r.renderSectionDeleteDialog},
+		{r.IsMovingTask, r.renderMoveTaskDialog},
+		{r.IsAddingComment, r.renderCommentDialog},
 	}
 
-	// Overlay project delete confirmation dialog if active
-	if r.ConfirmDeleteProject && r.EditingProject != nil {
-		content = r.overlayContent(content, r.renderProjectDeleteDialog())
-	}
-
-	// Overlay label creation dialog if active
-	if r.IsCreatingLabel {
-		content = r.overlayContent(content, r.renderLabelDialog())
-	}
-
-	// Overlay label edit dialog if active
-	if r.IsEditingLabel {
-		content = r.overlayContent(content, r.renderLabelEditDialog())
-	}
-
-	// Overlay label delete confirmation dialog if active
-	if r.ConfirmDeleteLabel && r.EditingLabel != nil {
-		content = r.overlayContent(content, r.renderLabelDeleteDialog())
-	}
-
-	// Overlay subtask creation dialog if active
-	if r.IsCreatingSubtask {
-		content = r.overlayContent(content, r.renderSubtaskDialog())
-	}
-
-	// Overlay section creation dialog if active
-	if r.IsCreatingSection {
-		content = r.overlayContent(content, r.renderSectionDialog())
-	}
-
-	// Overlay section edit dialog if active
-	if r.IsEditingSection {
-		content = r.overlayContent(content, r.renderSectionEditDialog())
-	}
-
-	// Overlay section delete confirmation dialog if active
-	if r.ConfirmDeleteSection && r.EditingSection != nil {
-		content = r.overlayContent(content, r.renderSectionDeleteDialog())
-	}
-
-	// Overlay move task dialog if active
-	if r.IsMovingTask {
-		content = r.overlayContent(content, r.renderMoveTaskDialog())
-	}
-
-	// Overlay add comment dialog if active
-	if r.IsAddingComment {
-		content = r.overlayContent(content, r.renderCommentDialog())
+	for _, o := range overlays {
+		if o.active {
+			content = r.overlayContent(content, o.render())
+		}
 	}
 
 	return content
