@@ -91,6 +91,13 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 		setView(initialView)
 	}
 
+	// Initialize calendar view mode from config
+	if cfg.UI.CalendarDefaultView == "expanded" {
+		s.CalendarViewMode = state.CalendarViewExpanded
+	} else {
+		s.CalendarViewMode = state.CalendarViewCompact
+	}
+
 	app := &App{
 		State: s,
 	}
