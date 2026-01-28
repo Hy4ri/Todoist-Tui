@@ -441,6 +441,10 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		} else if h.CurrentTab == state.TabLabels {
 			return h.handleNewLabel()
 		}
+	case "toggle_favorite":
+		if h.CurrentTab == state.TabProjects && h.FocusedPane == state.PaneSidebar {
+			return h.handleToggleFavorite()
+		}
 	// state.Tab shortcuts (Shift + letter)
 	case "tab_today":
 		return h.switchToTab(state.TabToday)

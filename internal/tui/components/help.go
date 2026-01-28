@@ -23,39 +23,7 @@ type HelpModel struct {
 // NewHelp creates a new HelpModel.
 func NewHelp() *HelpModel {
 	return &HelpModel{
-		keymap: defaultHelpItems(),
-	}
-}
-
-// defaultHelpItems returns the default help items.
-func defaultHelpItems() [][]string {
-	return [][]string{
-		{"Navigation", ""},
-		{"j/k", "Move up/down"},
-		{"gg/G", "Go to top/bottom"},
-		{"ctrl+u/ctrl+d", "Half page up/down"},
-		{"tab", "Switch pane"},
-		{"", ""},
-		{"Task Actions", ""},
-		{"enter", "Open task details"},
-		{"a", "Add new task"},
-		{"e", "Edit task"},
-		{"x", "Complete/uncomplete task"},
-		{"dd", "Delete task"},
-		{"1-4", "Set priority"},
-		{"</> ", "Due today/tomorrow"},
-		{"", ""},
-		{"Calendar", ""},
-		{"v", "Switch calendar view"},
-		{"h/l", "Previous/next day"},
-		{"[/]", "Previous/next month"},
-		{"", ""},
-		{"General", ""},
-		{"r", "Refresh data"},
-		{"/", "Search"},
-		{"?", "Toggle help"},
-		{"esc", "Go back / Cancel"},
-		{"q", "Quit"},
+		keymap: nil, // Will be set by renderer
 	}
 }
 
@@ -81,7 +49,7 @@ func (h *HelpModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 // View implements Component.
 func (h *HelpModel) View() string {
 	if len(h.keymap) == 0 {
-		return ""
+		return styles.Dialog.Render("No keybindings registered")
 	}
 
 	var b strings.Builder
@@ -89,13 +57,12 @@ func (h *HelpModel) View() string {
 	b.WriteString("\n\n")
 
 	// Split sections into two columns for better space utilization
-	// Column 1: Navigation, View Switching, Section/Project Actions, Calendar
-	// Column 2: Task Actions, General
+	// Column 1: Tab Navigation, Navigation, General
+	// Column 2: Task Actions, Label/Project Actions, Calendar View
 	var col1Sections = map[string]bool{
-		"Navigation":              true,
-		"View Switching":          true,
-		"Section/Project Actions": true,
-		"Calendar":                true,
+		"Tab Navigation": true,
+		"Navigation":     true,
+		"General":        true,
 	}
 
 	var col1Content, col2Content strings.Builder
@@ -115,7 +82,7 @@ func (h *HelpModel) View() string {
 			} else {
 				currentColumn = &col2Content
 			}
-			currentColumn.WriteString(styles.SectionHeader.Render(key) + "\n")
+			currentColumn.WriteString("\n" + styles.SectionHeader.Render(" "+key+" ") + "\n")
 			continue
 		}
 
@@ -125,9 +92,11 @@ func (h *HelpModel) View() string {
 		}
 
 		// Key-description pair
-		keyStr := styles.StatusBarKey.Render(key)
+		// For better alignment, use a fixed width for the key padding
+		keyStyle := styles.HelpKey.Copy().Width(12).Align(lipgloss.Right).PaddingRight(2)
+		keyStr := keyStyle.Render(key)
 		descStr := styles.HelpDesc.Render(desc)
-		currentColumn.WriteString("  " + keyStr + "  " + descStr + "\n")
+		currentColumn.WriteString(keyStr + descStr + "\n")
 	}
 
 	// Join columns horizontally with some padding
@@ -135,7 +104,12 @@ func (h *HelpModel) View() string {
 	col2 := col2Content.String()
 
 	// Ensure symmetric padding even if one column is shorter
-	columnStyle := lipgloss.NewStyle().Width(h.width / 2).PaddingRight(2)
+	colWidth := h.width / 2
+	if colWidth > 50 {
+		colWidth = 50 // Cap column width for better readability
+	}
+
+	columnStyle := lipgloss.NewStyle().Width(colWidth).PaddingLeft(2).PaddingRight(2)
 	helpView := lipgloss.JoinHorizontal(lipgloss.Top,
 		columnStyle.Render(col1),
 		columnStyle.Render(col2),
@@ -143,7 +117,10 @@ func (h *HelpModel) View() string {
 
 	b.WriteString(helpView)
 	b.WriteString("\n\n")
-	b.WriteString(styles.HelpDesc.Render("Press ESC or ? to close"))
+
+	// Centered help footer
+	footer := styles.HelpDesc.Render("Press ESC or ? to close • j/k: scroll")
+	b.WriteString(lipgloss.NewStyle().Width(h.width).Align(lipgloss.Center).Render(footer))
 
 	return b.String()
 }

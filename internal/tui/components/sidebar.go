@@ -191,7 +191,48 @@ func (s *SidebarModel) View() string {
 		availForName := nameMaxLen - len(countStr)
 		name = truncateString(name, availForName)
 
-		line := style.MaxWidth(s.width - 2).Render(fmt.Sprintf("%s%s%s %s%s", cursor, indent, item.Icon, name, countStr))
+		// Apply color if available
+		itemStyle := style
+		if item.Color != "" {
+			color := styles.GetColor(item.Color)
+			// Apply color to the icon/name but preserve selection style background if selected
+			if i == s.cursor && s.focused {
+				// Selected item: Keep background/bold, but tint foreground (if desired) or simple keep generic selection
+				// Todoist usually keeps specific color icon but white text on selection.
+				// Let's just color the Icon.
+			} else {
+				itemStyle = itemStyle.Foreground(color)
+			}
+		}
+
+		// We construct line manually to colorize just the icon or name
+		// Actually lipgloss applies style to the whole rendered string.
+		// Let's color the icon specifically if not selected?
+		var renderedItem string
+		if item.Color != "" {
+			color := styles.GetColor(item.Color)
+			iconStyle := lipgloss.NewStyle().Foreground(color)
+
+			// If selected, we might want to ensure high contrast.
+			// Usually selected = reversed or distinct background.
+			if i == s.cursor && s.focused {
+				// Use selection style for the whole line, but allow icon/name color to persist if possible.
+				// Explicitly color the name too, as per user request.
+				coloredName := iconStyle.Render(name)
+				renderedItem = fmt.Sprintf("%s%s%s %s%s", cursor, indent, iconStyle.Render(item.Icon), coloredName, countStr)
+			} else {
+				// Not selected - apply color to icon AND name
+				// Let's apply to icon only for "folder" icons, or bullet points.
+				// User asked for "project colors". Todoist usually colors the hashtag/dot.
+				// User explicitly asked to make the name the same color.
+				coloredName := iconStyle.Render(name)
+				renderedItem = fmt.Sprintf("%s%s%s %s%s", cursor, indent, iconStyle.Render(item.Icon), coloredName, countStr)
+			}
+		} else {
+			renderedItem = fmt.Sprintf("%s%s%s %s%s", cursor, indent, item.Icon, name, countStr)
+		}
+
+		line := style.MaxWidth(s.width - 2).Render(renderedItem)
 		b.WriteString(line)
 		b.WriteString("\n")
 	}
@@ -255,7 +296,7 @@ func (s *SidebarModel) SetProjects(projects []api.Project, counts map[string]int
 	// Add favorite projects first
 	for _, p := range projects {
 		if p.IsFavorite {
-			icon := "⭐"
+			icon := "❤︎"
 			if p.InboxProject {
 				icon = "📥"
 				_ = icon
@@ -268,6 +309,7 @@ func (s *SidebarModel) SetProjects(projects []api.Project, counts map[string]int
 				Count:      counts[p.ID],
 				IsFavorite: true,
 				ParentID:   p.ParentID,
+				Color:      p.Color,
 			})
 		}
 	}
@@ -287,7 +329,7 @@ func (s *SidebarModel) SetProjects(projects []api.Project, counts map[string]int
 	// Add remaining projects (non-favorites)
 	for _, p := range projects {
 		if !p.IsFavorite {
-			icon := "📁"
+			icon := "#"
 			if p.InboxProject {
 				icon = "📥"
 			}
@@ -298,6 +340,7 @@ func (s *SidebarModel) SetProjects(projects []api.Project, counts map[string]int
 				Icon:     icon,
 				Count:    counts[p.ID],
 				ParentID: p.ParentID,
+				Color:    p.Color,
 			})
 		}
 	}

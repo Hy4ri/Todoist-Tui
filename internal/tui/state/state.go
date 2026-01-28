@@ -124,7 +124,7 @@ type State struct {
 
 	// Components
 	Spinner spinner.Model
-	Keymap  interface{} // Using interface{} to avoid circular dependency on tui.Keymap if it remains there
+	Keymap  Keymap // Using interface to allow different implementations
 
 	// UI Components
 	SidebarComp *components.SidebarModel
@@ -139,6 +139,12 @@ type State struct {
 	SearchInput   textinput.Model
 	SearchResults []api.Task
 	IsSearching   bool
+
+	// Color selection state
+	IsSelectingColor bool
+	SelectedColor    string
+	ColorCursor      int
+	AvailableColors  []string
 
 	// New project state
 	ProjectInput         textinput.Model

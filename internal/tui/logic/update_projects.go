@@ -34,6 +34,50 @@ func (h *Handler) handleNewProject() tea.Cmd {
 
 // handleProjectInputKeyMsg handles keyboard input during project creation.
 func (h *Handler) handleProjectInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	// If choosing color
+	if h.IsSelectingColor {
+		switch msg.String() {
+		case "esc":
+			h.IsCreatingProject = false
+			h.IsSelectingColor = false
+			h.ProjectInput.Reset()
+			return nil
+		case "up", "k":
+			if h.ColorCursor > 0 {
+				h.ColorCursor--
+			}
+			return nil
+		case "down", "j":
+			if h.ColorCursor < len(h.AvailableColors)-1 {
+				h.ColorCursor++
+			}
+			return nil
+		case "enter":
+			// Submit new project with color
+			name := strings.TrimSpace(h.ProjectInput.Value())
+			color := h.AvailableColors[h.ColorCursor]
+
+			h.IsCreatingProject = false
+			h.IsSelectingColor = false
+			h.ProjectInput.Reset()
+			h.Loading = true
+
+			return func() tea.Msg {
+				project, err := h.Client.CreateProject(api.CreateProjectRequest{
+					Name:  name,
+					Color: color, // Removed &
+				})
+				if err != nil {
+					return errMsg{err}
+				}
+				// Refresh projects after creation
+				return projectCreatedMsg{project: project}
+			}
+		}
+		return nil
+	}
+
+	// Inputting name
 	switch msg.String() {
 	case "esc":
 		// Cancel project creation
@@ -42,7 +86,7 @@ func (h *Handler) handleProjectInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return nil
 
 	case "enter":
-		// Submit new project
+		// Proceed to color selection
 		name := strings.TrimSpace(h.ProjectInput.Value())
 		if name == "" {
 			h.IsCreatingProject = false
@@ -50,20 +94,17 @@ func (h *Handler) handleProjectInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 
-		h.IsCreatingProject = false
-		h.ProjectInput.Reset()
-		h.Loading = true
+		h.IsSelectingColor = true
+		h.ColorCursor = 0
 
-		return func() tea.Msg {
-			project, err := h.Client.CreateProject(api.CreateProjectRequest{
-				Name: name,
-			})
-			if err != nil {
-				return errMsg{err}
+		// Populate colors if empty (sorted)
+		if len(h.AvailableColors) == 0 {
+			for name := range styles.TodoistColorMap {
+				h.AvailableColors = append(h.AvailableColors, name)
 			}
-			// Refresh projects after creation
-			return projectCreatedMsg{project: project}
+			sort.Strings(h.AvailableColors)
 		}
+		return nil
 
 	default:
 		// Update text input
@@ -166,6 +207,48 @@ func (h *Handler) handleNewLabel() tea.Cmd {
 
 // handleLabelInputKeyMsg handles keyboard input during label creation.
 func (h *Handler) handleLabelInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	// If choosing color
+	if h.IsSelectingColor {
+		switch msg.String() {
+		case "esc":
+			h.IsCreatingLabel = false
+			h.IsSelectingColor = false
+			h.LabelInput.Reset()
+			return nil
+		case "up", "k":
+			if h.ColorCursor > 0 {
+				h.ColorCursor--
+			}
+			return nil
+		case "down", "j":
+			if h.ColorCursor < len(h.AvailableColors)-1 {
+				h.ColorCursor++
+			}
+			return nil
+		case "enter":
+			// Submit new label with color
+			name := strings.TrimSpace(h.LabelInput.Value())
+			color := h.AvailableColors[h.ColorCursor]
+
+			h.IsCreatingLabel = false
+			h.IsSelectingColor = false
+			h.LabelInput.Reset()
+			h.Loading = true
+
+			return func() tea.Msg {
+				label, err := h.Client.CreateLabel(api.CreateLabelRequest{
+					Name:  name,
+					Color: color, // Removed &
+				})
+				if err != nil {
+					return errMsg{err}
+				}
+				return labelCreatedMsg{label: label}
+			}
+		}
+		return nil
+	}
+
 	switch msg.String() {
 	case "esc":
 		// Cancel label creation
@@ -174,7 +257,7 @@ func (h *Handler) handleLabelInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return nil
 
 	case "enter":
-		// Submit new label
+		// Proceed to color selection
 		name := strings.TrimSpace(h.LabelInput.Value())
 		if name == "" {
 			h.IsCreatingLabel = false
@@ -182,19 +265,17 @@ func (h *Handler) handleLabelInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 
-		h.IsCreatingLabel = false
-		h.LabelInput.Reset()
-		h.Loading = true
+		h.IsSelectingColor = true
+		h.ColorCursor = 0
 
-		return func() tea.Msg {
-			label, err := h.Client.CreateLabel(api.CreateLabelRequest{
-				Name: name,
-			})
-			if err != nil {
-				return errMsg{err}
+		// Populate colors if empty (sorted)
+		if len(h.AvailableColors) == 0 {
+			for name := range styles.TodoistColorMap {
+				h.AvailableColors = append(h.AvailableColors, name)
 			}
-			return labelCreatedMsg{label: label}
+			sort.Strings(h.AvailableColors)
 		}
+		return nil
 
 	default:
 		// Update text input
@@ -1227,7 +1308,7 @@ func (h *Handler) buildSidebarItems() {
 			continue
 		}
 		if p.IsFavorite {
-			icon := "⭐"
+			icon := "❤︎"
 
 			h.SidebarItems = append(h.SidebarItems, components.SidebarItem{
 				Type:       "project",
@@ -1237,6 +1318,7 @@ func (h *Handler) buildSidebarItems() {
 				Count:      counts[p.ID],
 				IsFavorite: true,
 				ParentID:   p.ParentID,
+				Color:      p.Color,
 			})
 		}
 	}
@@ -1260,7 +1342,7 @@ func (h *Handler) buildSidebarItems() {
 			continue
 		}
 		if !p.IsFavorite {
-			icon := "📁"
+			icon := "#"
 
 			h.SidebarItems = append(h.SidebarItems, components.SidebarItem{
 				Type:     "project",
@@ -1269,9 +1351,48 @@ func (h *Handler) buildSidebarItems() {
 				Icon:     icon,
 				Count:    counts[p.ID],
 				ParentID: p.ParentID,
+				Color:    p.Color,
 			})
 		}
 	}
 }
 
 // View implements tea.Model.
+// handleToggleFavorite toggles the favorite status of the selected project.
+func (h *Handler) handleToggleFavorite() tea.Cmd {
+	if len(h.SidebarItems) == 0 || h.SidebarCursor >= len(h.SidebarItems) {
+		return nil
+	}
+
+	item := h.SidebarItems[h.SidebarCursor]
+	if item.Type != "project" || item.ID == "" {
+		return nil
+	}
+
+	// Find the project object to get current status
+	var project *api.Project
+	for i := range h.Projects {
+		if h.Projects[i].ID == item.ID {
+			project = &h.Projects[i]
+			break
+		}
+	}
+
+	if project == nil {
+		return nil
+	}
+
+	newStatus := !project.IsFavorite
+	h.Loading = true
+	h.StatusMsg = "Toggling favorite..."
+
+	return func() tea.Msg {
+		updatedProject, err := h.Client.UpdateProject(item.ID, api.UpdateProjectRequest{
+			IsFavorite: &newStatus,
+		})
+		if err != nil {
+			return errMsg{err}
+		}
+		return projectUpdatedMsg{project: updatedProject}
+	}
+}

@@ -109,9 +109,7 @@ func DefaultKeymap() KeymapData {
 		// Project actions
 		NewProject: Key{Key: "n", Help: "new project"},
 
-		// Section actions
-		NewSection:  Key{Key: "s", Help: "new section"},
-		MoveSection: Key{Key: "m", Help: "move task/section"},
+		// Map 'f' generic action logic will handle context
 	}
 }
 
@@ -249,6 +247,8 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "calendar_view", true
 	case keymap.NewProject.Key:
 		return "new_project", true
+	case "f":
+		return "toggle_favorite", true
 
 	// Tab navigation shortcuts (numbers 1-6 are handled in app.go, but we can document or keep placeholders?)
 	// Actually, 1-6 keys are NOT in keymap struct explicitly, they are likely handled via "1", "2" etc cases.
@@ -281,55 +281,67 @@ func (ks *KeyState) Reset() {
 // HelpItems returns a slice of key-description pairs for the help view.
 func (k KeymapData) HelpItems() [][]string {
 	return [][]string{
+		{"Tab Navigation", ""},
+		{"1", "Inbox"},
+		{"2", "Today's tasks"},
+		{"3", "Upcoming tasks"},
+		{"4", "Labels list"},
+		{"5", "Calendar view"},
+		{"6", "Projects sidebar"},
+		{"P", "Fast switch to Projects"},
+		{"L", "Fast switch to Labels"},
+		{"U", "Upcoming"},
+		{"T", "Today"},
+		{"I", "Inbox"},
+		{"", ""},
+
 		{"Navigation", ""},
 		{k.Up.Key + "/" + k.Down.Key, "Move up/down"},
 		{"gg/G", "Go to top/bottom"},
 		{k.HalfUp.Key + "/" + k.HalfDown.Key, "Half page up/down"},
 		{k.SwitchPane.Key, "Switch pane (Sidebar/Main)"},
-		{k.SwitchPane.Key, "Switch pane (Sidebar/Main)"},
+		{"h/l", "Pane navigation (Left/Right)"},
 		{"", ""},
-		{"View Switching", ""},
-		{"1", "Inbox"},
-		{"2", "Today's tasks"},
-		{"3", "Upcoming tasks"},
-		{"4", "Labels"},
-		{"5", "Calendar"},
-		{"6", "Projects"},
-		{"", ""},
+
 		{"Task Actions", ""},
 		{k.Select.Key, "Open task details"},
 		{k.AddTask.Key, "Add new task"},
-		{k.EditTask.Key, "Edit task"},
+		{k.EditTask.Key, "Edit task content"},
 		{k.CompleteTask.Key, "Complete/uncomplete task"},
 		{"dd", "Delete task"},
-		{"yy", "Copy task(s) to clipboard"},
-		{"Space", "Toggle task selection"},
-		{"1-4", "Set priority"},
-		{"Space", "Toggle task selection"},
-		{"1-4", "Set priority"},
-		{k.MoveTaskPrevDay.Key + "/" + k.MoveTaskNextDay.Key, "Move task -1/+1 day"},
+		{"yy", "Copy task URL/Title"},
+		{"Space", "Toggle selection"},
+		{"1-4", "Set priority (4 is highest)"},
+		{"</>", "Move task date -1/+1 day"},
 		{"s", "Add subtask"},
 		{"m", "Move task to section"},
-		{"A", "Add comment"},
-		{"ctrl+z", "Undo last action"},
+		{"A", "Add/View comments"},
 		{"", ""},
-		{"Section/Project Actions", ""},
+
+		{"Label/Project Actions", ""},
+		{"a", "Add new label (in Labels tab)"},
 		{"n", "New project (in sidebar)"},
-		{"S", "Manage sections (add/edit/delete)"},
+		{"f", "Toggle favorite project"},
+		{"e", "Edit selected item"},
+		{"d", "Delete selected item"},
+		{"S", "Manage sections"},
 		{"M", "Reorder sections"},
 		{"", ""},
-		{"Calendar", ""},
-		{k.CalendarView.Key, "Switch calendar view (Compact/Expanded)"},
+
+		{"Calendar View", ""},
+		{k.CalendarView.Key, "Switch layout (Compact/Expanded)"},
 		{"h/l", "Previous/next day"},
+		{"j/k", "Previous/next week"},
 		{"[/]", "Previous/next month"},
 		{"", ""},
+
 		{"General", ""},
-		{"Shift+D", "Set default view"},
-		{k.Refresh.Key, "Refresh data"},
-		{k.Search.Key, "Search"},
-		{k.Help.Key, "Toggle help"},
+		{"Shift+D", "Set current as default view"},
+		{k.Refresh.Key, "Refresh data from Todoist"},
+		{k.Search.Key, "Search tasks"},
+		{k.Help.Key, "Toggle this help menu"},
 		{k.Back.Key, "Go back / Cancel"},
-		{"f1", "Toggle key hints"},
-		{k.Quit.Key, "Quit"},
+		{"f1", "Toggle key hints bar"},
+		{k.Quit.Key, "Quit the application"},
 	}
 }

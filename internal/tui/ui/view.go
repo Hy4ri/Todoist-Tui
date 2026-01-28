@@ -26,6 +26,7 @@ func (r *Renderer) View() string {
 	var content string
 	switch r.CurrentView {
 	case state.ViewHelp:
+		r.HelpComp.SetKeymap(r.Keymap.HelpItems())
 		content = r.HelpComp.View()
 	case state.ViewTaskDetail:
 		// Ensure component has latest data

@@ -347,9 +347,17 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int,
 	if len(t.Labels) > 0 {
 		var lStrs []string
 		for _, l := range t.Labels {
-			lStrs = append(lStrs, "@"+l)
+			lStr := "@" + l
+			// Lookup color
+			if color := r.getLabelColor(l); color != "" {
+				lStr = lipgloss.NewStyle().Foreground(styles.GetColor(color)).Render(lStr)
+			}
+			lStrs = append(lStrs, lStr)
 		}
 		labelStr = strings.Join(lStrs, " ")
+		// We calculate width based on unstyled string to avoid issues,
+		// but Lipgloss styles add ANSI codes which ruin Width() if not careful.
+		// Actually lipgloss.Width() strips ANSI codes, so it should be fine.
 		labelWidth = lipgloss.Width(labelStr) + 1
 	}
 
@@ -596,7 +604,7 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 		// Show tasks for selected label
 		labelTitle := "@" + r.CurrentLabel.Name
 		if r.CurrentLabel.Color != "" {
-			labelTitle = lipgloss.NewStyle().Foreground(lipgloss.Color(r.CurrentLabel.Color)).Render(labelTitle)
+			labelTitle = lipgloss.NewStyle().Foreground(styles.GetColor(r.CurrentLabel.Color)).Render(labelTitle)
 		}
 		b.WriteString(styles.Subtitle.Render(labelTitle))
 		b.WriteString("\n\n")
@@ -669,7 +677,7 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 				// Label name with optional color
 				name := "@" + label.Name
 				if label.Color != "" {
-					name = lipgloss.NewStyle().Foreground(lipgloss.Color(label.Color)).Render(name)
+					name = lipgloss.NewStyle().Foreground(styles.GetColor(label.Color)).Render(name)
 				}
 
 				// Task count badge
@@ -757,4 +765,16 @@ func (r *Renderer) syncViewportToCursor(cursorLine int, height int) {
 		// Cursor below viewport - scroll down to show cursor at bottom
 		r.TaskViewport.SetYOffset(cursorLine - height + 1)
 	}
+}
+
+// getLabelColor returns the color name for a given label name.
+func (r *Renderer) getLabelColor(name string) string {
+	for _, l := range r.Labels {
+		if l.Name == name {
+			return l.Color
+		}
+	}
+	// Fallback to extractLabelsFromTasks if r.Labels is empty?
+	// Or maybe tasks have inconsistent label metadata.
+	return ""
 }

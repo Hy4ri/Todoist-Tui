@@ -53,6 +53,7 @@ type SidebarItem struct {
 	Count      int
 	IsFavorite bool
 	ParentID   *string
+	Color      string
 }
 
 // LastAction represents an undoable action.
