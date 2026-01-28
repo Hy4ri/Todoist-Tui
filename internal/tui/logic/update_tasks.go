@@ -548,7 +548,12 @@ func (h *Handler) handleAdd() tea.Cmd {
 		h.TaskForm.SetContext("Project")
 	case state.ViewLabels:
 		h.TaskForm.SetDue("")
-		h.TaskForm.SetContext("Labels")
+		if h.CurrentLabel != nil {
+			h.TaskForm.Labels = []string{h.CurrentLabel.Name}
+			h.TaskForm.SetContext("@" + h.CurrentLabel.Name)
+		} else {
+			h.TaskForm.SetContext("Labels")
+		}
 	default:
 		h.TaskForm.SetDue("")
 		h.TaskForm.SetContext("")

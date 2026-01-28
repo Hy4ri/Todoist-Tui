@@ -417,6 +417,10 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	case "delete":
 		return h.handleDelete()
 	case "add":
+		// Context-aware add for Labels tab
+		if h.CurrentTab == state.TabLabels && h.CurrentLabel == nil {
+			return h.handleNewLabel()
+		}
 		return h.handleAdd()
 	case "edit":
 		return h.handleEdit()
