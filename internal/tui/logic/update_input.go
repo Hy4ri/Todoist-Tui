@@ -342,17 +342,17 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	// state.Tab switching with number keys (1-5) - only when not in form/input modes
 	// state.Tab switching with number keys (1-5) and letters - only when not in form/input modes
 	switch msg.String() {
-	case "1", "i", "I":
+	case "1", "I":
 		return h.switchToTab(state.TabInbox)
-	case "2", "t", "T":
+	case "2", "T":
 		return h.switchToTab(state.TabToday)
-	case "3", "u", "U":
+	case "3", "U":
 		return h.switchToTab(state.TabUpcoming)
 	case "4", "L": // Shift+l to avoid calendar Nav conflict if any, or used to be 4
 		return h.switchToTab(state.TabLabels)
-	case "5", "c", "C":
+	case "5", "C":
 		return h.switchToTab(state.TabCalendar)
-	case "6", "p", "P":
+	case "6", "P":
 		return h.switchToTab(state.TabProjects)
 	case "D": // Shift+d
 		return h.setDefaultView()
@@ -405,9 +405,6 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		// l key - move to main pane in Projects tab
 		if h.CurrentTab == state.TabProjects && h.FocusedPane == state.PaneSidebar {
 			h.FocusedPane = state.PaneMain
-		} else if h.CurrentView != state.ViewCalendar && msg.String() == "l" {
-			// If not navigating projects or calendar, 'l' switches to Labels
-			return h.switchToTab(state.TabLabels)
 		}
 	case "switch_pane":
 		h.switchPane()
