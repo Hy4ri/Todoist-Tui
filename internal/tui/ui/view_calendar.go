@@ -480,9 +480,11 @@ func (r *Renderer) renderStatusBar() string {
 	// Left side: status message or error
 	left := ""
 	if r.Err != nil {
-		left = styles.StatusBarError.Render(fmt.Sprintf("Error: %v", r.Err))
+		errStr := strings.ReplaceAll(r.Err.Error(), "\n", " ")
+		left = styles.StatusBarError.Render("Error: " + errStr)
 	} else if r.StatusMsg != "" {
-		left = styles.StatusBarSuccess.Render(r.StatusMsg)
+		msgStr := strings.ReplaceAll(r.StatusMsg, "\n", " ")
+		left = styles.StatusBarSuccess.Render(msgStr)
 	}
 
 	// Right side: context-specific key hints (or just toggle hint if hidden)
@@ -499,6 +501,14 @@ func (r *Renderer) renderStatusBar() string {
 	leftWidth := lipgloss.Width(left)
 	rightWidth := lipgloss.Width(right)
 	padding := styles.StatusBar.GetHorizontalFrameSize()
+
+	// Ensure left doesn't overwhelm right
+	maxLeftWidth := r.Width - rightWidth - padding - 4
+	if leftWidth > maxLeftWidth && maxLeftWidth > 10 {
+		left = truncateString(left, maxLeftWidth)
+		leftWidth = lipgloss.Width(left)
+	}
+
 	spacing := r.Width - leftWidth - rightWidth - padding
 	if spacing < 0 {
 		spacing = 0

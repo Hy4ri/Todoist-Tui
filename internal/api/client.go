@@ -176,3 +176,8 @@ type CommentsPaginatedResponse struct {
 	Results    []Comment `json:"results"`
 	NextCursor *string   `json:"next_cursor"`
 }
+
+// BoolPtr returns a pointer to the given boolean.
+func BoolPtr(b bool) *bool {
+	return &b
+}

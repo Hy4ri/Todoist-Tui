@@ -1357,7 +1357,6 @@ func (h *Handler) buildSidebarItems() {
 	}
 }
 
-// View implements tea.Model.
 // handleToggleFavorite toggles the favorite status of the selected project.
 func (h *Handler) handleToggleFavorite() tea.Cmd {
 	if len(h.SidebarItems) == 0 || h.SidebarCursor >= len(h.SidebarItems) {
@@ -1370,25 +1369,36 @@ func (h *Handler) handleToggleFavorite() tea.Cmd {
 	}
 
 	// Find the project object to get current status
-	var project *api.Project
-	for i := range h.Projects {
-		if h.Projects[i].ID == item.ID {
-			project = &h.Projects[i]
+	var currentFavorite bool
+	found := false
+	for _, p := range h.Projects {
+		if p.ID == item.ID {
+			currentFavorite = p.IsFavorite
+			found = true
 			break
 		}
 	}
 
-	if project == nil {
-		return nil
+	if !found {
+		// Fallback to item's own favorite status if project not found in list
+		currentFavorite = item.IsFavorite
 	}
 
-	newStatus := !project.IsFavorite
+	newStatus := !currentFavorite
+	projectID := item.ID // Capture by value
+	pName := item.Name   // Capture name to ensure request is never "empty"
+
 	h.Loading = true
-	h.StatusMsg = "Toggling favorite..."
+	if newStatus {
+		h.StatusMsg = "Favoriting project..."
+	} else {
+		h.StatusMsg = "Unfavoriting project..."
+	}
 
 	return func() tea.Msg {
-		updatedProject, err := h.Client.UpdateProject(item.ID, api.UpdateProjectRequest{
-			IsFavorite: &newStatus,
+		updatedProject, err := h.Client.UpdateProject(projectID, api.UpdateProjectRequest{
+			Name:       &pName,
+			IsFavorite: api.BoolPtr(newStatus),
 		})
 		if err != nil {
 			return errMsg{err}

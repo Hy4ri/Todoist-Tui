@@ -85,9 +85,12 @@ func (r *Renderer) renderMainView() string {
 	// Render tab bar
 	tabBar := r.renderTabBar()
 
+	// Add status bar
+	statusBar := r.renderStatusBar()
+	statusBarHeight := lipgloss.Height(statusBar)
+
 	// Calculate content height dynamically (total - tab bar - status bar)
 	tabBarHeight := lipgloss.Height(tabBar)
-	statusBarHeight := 2
 	contentHeight := r.Height - tabBarHeight - statusBarHeight
 
 	var mainContent string
@@ -182,9 +185,6 @@ func (r *Renderer) renderMainView() string {
 			mainContent = r.renderTaskList(r.Width-2, contentHeight)
 		}
 	}
-
-	// Add status bar
-	statusBar := r.renderStatusBar()
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, mainContent, statusBar)
 }

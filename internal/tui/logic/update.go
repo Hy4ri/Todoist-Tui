@@ -102,8 +102,8 @@ func (h *Handler) handleWindowSizeMsg(msg tea.WindowSizeMsg) tea.Cmd {
 	h.Width = msg.Width
 	h.Height = msg.Height
 	// Initialize or update viewport dimensions
-	// Reserve space for tab bar (~3 lines), status bar (2 lines), borders (2 lines), title (2 lines)
-	vpHeight := msg.Height - 9
+	// Reserve space for tab bar (~3 lines), status bar (1 line), borders (2 lines), title (2 lines)
+	vpHeight := msg.Height - 8
 	if vpHeight < 5 {
 		vpHeight = 5
 	}

@@ -232,7 +232,8 @@ var (
 	StatusBar = lipgloss.NewStyle().
 			Foreground(lipgloss.AdaptiveColor{Light: "#333333", Dark: "#DDDDDD"}).
 			Background(lipgloss.AdaptiveColor{Light: "#E8E8E8", Dark: "#1F1F1F"}).
-			Padding(0, 1)
+			Padding(0, 1).
+			Height(1)
 
 	// StatusBarKey is for keyboard shortcut hints
 	StatusBarKey = lipgloss.NewStyle().

@@ -189,10 +189,11 @@ type CreateProjectRequest struct {
 
 // UpdateProjectRequest represents the request body for updating a project.
 type UpdateProjectRequest struct {
-	Name       *string `json:"name,omitempty"`
-	Color      *string `json:"color,omitempty"`
-	IsFavorite *bool   `json:"is_favorite,omitempty"`
-	ViewStyle  *string `json:"view_style,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Color       *string `json:"color,omitempty"`
+	IsFavorite  *bool   `json:"is_favorite,omitempty"`
+	ViewStyle   *string `json:"view_style,omitempty"`
 }
 
 // CreateSectionRequest represents the request body for creating a section.
