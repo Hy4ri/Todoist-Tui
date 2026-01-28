@@ -559,17 +559,12 @@ func (h *Handler) handleAdd() tea.Cmd {
 
 // handleMoveTaskDate moves the task due date by the specified number of days.
 func (h *Handler) handleMoveTaskDate(days int) tea.Cmd {
-	var taskID string
-	var currentDateStr string
+	var task *api.Task
 
-	// Determine task and current date
+	// Determine task
 	if h.SelectedTask != nil {
-		taskID = h.SelectedTask.ID
-		if h.SelectedTask.Due != nil {
-			currentDateStr = h.SelectedTask.Due.Date
-		}
+		task = h.SelectedTask
 	} else if len(h.Tasks) > 0 {
-		var task *api.Task
 		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
 			idx := h.TaskOrderedIndices[h.TaskCursor]
 			if idx >= 0 && idx < len(h.Tasks) {
@@ -578,17 +573,16 @@ func (h *Handler) handleMoveTaskDate(days int) tea.Cmd {
 		} else if h.TaskCursor < len(h.Tasks) {
 			task = &h.Tasks[h.TaskCursor]
 		}
-
-		if task != nil {
-			taskID = task.ID
-			if task.Due != nil {
-				currentDateStr = task.Due.Date
-			}
-		}
 	}
 
-	if taskID == "" {
+	if task == nil {
 		return nil
+	}
+
+	taskID := task.ID
+	var currentDateStr string
+	if task.Due != nil {
+		currentDateStr = task.Due.Date
 	}
 
 	// Calculate new date
@@ -610,10 +604,16 @@ func (h *Handler) handleMoveTaskDate(days int) tea.Cmd {
 	h.StatusMsg = fmt.Sprintf("Moving task to %s...", newDateStr)
 	h.Loading = true
 
-	// Prepare UpdateReq: explicitly verify DueString is NOT set to preserve recurrence
+	// Prepare UpdateReq
 	updateReq := api.UpdateTaskRequest{
 		DueDate: &newDateStr,
-		// DueString must be nil to avoid overwriting recurrence
+	}
+
+	// If task is recurring, we MUST explicitly send the recurrence string.
+	// Otherwise the API might treat this as a one-off date assignment and convert it to non-recurring.
+	if task.Due != nil && task.Due.IsRecurring && task.Due.String != "" {
+		recurrence := task.Due.String
+		updateReq.DueString = &recurrence
 	}
 
 	return func() tea.Msg {
