@@ -199,7 +199,6 @@ func (s *SidebarModel) View() string {
 			if i == s.cursor && s.focused {
 				// Selected item: Keep background/bold, but tint foreground (if desired) or simple keep generic selection
 				// Todoist usually keeps specific color icon but white text on selection.
-				// Let's just color the Icon.
 			} else {
 				itemStyle = itemStyle.Foreground(color)
 			}
@@ -216,10 +215,9 @@ func (s *SidebarModel) View() string {
 			// If selected, we might want to ensure high contrast.
 			// Usually selected = reversed or distinct background.
 			if i == s.cursor && s.focused {
-				// Use selection style for the whole line, but allow icon/name color to persist if possible.
-				// Explicitly color the name too, as per user request.
-				coloredName := iconStyle.Render(name)
-				renderedItem = fmt.Sprintf("%s%s%s %s%s", cursor, indent, iconStyle.Render(item.Icon), coloredName, countStr)
+				// Use selection style for the whole line.
+				// Todoist style: Colored Icon, White Text (default selection text).
+				renderedItem = fmt.Sprintf("%s%s%s %s%s", cursor, indent, iconStyle.Render(item.Icon), name, countStr)
 			} else {
 				// Not selected - apply color to icon AND name
 				// Let's apply to icon only for "folder" icons, or bullet points.
