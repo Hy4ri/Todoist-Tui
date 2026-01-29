@@ -14,6 +14,8 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 )
 
+const maxConcurrentRequests = 5
+
 func (h *Handler) sortTasks() {
 	sort.Slice(h.Tasks, func(i, j int) bool {
 		ti, tj := h.Tasks[i], h.Tasks[j]
@@ -84,10 +86,13 @@ func (h *Handler) handleComplete() tea.Cmd {
 			}
 
 			results := make(chan result, len(tasksToComplete))
+			sem := make(chan struct{}, maxConcurrentRequests)
 
 			// Launch concurrent API calls
 			for _, task := range tasksToComplete {
+				sem <- struct{}{}
 				go func(t api.Task) {
+					defer func() { <-sem }()
 					var err error
 					if t.Checked {
 						err = h.Client.ReopenTask(t.ID)
@@ -401,10 +406,13 @@ func (h *Handler) handleDelete() tea.Cmd {
 			}
 
 			results := make(chan result, len(tasksToDelete))
+			sem := make(chan struct{}, maxConcurrentRequests)
 
 			// Launch concurrent API calls
 			for _, task := range tasksToDelete {
+				sem <- struct{}{}
 				go func(t api.Task) {
+					defer func() { <-sem }()
 					err := h.Client.DeleteTask(t.ID)
 					results <- result{success: err == nil}
 				}(task)
