@@ -313,16 +313,17 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 
 		// Rows 2-3: Task previews
 		for taskLine := 0; taskLine < maxTasksPerCell; taskLine++ {
-			taskRow := "│"
+			var taskRowBuilder strings.Builder
+			taskRowBuilder.WriteString("│")
 			tempDay := day
 			for weekday := 0; weekday < 7; weekday++ {
 				if week == 0 && weekday < startWeekday {
-					taskRow += strings.Repeat(" ", cellWidth) + "│"
+					taskRowBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
 					continue
 				}
 
 				if tempDay > daysInMonth {
-					taskRow += strings.Repeat(" ", cellWidth) + "│"
+					taskRowBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
 					tempDay++
 					continue
 				}
@@ -364,10 +365,10 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 					cellContent = strings.Repeat(" ", cellWidth)
 				}
 
-				taskRow += cellContent + "│"
+				taskRowBuilder.WriteString(cellContent + "│")
 				tempDay++
 			}
-			b.WriteString(taskRow)
+			b.WriteString(taskRowBuilder.String())
 			b.WriteString("\n")
 		}
 
