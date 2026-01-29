@@ -52,7 +52,18 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 		if t.Due == nil {
 			continue
 		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
+		var parsed time.Time
+		var err error
+
+		// Use cached date if available
+		if cached, ok := r.State.TaskDates[t.ID]; ok {
+			parsed = cached
+		} else {
+			// Fallback to parsing if not in cache
+			parsed, err = time.Parse("2006-01-02", t.Due.Date)
+		}
+
+		if err == nil {
 			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
 				tasksByDay[parsed.Day()]++
 			}
@@ -229,7 +240,18 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 		if t.Due == nil {
 			continue
 		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
+		var parsed time.Time
+		var err error
+
+		// Use cached date if available
+		if cached, ok := r.State.TaskDates[t.ID]; ok {
+			parsed = cached
+		} else {
+			// Fallback to parsing if not in cache
+			parsed, err = time.Parse("2006-01-02", t.Due.Date)
+		}
+
+		if err == nil {
 			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
 				tasksByDay[parsed.Day()] = append(tasksByDay[parsed.Day()], t)
 			}

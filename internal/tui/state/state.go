@@ -86,6 +86,9 @@ type State struct {
 	Projects []api.Project
 	Tasks    []api.Task
 
+	// Optimization: Cached parsed dates for tasks
+	TaskDates map[string]time.Time
+
 	// UI Elements
 	SidebarItems []components.SidebarItem
 
