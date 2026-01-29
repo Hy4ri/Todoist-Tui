@@ -47,6 +47,7 @@ type TaskForm struct {
 	// Data for completion/selection
 	AvailableProjects []api.Project
 	AvailableLabels   []api.Label
+	LabelListCursor   int
 }
 
 // Update updates the form models.
@@ -56,13 +57,27 @@ func (f *TaskForm) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Navigation
+		// Prevent global navigation if we are navigating a dropdown
+		isLabelDropdown := f.FocusIndex == FormFieldLabels && f.ShowLabelList
+
 		switch msg.String() {
-		case "tab", "down":
+		case "tab":
 			f.NextField()
 			return nil
-		case "shift+tab", "up":
+		case "shift+tab":
 			f.PrevField()
 			return nil
+		case "down":
+			if !isLabelDropdown {
+				f.NextField()
+				return nil
+			}
+		case "up":
+			if !isLabelDropdown {
+				f.PrevField()
+				return nil
+			}
 		}
 
 		// Handle specific field input
@@ -102,20 +117,46 @@ func (f *TaskForm) Update(msg tea.Msg) tea.Cmd {
 			}
 			// Don't return here, let parent handle project selection if needed
 		case FormFieldLabels:
-			// Toggle dropdown on Enter/Space
-			if msg.String() == "enter" || msg.String() == "space" {
-				f.ShowLabelList = !f.ShowLabelList
-				return nil
+			if f.ShowLabelList {
+				switch msg.String() {
+				case "j", "down":
+					if f.LabelListCursor < len(f.AvailableLabels)-1 {
+						f.LabelListCursor++
+					}
+					return nil
+				case "k", "up":
+					if f.LabelListCursor > 0 {
+						f.LabelListCursor--
+					}
+					return nil
+				case "enter", "space", " ":
+					if len(f.AvailableLabels) > 0 && f.LabelListCursor < len(f.AvailableLabels) {
+						label := f.AvailableLabels[f.LabelListCursor].Name
+						// Toggle selection
+						found := false
+						for i, l := range f.Labels {
+							if l == label {
+								// Remove
+								f.Labels = append(f.Labels[:i], f.Labels[i+1:]...)
+								found = true
+								break
+							}
+						}
+						if !found {
+							f.Labels = append(f.Labels, label)
+						}
+					}
+					return nil
+				case "esc":
+					f.ShowLabelList = false
+					return nil
+				}
+			} else {
+				if msg.String() == "enter" || msg.String() == "space" || msg.String() == " " || msg.String() == "j" || msg.String() == "down" {
+					f.ShowLabelList = true
+					return nil
+				}
 			}
-
-			// If dropdown is open, handle selection with keys?
-			// Actually, navigation happens in wrapper logic?
-			// Wait, f.Labels is a list of strings. We need a way to SELECT one.
-			// The current state doesn't have a "Cursor" for the label list.
-			// We need to add `LabelListCursor int` to struct to support selection.
-			// For now, let's just allow opening/closing.
-			// Real selection logic requires tracking a cursor inside the dropdown.
-
 		}
 	}
 

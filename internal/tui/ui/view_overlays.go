@@ -146,15 +146,31 @@ func (r *Renderer) renderTaskForm() string {
 	if f.ShowLabelList {
 		b.WriteString(styles.Subtitle.Render("Select Labels:") + "\n")
 		var lines []string
-		count := 0
 
 		if len(f.AvailableLabels) == 0 {
 			lines = append(lines, styles.HelpDesc.Render("No labels available"))
 		} else {
-			for _, l := range f.AvailableLabels {
-				if count > 5 {
-					break
+			height := 5
+			start := 0
+			if f.LabelListCursor > height/2 {
+				start = f.LabelListCursor - height/2
+			}
+			end := start + height
+			if end > len(f.AvailableLabels) {
+				end = len(f.AvailableLabels)
+				start = end - height
+				if start < 0 {
+					start = 0
 				}
+			}
+
+			// Top indicator
+			if start > 0 {
+				lines = append(lines, styles.HelpDesc.Render("..."))
+			}
+
+			for i := start; i < end; i++ {
+				l := f.AvailableLabels[i]
 				cursor := "  "
 				style := styles.LabelItem
 
@@ -167,15 +183,26 @@ func (r *Renderer) renderTaskForm() string {
 					}
 				}
 
-				if isSelected {
-					cursor = "✓ "
-					style = styles.LabelSelected
+				if i == f.LabelListCursor {
+					style = style.Copy().Bold(true).Foreground(styles.Highlight)
+					if isSelected {
+						cursor = ">✓"
+					} else {
+						cursor = "> "
+					}
+				} else {
+					if isSelected {
+						cursor = " ✓"
+						style = styles.LabelSelected
+					}
 				}
+
 				lines = append(lines, style.Render(cursor+l.Name))
-				count++
 			}
-			if len(f.AvailableLabels) > 5 {
-				remaining := len(f.AvailableLabels) - 5
+
+			// Bottom indicator
+			if end < len(f.AvailableLabels) {
+				remaining := len(f.AvailableLabels) - end
 				lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("...and %d more", remaining)))
 			}
 		}
