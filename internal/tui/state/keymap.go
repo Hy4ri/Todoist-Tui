@@ -43,9 +43,7 @@ type KeymapData struct {
 	MoveTaskNextDay Key
 
 	// Navigation between panes
-	SwitchPane    Key
-	FocusTasks    Key
-	FocusProjects Key
+	SwitchPane Key
 
 	// Search/Filter
 	Search Key
@@ -96,9 +94,7 @@ func DefaultKeymap() KeymapData {
 		MoveTaskNextDay: Key{Key: ">", Help: "move +1 day"},
 
 		// Navigation between panes
-		SwitchPane:    Key{Key: "tab", Help: "switch pane"},
-		FocusTasks:    Key{Key: "t", Help: "focus tasks"},
-		FocusProjects: Key{Key: "p", Help: "focus projects"},
+		SwitchPane: Key{Key: "tab", Help: "switch pane"},
 
 		// Search
 		Search: Key{Key: "/", Help: "search"},

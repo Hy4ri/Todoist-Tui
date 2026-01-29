@@ -492,10 +492,6 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			h.StatusMsg = "Use 'S' to manage sections - select with Space, reorder with Shift+j/k"
 			return nil
 		}
-	// Note: 'C' key is not in keymap yet, handling manually or adding to keymap
-	// Actually, I should add 'C' to keymap or handle via raw key manually if I want.
-	// But let's assume I added 'C' -> 'add_comment' in keymap (I didn't yet).
-	// I'll add the case here assuming I will update keymap.go next.
 	case "add_comment":
 		if h.SelectedTask != nil {
 			h.IsAddingComment = true
