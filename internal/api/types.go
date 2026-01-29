@@ -8,32 +8,33 @@ import (
 
 // Task represents a Todoist task.
 type Task struct {
-	ID             string    `json:"id"`
-	UserID         string    `json:"user_id"`
-	ProjectID      string    `json:"project_id"`
-	SectionID      *string   `json:"section_id"`
-	ParentID       *string   `json:"parent_id"`
-	Content        string    `json:"content"`
-	Description    string    `json:"description"`
-	Checked        bool      `json:"checked"`
-	IsDeleted      bool      `json:"is_deleted"`
-	IsCollapsed    bool      `json:"is_collapsed"`
-	Labels         []string  `json:"labels"`
-	ChildOrder     int       `json:"child_order"`
-	DayOrder       int       `json:"day_order"`
-	Priority       int       `json:"priority"`
-	Due            *Due      `json:"due"`
-	Deadline       *Deadline `json:"deadline"`
-	URL            string    `json:"url"`
-	NoteCount      int       `json:"note_count"`
-	AddedAt        string    `json:"added_at"`
-	AddedByUID     string    `json:"added_by_uid"`
-	AssignedByUID  *string   `json:"assigned_by_uid"`
-	ResponsibleUID *string   `json:"responsible_uid"`
-	CompletedAt    *string   `json:"completed_at"`
-	CompletedByUID *string   `json:"completed_by_uid"`
-	UpdatedAt      string    `json:"updated_at"`
-	Duration       *Duration `json:"duration"`
+	ID             string     `json:"id"`
+	UserID         string     `json:"user_id"`
+	ProjectID      string     `json:"project_id"`
+	SectionID      *string    `json:"section_id"`
+	ParentID       *string    `json:"parent_id"`
+	Content        string     `json:"content"`
+	Description    string     `json:"description"`
+	Checked        bool       `json:"checked"`
+	IsDeleted      bool       `json:"is_deleted"`
+	IsCollapsed    bool       `json:"is_collapsed"`
+	Labels         []string   `json:"labels"`
+	ChildOrder     int        `json:"child_order"`
+	DayOrder       int        `json:"day_order"`
+	Priority       int        `json:"priority"`
+	Due            *Due       `json:"due"`
+	Deadline       *Deadline  `json:"deadline"`
+	URL            string     `json:"url"`
+	NoteCount      int        `json:"note_count"`
+	AddedAt        string     `json:"added_at"`
+	AddedByUID     string     `json:"added_by_uid"`
+	AssignedByUID  *string    `json:"assigned_by_uid"`
+	ResponsibleUID *string    `json:"responsible_uid"`
+	CompletedAt    *string    `json:"completed_at"`
+	CompletedByUID *string    `json:"completed_by_uid"`
+	UpdatedAt      string     `json:"updated_at"`
+	Duration       *Duration  `json:"duration"`
+	ParsedDate     *time.Time `json:"-"`
 }
 
 // Due represents a task's due date information.
@@ -253,10 +254,17 @@ func (t *Task) IsOverdue() bool {
 		return false
 	}
 
-	// Parse in local timezone to match time.Now()
-	dueDate, err := time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
-	if err != nil {
-		return false
+	var dueDate time.Time
+	var err error
+
+	if t.ParsedDate != nil {
+		dueDate = *t.ParsedDate
+	} else {
+		// Parse in local timezone to match time.Now()
+		dueDate, err = time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
+		if err != nil {
+			return false
+		}
 	}
 
 	today := time.Now()
@@ -270,10 +278,17 @@ func (t *Task) IsDueToday() bool {
 		return false
 	}
 
-	// Parse in local timezone to match time.Now()
-	dueDate, err := time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
-	if err != nil {
-		return false
+	var dueDate time.Time
+	var err error
+
+	if t.ParsedDate != nil {
+		dueDate = *t.ParsedDate
+	} else {
+		// Parse in local timezone to match time.Now()
+		dueDate, err = time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
+		if err != nil {
+			return false
+		}
 	}
 
 	today := time.Now()
@@ -287,10 +302,17 @@ func (t *Task) DueDisplay() string {
 		return ""
 	}
 
-	// Parse in local timezone to match time.Now()
-	dueDate, err := time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
-	if err != nil {
-		return t.Due.String
+	var dueDate time.Time
+	var err error
+
+	if t.ParsedDate != nil {
+		dueDate = *t.ParsedDate
+	} else {
+		// Parse in local timezone to match time.Now()
+		dueDate, err = time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
+		if err != nil {
+			return t.Due.String
+		}
 	}
 
 	today := time.Now()

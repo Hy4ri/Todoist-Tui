@@ -3,11 +3,13 @@ package logic
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
 
@@ -137,8 +139,28 @@ func (h *Handler) handleWindowSizeMsg(msg tea.WindowSizeMsg) tea.Cmd {
 func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	h.Loading = false
 
+	dataChanged := false
+
 	if len(msg.allTasks) > 0 {
 		h.AllTasks = msg.allTasks
+		dataChanged = true
+		h.TasksByDate = make(map[string][]api.Task)
+
+		// Optimization: Pre-parse task dates and group by date
+		for i := range h.AllTasks {
+			t := &h.AllTasks[i]
+			if t.Due != nil {
+				dateStr := t.Due.Date
+				if len(dateStr) > 10 {
+					dateStr = dateStr[:10]
+				}
+				h.TasksByDate[dateStr] = append(h.TasksByDate[dateStr], *t)
+
+				if parsed, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
+					t.ParsedDate = &parsed
+				}
+			}
+		}
 	}
 
 	if len(msg.projects) > 0 {
@@ -163,6 +185,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	if msg.tasks != nil {
 		h.Tasks = msg.tasks
 		h.sortTasks()
+		dataChanged = true
 	}
 	if len(msg.labels) > 0 {
 		h.Labels = msg.labels
@@ -187,6 +210,10 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 			}
 		}
 		h.RestoreCursorToTaskID = "" // Clear after restoring
+	}
+
+	if dataChanged {
+		h.DataVersion++
 	}
 
 	return nil

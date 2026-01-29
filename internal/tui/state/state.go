@@ -86,6 +86,9 @@ type State struct {
 	Projects []api.Project
 	Tasks    []api.Task
 
+	// DataVersion tracks the version of data to help with caching
+	DataVersion int64
+
 	// UI Elements
 	SidebarItems []components.SidebarItem
 
@@ -94,6 +97,7 @@ type State struct {
 	AllSections    []api.Section
 	Labels         []api.Label
 	Comments       []api.Comment
+	TasksByDate    map[string][]api.Task
 	SelectedTask   *api.Task
 	CurrentProject *api.Project
 	CurrentLabel   *api.Label

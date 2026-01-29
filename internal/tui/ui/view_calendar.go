@@ -47,15 +47,12 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 	today := time.Now()
 
 	// Build map of tasks by day
+	// Build map of tasks by day using TasksByDate cache
 	tasksByDay := make(map[int]int) // day -> count
-	for _, t := range r.AllTasks {
-		if t.Due == nil {
-			continue
-		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
-			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
-				tasksByDay[parsed.Day()]++
-			}
+	for d := 1; d <= daysInMonth; d++ {
+		dateStr := fmt.Sprintf("%04d-%02d-%02d", r.CalendarDate.Year(), r.CalendarDate.Month(), d)
+		if tasks, ok := r.TasksByDate[dateStr]; ok {
+			tasksByDay[d] = len(tasks)
 		}
 	}
 
@@ -124,14 +121,9 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 	b.WriteString(styles.Subtitle.Render(selectedDate.Format("Monday, January 2")))
 	b.WriteString("\n\n")
 
-	// Find tasks for selected day
-	var dayTasks []api.Task
-	selectedDateStr := selectedDate.Format("2006-01-02")
-	for _, t := range r.AllTasks {
-		if t.Due != nil && t.Due.Date == selectedDateStr {
-			dayTasks = append(dayTasks, t)
-		}
-	}
+	// Find tasks for selected day using cache
+	dateStr := selectedDate.Format("2006-01-02")
+	dayTasks := r.TasksByDate[dateStr]
 
 	// Calculate remaining height for task list
 	// Used: title(1) + help(1) + blank(1) + weekdays(1) + calendar(weeksRendered) + blank(1) + subtitle(1) + blank(1)
@@ -201,15 +193,16 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 
 	// Weekday headers
 	weekdays := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
-	headerLine := "│"
+	var headerBuilder strings.Builder
+	headerBuilder.WriteString("│")
 	for _, wd := range weekdays {
 		header := fmt.Sprintf(" %-*s", cellWidth-1, wd)
 		if len(header) > cellWidth {
 			header = header[:cellWidth]
 		}
-		headerLine += styles.CalendarWeekday.Render(header) + "│"
+		headerBuilder.WriteString(styles.CalendarWeekday.Render(header) + "│")
 	}
-	b.WriteString(headerLine)
+	b.WriteString(headerBuilder.String())
 	b.WriteString("\n")
 
 	// Top border
@@ -223,16 +216,12 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 	daysInMonth := lastOfMonth.Day()
 	today := time.Now()
 
-	// Build map of tasks by day
+	// Build map of tasks by day using TasksByDate cache
 	tasksByDay := make(map[int][]api.Task) // day -> tasks
-	for _, t := range r.AllTasks {
-		if t.Due == nil {
-			continue
-		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
-			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
-				tasksByDay[parsed.Day()] = append(tasksByDay[parsed.Day()], t)
-			}
+	for d := 1; d <= daysInMonth; d++ {
+		dateStr := fmt.Sprintf("%04d-%02d-%02d", r.CalendarDate.Year(), r.CalendarDate.Month(), d)
+		if tasks, ok := r.TasksByDate[dateStr]; ok {
+			tasksByDay[d] = tasks
 		}
 	}
 
@@ -267,10 +256,11 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 		}
 
 		// Row 1: Day numbers
-		dayNumLine := "│"
+		var dayNumBuilder strings.Builder
+		dayNumBuilder.WriteString("│")
 		for weekday := 0; weekday < 7; weekday++ {
 			if week == 0 && weekday < startWeekday || day > daysInMonth {
-				dayNumLine += strings.Repeat(" ", cellWidth) + "│"
+				dayNumBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
 				if week == 0 && weekday < startWeekday {
 					continue
 				}
@@ -299,10 +289,10 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 
 			// Pad to cell width
 			paddedDay := fmt.Sprintf("%-*s", cellWidth, dayStr)
-			dayNumLine += style.Render(paddedDay) + "│"
+			dayNumBuilder.WriteString(style.Render(paddedDay) + "│")
 			day++
 		}
-		b.WriteString(dayNumLine)
+		b.WriteString(dayNumBuilder.String())
 		b.WriteString("\n")
 
 		// Reset day counter for task rows
@@ -313,16 +303,17 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 
 		// Rows 2-3: Task previews
 		for taskLine := 0; taskLine < maxTasksPerCell; taskLine++ {
-			taskRow := "│"
+			var taskRowBuilder strings.Builder
+			taskRowBuilder.WriteString("│")
 			tempDay := day
 			for weekday := 0; weekday < 7; weekday++ {
 				if week == 0 && weekday < startWeekday {
-					taskRow += strings.Repeat(" ", cellWidth) + "│"
+					taskRowBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
 					continue
 				}
 
 				if tempDay > daysInMonth {
-					taskRow += strings.Repeat(" ", cellWidth) + "│"
+					taskRowBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
 					tempDay++
 					continue
 				}
@@ -364,10 +355,10 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 					cellContent = strings.Repeat(" ", cellWidth)
 				}
 
-				taskRow += cellContent + "│"
+				taskRowBuilder.WriteString(cellContent + "│")
 				tempDay++
 			}
-			b.WriteString(taskRow)
+			b.WriteString(taskRowBuilder.String())
 			b.WriteString("\n")
 		}
 
