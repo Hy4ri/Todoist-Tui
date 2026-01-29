@@ -40,6 +40,9 @@ type TaskForm struct {
 	SectionName     string
 	Context         string
 
+	// Dropdown Cursors
+	LabelListCursor int
+
 	// Mode tracking
 	Mode   string // "create" or "edit"
 	TaskID string // ID of task being edited
@@ -102,19 +105,49 @@ func (f *TaskForm) Update(msg tea.Msg) tea.Cmd {
 			}
 			// Don't return here, let parent handle project selection if needed
 		case FormFieldLabels:
-			// Toggle dropdown on Enter/Space
-			if msg.String() == "enter" || msg.String() == "space" {
-				f.ShowLabelList = !f.ShowLabelList
-				return nil
-			}
+			// If dropdown is NOT open, Enter/Space opens it
+			if !f.ShowLabelList {
+				if msg.String() == "enter" || msg.String() == "space" {
+					f.ShowLabelList = true
+					return nil
+				}
+			} else {
+				// Dropdown IS open
+				switch msg.String() {
+				case "esc":
+					f.ShowLabelList = false
+					return nil
+				case "up", "k":
+					if f.LabelListCursor > 0 {
+						f.LabelListCursor--
+					}
+				case "down", "j":
+					if f.LabelListCursor < len(f.AvailableLabels)-1 {
+						f.LabelListCursor++
+					}
+				case "enter", "space":
+					if len(f.AvailableLabels) > 0 && f.LabelListCursor < len(f.AvailableLabels) {
+						selectedLabel := f.AvailableLabels[f.LabelListCursor]
 
-			// If dropdown is open, handle selection with keys?
-			// Actually, navigation happens in wrapper logic?
-			// Wait, f.Labels is a list of strings. We need a way to SELECT one.
-			// The current state doesn't have a "Cursor" for the label list.
-			// We need to add `LabelListCursor int` to struct to support selection.
-			// For now, let's just allow opening/closing.
-			// Real selection logic requires tracking a cursor inside the dropdown.
+						// Toggle selection
+						foundIndex := -1
+						for i, name := range f.Labels {
+							if name == selectedLabel.Name {
+								foundIndex = i
+								break
+							}
+						}
+
+						if foundIndex >= 0 {
+							// Remove
+							f.Labels = append(f.Labels[:foundIndex], f.Labels[foundIndex+1:]...)
+						} else {
+							// Add
+							f.Labels = append(f.Labels, selectedLabel.Name)
+						}
+					}
+				}
+			}
 
 		}
 	}

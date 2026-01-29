@@ -146,37 +146,61 @@ func (r *Renderer) renderTaskForm() string {
 	if f.ShowLabelList {
 		b.WriteString(styles.Subtitle.Render("Select Labels:") + "\n")
 		var lines []string
-		count := 0
 
 		if len(f.AvailableLabels) == 0 {
 			lines = append(lines, styles.HelpDesc.Render("No labels available"))
 		} else {
-			for _, l := range f.AvailableLabels {
-				if count > 5 {
-					break
-				}
-				cursor := "  "
-				style := styles.LabelItem
+			// Scrolling logic
+			windowHeight := 5
+			startIdx := 0
+			if f.LabelListCursor >= windowHeight {
+				startIdx = f.LabelListCursor - windowHeight + 1
+			}
+			endIdx := startIdx + windowHeight
+			if endIdx > len(f.AvailableLabels) {
+				endIdx = len(f.AvailableLabels)
+			}
 
-				// Check if label is selected in f.Labels
-				isSelected := false
+			// Show indicator if scrolled down
+			if startIdx > 0 {
+				lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("▲ %d more", startIdx)))
+			}
+
+			for i := startIdx; i < endIdx; i++ {
+				l := f.AvailableLabels[i]
+
+				cursor := "  "
+				// Label list cursor indication
+				if i == f.LabelListCursor {
+					cursor = "> "
+				}
+
+				style := styles.LabelItem
+				if i == f.LabelListCursor {
+					style = style.Bold(true).Foreground(styles.Highlight)
+				}
+
+				// Check if label is checked/selected
+				isChecked := false
 				for _, selectedLabelName := range f.Labels {
 					if selectedLabelName == l.Name {
-						isSelected = true
+						isChecked = true
 						break
 					}
 				}
 
-				if isSelected {
-					cursor = "✓ "
-					style = styles.LabelSelected
+				checkMark := "[ ] "
+				if isChecked {
+					checkMark = "[x] "
+					style = style.Foreground(styles.Highlight) // Keep highlight for selected
 				}
-				lines = append(lines, style.Render(cursor+l.Name))
-				count++
+
+				lines = append(lines, style.Render(cursor+checkMark+l.Name))
 			}
-			if len(f.AvailableLabels) > 5 {
-				remaining := len(f.AvailableLabels) - 5
-				lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("...and %d more", remaining)))
+
+			if endIdx < len(f.AvailableLabels) {
+				remaining := len(f.AvailableLabels) - endIdx
+				lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("▼ %d more", remaining)))
 			}
 		}
 
