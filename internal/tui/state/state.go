@@ -86,6 +86,9 @@ type State struct {
 	Projects []api.Project
 	Tasks    []api.Task
 
+	// DataVersion tracks the version of data to help with caching
+	DataVersion int64
+
 	// UI Elements
 	SidebarItems []components.SidebarItem
 

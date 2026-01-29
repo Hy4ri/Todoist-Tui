@@ -6,12 +6,18 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
 type Renderer struct {
 	*state.State
+
+	// Caches
+	lastDataVersion       int64
+	cachedExtractedLabels []api.Label
+	cachedTaskCountMap    map[string]int
 }
 
 func NewRenderer(s *state.State) *Renderer {

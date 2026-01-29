@@ -132,9 +132,11 @@ func (h *Handler) handleWindowSizeMsg(msg tea.WindowSizeMsg) tea.Cmd {
 
 func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	h.Loading = false
+	dataChanged := false
 
 	if len(msg.allTasks) > 0 {
 		h.AllTasks = msg.allTasks
+		dataChanged = true
 	}
 
 	if len(msg.projects) > 0 {
@@ -159,6 +161,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	if msg.tasks != nil {
 		h.Tasks = msg.tasks
 		h.sortTasks()
+		dataChanged = true
 	}
 	if len(msg.labels) > 0 {
 		h.Labels = msg.labels
@@ -183,6 +186,10 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 			}
 		}
 		h.RestoreCursorToTaskID = "" // Clear after restoring
+	}
+
+	if dataChanged {
+		h.DataVersion++
 	}
 
 	return nil

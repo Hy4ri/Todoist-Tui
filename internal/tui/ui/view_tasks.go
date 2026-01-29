@@ -639,14 +639,25 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 		b.WriteString("\n")
 		b.WriteString(styles.HelpDesc.Render("Press ESC to go back to labels list"))
 	} else {
+		// Invalidate cache if data version changed
+		if r.State.DataVersion != r.lastDataVersion || r.cachedTaskCountMap == nil {
+			r.cachedTaskCountMap = r.getLabelTaskCounts()
+			r.lastDataVersion = r.State.DataVersion
+			// Invalidate extracted labels too
+			r.cachedExtractedLabels = nil
+		}
+
 		// Extract unique labels from all tasks if personal labels are empty
 		labelsToShow := r.Labels
 		if len(labelsToShow) == 0 {
-			labelsToShow = r.extractLabelsFromTasks()
+			if r.cachedExtractedLabels == nil {
+				r.cachedExtractedLabels = r.extractLabelsFromTasks()
+			}
+			labelsToShow = r.cachedExtractedLabels
 		}
 
 		// Build task count map for labels
-		taskCountMap := r.getLabelTaskCounts()
+		taskCountMap := r.cachedTaskCountMap
 
 		// Account for footer (2 lines)
 		labelHeight := contentHeight - 2
