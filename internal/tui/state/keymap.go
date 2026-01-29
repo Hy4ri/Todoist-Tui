@@ -298,7 +298,7 @@ func (k KeymapData) HelpItems() [][]string {
 		{"Navigation", ""},
 		{k.Up.Key + "/" + k.Down.Key, "Move up/down"},
 		{"gg/G", "Go to top/bottom"},
-		{k.HalfUp.Key + "/" + k.HalfDown.Key, "Half page up/down"},
+		{"Ctrl+u/d", "Half page up/down"},
 		{k.SwitchPane.Key, "Switch pane (Sidebar/Main)"},
 		{"h/l", "Pane navigation (Left/Right)"},
 		{"", ""},
