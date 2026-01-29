@@ -47,7 +47,11 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case dataLoadedMsg:
 		return h.handleDataLoaded(msg)
 
-	case taskUpdatedMsg, taskDeletedMsg, taskCompletedMsg, taskCreatedMsg:
+	case taskCompletedMsg, taskDeletedMsg:
+		h.Loading = false
+		return nil
+
+	case taskUpdatedMsg, taskCreatedMsg:
 		return h.handleTaskMsgs(msg)
 
 	case projectCreatedMsg, projectUpdatedMsg, projectDeletedMsg:

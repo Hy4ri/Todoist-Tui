@@ -2,6 +2,7 @@ package logic
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ func (h *Handler) sortTasks() {
 	})
 }
 
-// handleSelect handles the Enter key.
+// handleComplete handles the task completion with optimistic updates.
 func (h *Handler) handleComplete() tea.Cmd {
 	// In Projects tab, only allow in main pane
 	if h.CurrentTab == state.TabProjects && h.FocusedPane != state.PaneMain {
@@ -67,93 +68,127 @@ func (h *Handler) handleComplete() tea.Cmd {
 		return nil
 	}
 
-	// If there are selected tasks, complete/uncomplete all of them
+	tasksToComplete := make([]api.Task, 0)
+
+	// Identify tasks to complete
 	if len(h.SelectedTaskIDs) > 0 {
-		h.Loading = true
-		tasksToComplete := make([]api.Task, 0)
 		for _, task := range h.Tasks {
 			if h.SelectedTaskIDs[task.ID] {
 				tasksToComplete = append(tasksToComplete, task)
 			}
 		}
-
-		return func() tea.Msg {
-			// Use channels and goroutines for concurrent API calls
-			type result struct {
-				success bool
+	} else {
+		// Get the correct task using ordered indices mapping
+		var task *api.Task
+		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+			taskIndex := h.TaskOrderedIndices[h.TaskCursor]
+			if taskIndex >= 0 && taskIndex < len(h.Tasks) {
+				task = &h.Tasks[taskIndex]
 			}
+		} else if h.TaskCursor < len(h.Tasks) {
+			task = &h.Tasks[h.TaskCursor]
+		}
 
-			results := make(chan result, len(tasksToComplete))
-
-			// Launch concurrent API calls
-			for _, task := range tasksToComplete {
-				go func(t api.Task) {
-					var err error
-					if t.Checked {
-						err = h.Client.ReopenTask(t.ID)
-					} else {
-						err = h.Client.CloseTask(t.ID)
-					}
-					results <- result{success: err == nil}
-				}(task)
-			}
-
-			// Collect results
-			completed := 0
-			failed := 0
-			for i := 0; i < len(tasksToComplete); i++ {
-				res := <-results
-				if res.success {
-					completed++
-				} else {
-					failed++
-				}
-			}
-
-			if failed > 0 {
-				return statusMsg{msg: fmt.Sprintf("Completed %d tasks, %d failed", completed, failed)}
-			}
-			return statusMsg{msg: fmt.Sprintf("Completed %d tasks", completed)}
+		if task != nil {
+			tasksToComplete = append(tasksToComplete, *task)
 		}
 	}
 
-	// Get the correct task using ordered indices mapping
-	var task *api.Task
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-		// Skip empty section headers (negative indices <= -100)
-		if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-			task = &h.Tasks[taskIndex]
-		}
-	} else if h.TaskCursor < len(h.Tasks) {
-		// Fallback for views that don't use ordered indices
-		task = &h.Tasks[h.TaskCursor]
-	}
-
-	if task == nil {
+	if len(tasksToComplete) == 0 {
 		return nil
 	}
 
-	// Store last action for undo
-	if task.Checked {
-		h.State.LastAction = &state.LastAction{Type: "uncomplete", TaskID: task.ID}
-	} else {
-		h.State.LastAction = &state.LastAction{Type: "complete", TaskID: task.ID}
+	// Store last action for undo (just the first one for simplicity/legacy support)
+	if len(tasksToComplete) == 1 {
+		t := tasksToComplete[0]
+		if t.Checked {
+			h.State.LastAction = &state.LastAction{Type: "uncomplete", TaskID: t.ID}
+		} else {
+			h.State.LastAction = &state.LastAction{Type: "complete", TaskID: t.ID}
+		}
 	}
 
-	h.Loading = true
+	// --- Optimistic Update ---
 
+	idsToRemove := make(map[string]bool)
+	for _, t := range tasksToComplete {
+		idsToRemove[t.ID] = true
+	}
+
+	// Update AllTasks (Source of Truth)
+	h.AllTasks = slices.DeleteFunc(h.AllTasks, func(t api.Task) bool {
+		return idsToRemove[t.ID]
+	})
+
+	// Update h.Tasks (Current View)
+	h.Tasks = slices.DeleteFunc(h.Tasks, func(t api.Task) bool {
+		return idsToRemove[t.ID]
+	})
+
+	// Clear Selection
+	h.SelectedTaskIDs = make(map[string]bool)
+
+	// Adjust Cursor
+	if h.TaskCursor >= len(h.Tasks) {
+		h.TaskCursor = max(0, len(h.Tasks)-1)
+	}
+
+	// Update Sidebar Counts
+	h.buildSidebarItems()
+	// Calculate task counts
+	counts := make(map[string]int)
+	for _, t := range h.AllTasks {
+		if !t.Checked && !t.IsDeleted {
+			counts[t.ProjectID]++
+		}
+	}
+	// Sync sidebar component with counts
+	h.SidebarComp.SetProjects(h.Projects, counts)
+
+	// UI Feedback
+	h.StatusMsg = fmt.Sprintf("Completed %d tasks", len(tasksToComplete))
+	// Do NOT set h.Loading = true to keep UI responsive
+
+	// --- Background API Call ---
 	return func() tea.Msg {
-		var err error
-		if task.Checked {
-			err = h.Client.ReopenTask(task.ID)
-		} else {
-			err = h.Client.CloseTask(task.ID)
+		// Concurrent processing
+		type result struct {
+			success bool
+			id      string
+			err     error
 		}
-		if err != nil {
-			return errMsg{err}
+		results := make(chan result, len(tasksToComplete))
+
+		for _, task := range tasksToComplete {
+			go func(t api.Task) {
+				var err error
+				if t.Checked {
+					err = h.Client.ReopenTask(t.ID)
+				} else {
+					err = h.Client.CloseTask(t.ID)
+				}
+				results <- result{success: err == nil, id: t.ID, err: err}
+			}(task)
 		}
-		return taskCompletedMsg{id: task.ID}
+
+		// Wait for results
+		failedCount := 0
+		for i := 0; i < len(tasksToComplete); i++ {
+			res := <-results
+			if !res.success {
+				failedCount++
+				// TODO: handle rollback on failure?
+			}
+		}
+
+		if failedCount > 0 {
+			// Trigger a full refresh if something failed to ensure consistency
+			// We return a message that triggers refresh in update.go (like taskUpdatedMsg)
+			return taskUpdatedMsg{}
+		}
+
+		// Success - UI is already updated.
+		return taskCompletedMsg{id: tasksToComplete[0].ID}
 	}
 }
 
@@ -384,69 +419,98 @@ func (h *Handler) handleDelete() tea.Cmd {
 		return nil
 	}
 
-	// If there are selected tasks, delete all of them
+	tasksToDelete := make([]api.Task, 0)
+
+	// Identify tasks to delete
 	if len(h.SelectedTaskIDs) > 0 {
-		h.Loading = true
-		tasksToDelete := make([]api.Task, 0)
 		for _, task := range h.Tasks {
 			if h.SelectedTaskIDs[task.ID] {
 				tasksToDelete = append(tasksToDelete, task)
 			}
 		}
-
-		return func() tea.Msg {
-			// Use channels and goroutines for concurrent API calls
-			type result struct {
-				success bool
-			}
-
-			results := make(chan result, len(tasksToDelete))
-
-			// Launch concurrent API calls
-			for _, task := range tasksToDelete {
-				go func(t api.Task) {
-					err := h.Client.DeleteTask(t.ID)
-					results <- result{success: err == nil}
-				}(task)
-			}
-
-			// Collect results
-			deleted := 0
-			failed := 0
-			for i := 0; i < len(tasksToDelete); i++ {
-				res := <-results
-				if res.success {
-					deleted++
-				} else {
-					failed++
-				}
-			}
-
-			if failed > 0 {
-				return statusMsg{msg: fmt.Sprintf("Deleted %d tasks, %d failed", deleted, failed)}
-			}
-			return statusMsg{msg: fmt.Sprintf("Deleted %d tasks", deleted)}
+	} else {
+		// Use ordered indices if available
+		taskIndex := h.TaskCursor
+		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+			taskIndex = h.TaskOrderedIndices[h.TaskCursor]
+		}
+		if taskIndex >= 0 && taskIndex < len(h.Tasks) {
+			tasksToDelete = append(tasksToDelete, h.Tasks[taskIndex])
 		}
 	}
 
-	// Use ordered indices if available
-	taskIndex := h.TaskCursor
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
-	}
-	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+	if len(tasksToDelete) == 0 {
 		return nil
 	}
 
-	task := &h.Tasks[taskIndex]
-	h.Loading = true
+	// --- Optimistic Update ---
 
-	return func() tea.Msg {
-		err := h.Client.DeleteTask(task.ID)
-		if err != nil {
-			return errMsg{err}
+	idsToRemove := make(map[string]bool)
+	for _, t := range tasksToDelete {
+		idsToRemove[t.ID] = true
+	}
+
+	// Update AllTasks
+	h.AllTasks = slices.DeleteFunc(h.AllTasks, func(t api.Task) bool {
+		return idsToRemove[t.ID]
+	})
+
+	// Update h.Tasks
+	h.Tasks = slices.DeleteFunc(h.Tasks, func(t api.Task) bool {
+		return idsToRemove[t.ID]
+	})
+
+	// Clear Selection
+	h.SelectedTaskIDs = make(map[string]bool)
+
+	// Adjust Cursor
+	if h.TaskCursor >= len(h.Tasks) {
+		h.TaskCursor = max(0, len(h.Tasks)-1)
+	}
+
+	// Update Sidebar Counts
+	h.buildSidebarItems()
+	counts := make(map[string]int)
+	for _, t := range h.AllTasks {
+		if !t.Checked && !t.IsDeleted {
+			counts[t.ProjectID]++
 		}
-		return taskDeletedMsg{id: task.ID}
+	}
+	h.SidebarComp.SetProjects(h.Projects, counts)
+
+	// UI Feedback
+	h.StatusMsg = fmt.Sprintf("Deleted %d tasks", len(tasksToDelete))
+
+	// --- Background API Call ---
+	return func() tea.Msg {
+		type result struct {
+			success bool
+			id      string
+			err     error
+		}
+		results := make(chan result, len(tasksToDelete))
+
+		for _, task := range tasksToDelete {
+			go func(t api.Task) {
+				err := h.Client.DeleteTask(t.ID)
+				results <- result{success: err == nil, id: t.ID, err: err}
+			}(task)
+		}
+
+		failedCount := 0
+		for i := 0; i < len(tasksToDelete); i++ {
+			res := <-results
+			if !res.success {
+				failedCount++
+			}
+		}
+
+		if failedCount > 0 {
+			// Trigger refresh on failure
+			return taskUpdatedMsg{}
+		}
+
+		return taskDeletedMsg{id: tasksToDelete[0].ID}
 	}
 }
 
