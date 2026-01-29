@@ -126,8 +126,8 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 	// 1. First, tasks without sections
 	if len(noSectionTasks) > 0 {
 		for _, i := range noSectionTasks {
+			i, displayPos := i, len(orderedIndices)
 			orderedIndices = append(orderedIndices, i)
-			displayPos := len(orderedIndices) - 1
 			lines = append(lines, lineInfo{
 				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, displayPos, w) },
 				taskIndex:  i,
@@ -168,8 +168,8 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 					sectionID: section.ID,
 				})
 				for _, i := range taskIndices {
+					i, displayPos := i, len(orderedIndices)
 					orderedIndices = append(orderedIndices, i)
-					displayPos := len(orderedIndices) - 1
 					lines = append(lines, lineInfo{
 						renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, displayPos, w) },
 						taskIndex:  i,
@@ -221,7 +221,7 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 	if len(overdue) > 0 {
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("OVERDUE"), taskIndex: -1})
 		for _, i := range overdue {
-			pos := currentDisplayPos
+			i, pos := i, currentDisplayPos
 			currentDisplayPos++
 			lines = append(lines, lineInfo{
 				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
@@ -242,7 +242,7 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 			lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		}
 		for _, i := range today {
-			pos := currentDisplayPos
+			i, pos := i, currentDisplayPos
 			currentDisplayPos++
 			lines = append(lines, lineInfo{
 				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
@@ -264,7 +264,7 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 		}
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("NO DUE DATE"), taskIndex: -1})
 		for _, i := range other {
-			pos := currentDisplayPos
+			i, pos := i, currentDisplayPos
 			currentDisplayPos++
 			lines = append(lines, lineInfo{
 				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
@@ -289,8 +289,8 @@ func (r *Renderer) renderFlatTasks(width, maxHeight int) string {
 	var orderedIndices []int
 
 	for i := range r.Tasks {
+		i, displayPos := i, len(orderedIndices)
 		orderedIndices = append(orderedIndices, i)
-		displayPos := len(orderedIndices) - 1
 		lines = append(lines, lineInfo{
 			renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, displayPos, w) },
 			taskIndex:  i,
@@ -690,7 +690,7 @@ func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 		}
 
 		for _, i := range tasksByDate[date] {
-			pos := currentDisplayPos
+			i, pos := i, currentDisplayPos
 			currentDisplayPos++
 			lines = append(lines, lineInfo{
 				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
@@ -745,7 +745,7 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 				orderedIndices = append(orderedIndices, i)
 			}
 			for i := range r.Tasks {
-				pos := i // orderedIndices[i] == i
+				i, pos := i, i // orderedIndices[i] == i
 				lines = append(lines, lineInfo{
 					renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
 					taskIndex:  i,
@@ -764,14 +764,26 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 		b.WriteString("\n")
 		b.WriteString(styles.HelpDesc.Render("Press ESC to go back to labels list"))
 	} else {
+
+		// Invalidate cache if data version changed
+		if r.State.DataVersion != r.lastDataVersion || r.cachedTaskCountMap == nil {
+			r.cachedTaskCountMap = r.getLabelTaskCounts()
+			r.lastDataVersion = r.State.DataVersion
+			// Invalidate extracted labels too
+			r.cachedExtractedLabels = nil
+		}
+
 		// Extract unique labels from all tasks if personal labels are empty
 		labelsToShow := r.Labels
 		if len(labelsToShow) == 0 {
-			labelsToShow = r.extractLabelsFromTasks()
+			if r.cachedExtractedLabels == nil {
+				r.cachedExtractedLabels = r.extractLabelsFromTasks()
+			}
+			labelsToShow = r.cachedExtractedLabels
 		}
 
 		// Build task count map for labels
-		taskCountMap := r.getLabelTaskCounts()
+		taskCountMap := r.cachedTaskCountMap
 
 		// Account for footer (2 lines)
 		labelHeight := contentHeight - 2
