@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,6 +30,7 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 
 		SearchResults:   []api.Task{},
 		SelectedTaskIDs: make(map[string]bool),
+		TaskDates:       make(map[string]time.Time),
 	}
 
 	// Initialize UI components

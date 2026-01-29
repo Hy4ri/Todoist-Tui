@@ -3,6 +3,7 @@ package logic
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -135,6 +136,15 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 
 	if len(msg.allTasks) > 0 {
 		h.AllTasks = msg.allTasks
+		// Populate task dates cache
+		h.TaskDates = make(map[string]time.Time)
+		for _, t := range h.AllTasks {
+			if t.Due != nil && t.Due.Date != "" {
+				if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
+					h.TaskDates[t.ID] = parsed
+				}
+			}
+		}
 	}
 
 	if len(msg.projects) > 0 {

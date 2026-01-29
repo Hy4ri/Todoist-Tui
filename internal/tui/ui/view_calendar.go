@@ -52,7 +52,7 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 		if t.Due == nil {
 			continue
 		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
+		if parsed, ok := r.TaskDates[t.ID]; ok {
 			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
 				tasksByDay[parsed.Day()]++
 			}
@@ -229,7 +229,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 		if t.Due == nil {
 			continue
 		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
+		if parsed, ok := r.TaskDates[t.ID]; ok {
 			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
 				tasksByDay[parsed.Day()] = append(tasksByDay[parsed.Day()], t)
 			}
