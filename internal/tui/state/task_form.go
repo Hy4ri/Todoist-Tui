@@ -216,13 +216,13 @@ func (f *TaskForm) ToCreateRequest() api.CreateTaskRequest {
 	desc := strings.TrimSpace(f.Description.Value())
 	due := strings.TrimSpace(f.DueString.Value())
 
-	// Priority mapping: UI 1-4 -> API 4-1
-	// UI P1 (Red) = 4, UI P2 (Orange) = 3, UI P3 (Blue) = 2, UI P4 (Grey) = 1
-	// Our internal Priority seems to match Todoist API directly?
-	// In view.go: priorityLabel := fmt.Sprintf("P%d", 5-t.Priority).
-	// If t.Priority is 4 (High), label is P1.
-	// So internal priority 4 = High.
-	// API AddParams uses Priority.
+	// Priority mapping:
+	// API/Internal: 4 (Urgent) -> UI: P1
+	// API/Internal: 3 (High)   -> UI: P2
+	// API/Internal: 2 (Medium) -> UI: P3
+	// API/Internal: 1 (Normal) -> UI: P4
+	//
+	// We use the API values (4-1) internally.
 
 	return api.CreateTaskRequest{
 		Content:     content,
