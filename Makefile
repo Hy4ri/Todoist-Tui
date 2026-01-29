@@ -18,9 +18,12 @@ GOVET=$(GOCMD) vet
 # Build the binary
 build:
 	$(GOBUILD) -o $(BINARY_PATH) ./cmd/todoist-tui
+
+# local build
+lbuild:
+	$(GOBUILD) -o $(BINARY_PATH) ./cmd/todoist-tui
 	rm -f $(LOCAL_PATH)
 	ln -s ~/Documents/Projects/todoist/$(BINARY_PATH) $(LOCAL_PATH)
-
 
 # Run in development mode
 run:

@@ -15,6 +15,8 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 )
 
+const maxConcurrentRequests = 5
+
 func (h *Handler) sortTasks() {
 	sort.Slice(h.Tasks, func(i, j int) bool {
 		ti, tj := h.Tasks[i], h.Tasks[j]
@@ -158,9 +160,12 @@ func (h *Handler) handleComplete() tea.Cmd {
 			err     error
 		}
 		results := make(chan result, len(tasksToComplete))
+		sem := make(chan struct{}, maxConcurrentRequests)
 
 		for _, task := range tasksToComplete {
+			sem <- struct{}{}
 			go func(t api.Task) {
+				defer func() { <-sem }()
 				var err error
 				if t.Checked {
 					err = h.Client.ReopenTask(t.ID)
@@ -177,7 +182,7 @@ func (h *Handler) handleComplete() tea.Cmd {
 			res := <-results
 			if !res.success {
 				failedCount++
-				// TODO: handle rollback on failure?
+				// Refresh on failure is handled by returning taskUpdatedMsg below
 			}
 		}
 
@@ -489,9 +494,12 @@ func (h *Handler) handleDelete() tea.Cmd {
 			err     error
 		}
 		results := make(chan result, len(tasksToDelete))
+		sem := make(chan struct{}, maxConcurrentRequests)
 
 		for _, task := range tasksToDelete {
+			sem <- struct{}{}
 			go func(t api.Task) {
+				defer func() { <-sem }()
 				err := h.Client.DeleteTask(t.ID)
 				results <- result{success: err == nil, id: t.ID, err: err}
 			}(task)
