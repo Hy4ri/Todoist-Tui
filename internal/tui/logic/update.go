@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
 
@@ -135,6 +136,13 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 
 	if len(msg.allTasks) > 0 {
 		h.AllTasks = msg.allTasks
+		// Populate TasksByDate map for efficient calendar rendering
+		h.TasksByDate = make(map[string][]api.Task)
+		for _, t := range h.AllTasks {
+			if t.Due != nil && t.Due.Date != "" {
+				h.TasksByDate[t.Due.Date] = append(h.TasksByDate[t.Due.Date], t)
+			}
+		}
 	}
 
 	if len(msg.projects) > 0 {

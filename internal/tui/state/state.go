@@ -90,6 +90,7 @@ type State struct {
 	SidebarItems []components.SidebarItem
 
 	AllTasks       []api.Task
+	TasksByDate    map[string][]api.Task
 	Sections       []api.Section
 	AllSections    []api.Section
 	Labels         []api.Label

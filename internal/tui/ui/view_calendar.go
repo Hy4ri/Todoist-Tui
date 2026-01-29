@@ -46,18 +46,6 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 	daysInMonth := lastOfMonth.Day()
 	today := time.Now()
 
-	// Build map of tasks by day
-	tasksByDay := make(map[int]int) // day -> count
-	for _, t := range r.AllTasks {
-		if t.Due == nil {
-			continue
-		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
-			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
-				tasksByDay[parsed.Day()]++
-			}
-		}
-	}
 
 	// Render calendar grid and count weeks rendered
 	day := 1
@@ -88,7 +76,9 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 				today.Day() == day
 
 			// Check if this day has tasks
-			hasTasks := tasksByDay[day] > 0
+			currentDate := time.Date(r.CalendarDate.Year(), r.CalendarDate.Month(), day, 0, 0, 0, 0, time.Local)
+			dateStr := currentDate.Format("2006-01-02")
+			hasTasks := len(r.TasksByDate[dateStr]) > 0
 
 			// Check if this is the selected day
 			isSelected := day == r.CalendarDay && r.FocusedPane == state.PaneMain
@@ -223,18 +213,6 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 	daysInMonth := lastOfMonth.Day()
 	today := time.Now()
 
-	// Build map of tasks by day
-	tasksByDay := make(map[int][]api.Task) // day -> tasks
-	for _, t := range r.AllTasks {
-		if t.Due == nil {
-			continue
-		}
-		if parsed, err := time.Parse("2006-01-02", t.Due.Date); err == nil {
-			if parsed.Year() == r.CalendarDate.Year() && parsed.Month() == r.CalendarDate.Month() {
-				tasksByDay[parsed.Day()] = append(tasksByDay[parsed.Day()], t)
-			}
-		}
-	}
 
 	// Calculate how many weeks we need to display
 	weeksNeeded := (daysInMonth + startWeekday + 6) / 7
@@ -285,7 +263,11 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 				today.Day() == day
 			isSelected := day == r.CalendarDay && r.FocusedPane == state.PaneMain
 			isWeekend := weekday == 5 || weekday == 6
-			hasTasks := len(tasksByDay[day]) > 0
+
+			// Construct date string for lookup
+			currentDate := time.Date(r.CalendarDate.Year(), r.CalendarDate.Month(), day, 0, 0, 0, 0, time.Local)
+			dateStr := currentDate.Format("2006-01-02")
+			hasTasks := len(r.TasksByDate[dateStr]) > 0
 
 			if isSelected {
 				style = styles.CalendarDaySelected
@@ -327,7 +309,9 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 					continue
 				}
 
-				tasks := tasksByDay[tempDay]
+				currentDate := time.Date(r.CalendarDate.Year(), r.CalendarDate.Month(), tempDay, 0, 0, 0, 0, time.Local)
+				dateStr := currentDate.Format("2006-01-02")
+				tasks := r.TasksByDate[dateStr]
 				var cellContent string
 
 				if taskLine < len(tasks) && taskLine < maxTasksPerCell-1 {
