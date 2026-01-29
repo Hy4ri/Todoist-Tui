@@ -98,9 +98,10 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 
 // lineInfo represents a display line with optional task reference.
 type lineInfo struct {
-	content   string
-	taskIndex int    // -1 for headers
-	sectionID string // section ID if this is a section header
+	content    string
+	renderFunc func(width int) string // Lazy renderer
+	taskIndex  int                    // -1 for headers
+	sectionID  string                 // section ID if this is a section header
 }
 
 // renderProjectTasks renders tasks grouped by section for a project.
@@ -126,9 +127,17 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 	if len(noSectionTasks) > 0 {
 		for _, i := range noSectionTasks {
 			orderedIndices = append(orderedIndices, i)
-			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			displayPos := len(orderedIndices) - 1
+			lines = append(lines, lineInfo{
+				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, displayPos, w) },
+				taskIndex:  i,
+			})
 			if r.Tasks[i].Description != "" {
-				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+				desc := r.Tasks[i].Description
+				lines = append(lines, lineInfo{
+					renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+					taskIndex:  i,
+				})
 			}
 		}
 		// Add spacer if there are sections following
@@ -160,9 +169,17 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 				})
 				for _, i := range taskIndices {
 					orderedIndices = append(orderedIndices, i)
-					lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+					displayPos := len(orderedIndices) - 1
+					lines = append(lines, lineInfo{
+						renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, displayPos, w) },
+						taskIndex:  i,
+					})
 					if r.Tasks[i].Description != "" {
-						lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+						desc := r.Tasks[i].Description
+						lines = append(lines, lineInfo{
+							renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+							taskIndex:  i,
+						})
 					}
 				}
 			}
@@ -195,15 +212,27 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 	orderedIndices = append(orderedIndices, today...)
 	orderedIndices = append(orderedIndices, other...)
 
+	// Track display position for orderedIndices
+	currentDisplayPos := 0
+
 	// Build lines
 	var lines []lineInfo
 
 	if len(overdue) > 0 {
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("OVERDUE"), taskIndex: -1})
 		for _, i := range overdue {
-			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			pos := currentDisplayPos
+			currentDisplayPos++
+			lines = append(lines, lineInfo{
+				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
+				taskIndex:  i,
+			})
 			if r.Tasks[i].Description != "" {
-				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+				desc := r.Tasks[i].Description
+				lines = append(lines, lineInfo{
+					renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+					taskIndex:  i,
+				})
 			}
 		}
 	}
@@ -213,9 +242,18 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 			lines = append(lines, lineInfo{content: "", taskIndex: -1})
 		}
 		for _, i := range today {
-			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			pos := currentDisplayPos
+			currentDisplayPos++
+			lines = append(lines, lineInfo{
+				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
+				taskIndex:  i,
+			})
 			if r.Tasks[i].Description != "" {
-				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+				desc := r.Tasks[i].Description
+				lines = append(lines, lineInfo{
+					renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+					taskIndex:  i,
+				})
 			}
 		}
 	}
@@ -226,9 +264,18 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 		}
 		lines = append(lines, lineInfo{content: styles.SectionHeader.Render("NO DUE DATE"), taskIndex: -1})
 		for _, i := range other {
-			lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+			pos := currentDisplayPos
+			currentDisplayPos++
+			lines = append(lines, lineInfo{
+				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
+				taskIndex:  i,
+			})
 			if r.Tasks[i].Description != "" {
-				lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+				desc := r.Tasks[i].Description
+				lines = append(lines, lineInfo{
+					renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+					taskIndex:  i,
+				})
 			}
 		}
 	}
@@ -243,9 +290,17 @@ func (r *Renderer) renderFlatTasks(width, maxHeight int) string {
 
 	for i := range r.Tasks {
 		orderedIndices = append(orderedIndices, i)
-		lines = append(lines, lineInfo{content: r.renderTaskByDisplayIndex(i, orderedIndices, width), taskIndex: i})
+		displayPos := len(orderedIndices) - 1
+		lines = append(lines, lineInfo{
+			renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, displayPos, w) },
+			taskIndex:  i,
+		})
 		if r.Tasks[i].Description != "" {
-			lines = append(lines, lineInfo{content: r.renderTaskDescription(r.Tasks[i].Description, width), taskIndex: i})
+			desc := r.Tasks[i].Description
+			lines = append(lines, lineInfo{
+				renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+				taskIndex:  i,
+			})
 		}
 	}
 
@@ -297,17 +352,8 @@ func (r *Renderer) renderSectionHeaderByIndex(sectionName string, headerIndex in
 }
 
 // renderTaskByDisplayIndex renders a task with cursor based on display order.
-func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, orderedIndices []int, width int) string {
+func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width int) string {
 	t := r.Tasks[taskIndex]
-
-	// Find display position for cursor
-	displayPos := 0
-	for i, idx := range orderedIndices {
-		if idx == taskIndex {
-			displayPos = i
-			break
-		}
-	}
 
 	// Cursor
 	cursor := "  "
@@ -434,7 +480,7 @@ func (r *Renderer) renderTaskDescription(desc string, width int) string {
 	return styles.TaskListDescription.MaxWidth(width - 2).Render(truncated)
 }
 
-// renderScrollableLines renders lines with scrolling support using viewport.
+// renderScrollableLines renders lines with scrolling support using viewport and windowing.
 func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxHeight int) string {
 	// Store ordered indices for use in handleSelect
 	r.TaskOrderedIndices = orderedIndices
@@ -446,23 +492,39 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 		return ""
 	}
 
-	// Build content string and track line->task mapping and section mapping
-	var content strings.Builder
+	// Map lines to tasks/sections for click handling (always map all lines)
 	r.State.ViewportLines = make([]int, 0, len(lines))
 	r.State.ViewportSections = make([]string, 0, len(lines))
-
-	for i, line := range lines {
-		content.WriteString(line.content)
-		if i < len(lines)-1 {
-			content.WriteString("\n")
-		}
-		// Map this viewport line to its task index (-1 for headers, -2 for section headers)
+	for _, line := range lines {
 		r.State.ViewportLines = append(r.State.ViewportLines, line.taskIndex)
-		// Map this viewport line to its section ID (empty string for non-section lines)
 		r.State.ViewportSections = append(r.State.ViewportSections, line.sectionID)
 	}
 
-	// Find which line the cursor is on
+	// Ensure viewport is initialized
+	if !r.State.ViewportReady {
+		// Just render everything if not ready (fallback)
+		var content strings.Builder
+		width := r.Width - 4 // Approximate if viewport not ready
+		for i, line := range lines {
+			if line.renderFunc != nil {
+				content.WriteString(line.renderFunc(width))
+			} else {
+				content.WriteString(line.content)
+			}
+			if i < len(lines)-1 {
+				content.WriteString("\n")
+			}
+		}
+		return content.String()
+	}
+
+	// Update viewport height
+	if r.TaskViewport.Height != maxHeight && maxHeight > 0 {
+		r.TaskViewport.Height = maxHeight
+	}
+
+	// Determine visible window
+	// 1. Find cursor line
 	cursorLine := 0
 	if r.TaskCursor >= 0 && r.TaskCursor < len(orderedIndices) {
 		targetTaskIndex := orderedIndices[r.TaskCursor]
@@ -474,28 +536,69 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 		}
 	}
 
-	// If viewport is ready, use it for scrolling
-	if r.State.ViewportReady {
-		// Update viewport height if needed (maxHeight is the available height)
-		if r.TaskViewport.Height != maxHeight && maxHeight > 0 {
-			r.TaskViewport.Height = maxHeight
-		}
-
-		// Set content to viewport
-		r.TaskViewport.SetContent(content.String())
-
-		// Sync viewport to show cursor
-		r.syncViewportToCursor(cursorLine, maxHeight)
-
-		// Store scroll offset for click handling
-		r.ScrollOffset = r.TaskViewport.YOffset
-
-		return r.TaskViewport.View()
+	// 2. Predict target YOffset to keep cursor in view
+	yOffset := r.TaskViewport.YOffset
+	height := r.TaskViewport.Height
+	if height <= 0 {
+		height = 10 // Fallback
 	}
 
-	// Fallback: viewport not ready, just return raw content (truncated)
-	r.ScrollOffset = 0
-	return content.String()
+	if cursorLine < yOffset {
+		yOffset = cursorLine
+	} else if cursorLine >= yOffset+height {
+		yOffset = cursorLine - height + 1
+	}
+
+	// Clamp YOffset
+	maxOffset := len(lines) - height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if yOffset > maxOffset {
+		yOffset = maxOffset
+	}
+	if yOffset < 0 {
+		yOffset = 0
+	}
+
+	// 3. Define rendering window (add buffer)
+	buffer := 5
+	renderStart := yOffset - buffer
+	renderEnd := yOffset + height + buffer
+
+	width := r.TaskViewport.Width
+
+	// Build content with windowing
+	var content strings.Builder
+	for i, line := range lines {
+		// Always render explicitly provided content (headers/spacers), lazy render tasks
+		isVisible := i >= renderStart && i <= renderEnd
+
+		if line.renderFunc != nil {
+			if isVisible {
+				content.WriteString(line.renderFunc(width))
+			} else {
+				// Placeholder for invisible task line to maintain scroll height
+				// Note: renderTaskByDisplayIndex produces 1 line.
+				// If multiline descriptions were lazy, we'd need to know their height.
+				// Assume 1 line for now.
+				content.WriteString("")
+			}
+		} else {
+			content.WriteString(line.content)
+		}
+
+		if i < len(lines)-1 {
+			content.WriteString("\n")
+		}
+	}
+
+	// Update Viewport
+	r.TaskViewport.SetContent(content.String())
+	r.TaskViewport.SetYOffset(yOffset)
+	r.ScrollOffset = yOffset
+
+	return r.TaskViewport.View()
 }
 
 // renderUpcoming renders the upcoming view with tasks grouped by date.
@@ -569,15 +672,35 @@ func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 			taskIndex: -1,
 		})
 
+		// Track display position for orderedIndices
+		currentDisplayPos := 0
+		for _, date := range dates {
+			if idx > 0 && date == dates[idx-1] {
+				// Continuation... logic here is iterating dates in outer, so we need to sync currentDisplayPos
+				// But we are inside outer loop over 'idx, date'.
+				// So we need to advance currentDisplayPos through previous dates?
+				// Better: Just loop 'orderedIndices' logic again inside? No.
+				// We can just calculate currentDisplayPos by summing lengths of tasksByDate[prevDate].
+			}
+		}
+		// Reset currentDisplayPos logic:
+		currentDisplayPos = 0
+		for k := 0; k < idx; k++ {
+			currentDisplayPos += len(tasksByDate[dates[k]])
+		}
+
 		for _, i := range tasksByDate[date] {
+			pos := currentDisplayPos
+			currentDisplayPos++
 			lines = append(lines, lineInfo{
-				content:   r.renderTaskByDisplayIndex(i, orderedIndices, width),
-				taskIndex: i,
+				renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
+				taskIndex:  i,
 			})
 			if r.Tasks[i].Description != "" {
+				desc := r.Tasks[i].Description
 				lines = append(lines, lineInfo{
-					content:   r.renderTaskDescription(r.Tasks[i].Description, width),
-					taskIndex: i,
+					renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+					taskIndex:  i,
 				})
 			}
 		}
@@ -622,14 +745,16 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 				orderedIndices = append(orderedIndices, i)
 			}
 			for i := range r.Tasks {
+				pos := i // orderedIndices[i] == i
 				lines = append(lines, lineInfo{
-					content:   r.renderTaskByDisplayIndex(i, orderedIndices, width),
-					taskIndex: i,
+					renderFunc: func(w int) string { return r.renderTaskByDisplayIndex(i, pos, w) },
+					taskIndex:  i,
 				})
 				if r.Tasks[i].Description != "" {
+					desc := r.Tasks[i].Description
 					lines = append(lines, lineInfo{
-						content:   r.renderTaskDescription(r.Tasks[i].Description, width),
-						taskIndex: i,
+						renderFunc: func(w int) string { return r.renderTaskDescription(desc, w) },
+						taskIndex:  i,
 					})
 				}
 			}

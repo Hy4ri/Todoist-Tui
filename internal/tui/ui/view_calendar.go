@@ -452,8 +452,9 @@ func (r *Renderer) renderCalendarDay() string {
 		var orderedIndices []int
 		for i := range r.Tasks {
 			orderedIndices = append(orderedIndices, i)
+			pos := i
 			lines = append(lines, lineInfo{
-				content:   r.renderTaskByDisplayIndex(i, orderedIndices, contentWidth),
+				content:   r.renderTaskByDisplayIndex(i, pos, contentWidth),
 				taskIndex: i,
 			})
 		}
