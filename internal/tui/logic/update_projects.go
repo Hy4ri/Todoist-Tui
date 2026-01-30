@@ -29,6 +29,15 @@ func (h *Handler) handleNewProject() tea.Cmd {
 	h.ProjectInput.Focus()
 	h.IsCreatingProject = true
 
+	// Pre-populate colors
+	if len(h.AvailableColors) == 0 {
+		for name := range styles.TodoistColorMap {
+			h.AvailableColors = append(h.AvailableColors, name)
+		}
+		sort.Strings(h.AvailableColors)
+	}
+	h.ColorCursor = 0
+
 	return nil
 }
 
@@ -38,9 +47,8 @@ func (h *Handler) handleProjectInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	if h.IsSelectingColor {
 		switch msg.String() {
 		case "esc":
-			h.IsCreatingProject = false
 			h.IsSelectingColor = false
-			h.ProjectInput.Reset()
+			h.ProjectInput.Focus()
 			return nil
 		case "up", "k":
 			if h.ColorCursor > 0 {
@@ -96,6 +104,7 @@ func (h *Handler) handleProjectInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 		h.IsSelectingColor = true
 		h.ColorCursor = 0
+		h.ProjectInput.Blur()
 
 		// Populate colors if empty (sorted)
 		if len(h.AvailableColors) == 0 {
@@ -202,6 +211,15 @@ func (h *Handler) handleNewLabel() tea.Cmd {
 	h.LabelInput.Focus()
 	h.IsCreatingLabel = true
 
+	// Pre-populate colors
+	if len(h.AvailableColors) == 0 {
+		for name := range styles.TodoistColorMap {
+			h.AvailableColors = append(h.AvailableColors, name)
+		}
+		sort.Strings(h.AvailableColors)
+	}
+	h.ColorCursor = 0
+
 	return nil
 }
 
@@ -211,9 +229,8 @@ func (h *Handler) handleLabelInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	if h.IsSelectingColor {
 		switch msg.String() {
 		case "esc":
-			h.IsCreatingLabel = false
 			h.IsSelectingColor = false
-			h.LabelInput.Reset()
+			h.LabelInput.Focus()
 			return nil
 		case "up", "k":
 			if h.ColorCursor > 0 {
@@ -267,6 +284,7 @@ func (h *Handler) handleLabelInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 		h.IsSelectingColor = true
 		h.ColorCursor = 0
+		h.LabelInput.Blur()
 
 		// Populate colors if empty (sorted)
 		if len(h.AvailableColors) == 0 {

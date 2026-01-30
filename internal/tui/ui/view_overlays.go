@@ -353,16 +353,46 @@ func (r *Renderer) overlayContent(background string, dialog string) string {
 
 // renderProjectDialog renders the new project dialog.
 func (r *Renderer) renderProjectDialog() string {
+	var b strings.Builder
+	b.WriteString(styles.Title.Render("📁 New Project") + "\n\n")
+
+	// Name Input
+	inputLabel := styles.InputLabel.Copy().Render("PROJECT NAME")
+	if !r.IsSelectingColor {
+		inputLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME")
+	}
+	b.WriteString(inputLabel + "\n")
+	b.WriteString(r.ProjectInput.View() + "\n\n")
+
+	// Color Selection
+	colorLabel := styles.InputLabel.Copy().Render("COLOR")
 	if r.IsSelectingColor {
-		return r.renderColorPicker("Project Color")
+		colorLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("COLOR")
+	}
+	b.WriteString(colorLabel + "\n")
+
+	// Show selected color preview or list
+	if r.IsSelectingColor {
+		b.WriteString(r.renderColorSelectionList(5))
+	} else {
+		colorName := "Default"
+		if len(r.AvailableColors) > 0 && r.ColorCursor < len(r.AvailableColors) {
+			colorName = r.AvailableColors[r.ColorCursor]
+		}
+		hex := styles.GetColor(colorName)
+		preview := lipgloss.NewStyle().Background(hex).SetString("  ").String()
+		b.WriteString(fmt.Sprintf("%s %s", preview, colorName))
 	}
 
-	content := styles.Title.Render("📁 New Project") + "\n\n" +
-		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME") + "\n" +
-		r.ProjectInput.View() + "\n\n" +
-		styles.HelpDesc.Render("Enter: next • Esc: cancel")
+	b.WriteString("\n\n")
 
-	return r.renderCenteredDialog(content, 50)
+	if r.IsSelectingColor {
+		b.WriteString(styles.HelpDesc.Render("j/k: select • Enter: create • Esc: back"))
+	} else {
+		b.WriteString(styles.HelpDesc.Render("Enter: pick color • Esc: cancel"))
+	}
+
+	return r.renderCenteredDialog(b.String(), 50)
 }
 
 // renderProjectEditDialog renders the edit project dialog.
@@ -390,15 +420,46 @@ func (r *Renderer) renderProjectDeleteDialog() string {
 
 // renderLabelDialog renders the new label dialog.
 func (r *Renderer) renderLabelDialog() string {
+	var b strings.Builder
+	b.WriteString(styles.Title.Render("🏷️ New Label") + "\n\n")
+
+	// Name Input
+	inputLabel := styles.InputLabel.Copy().Render("LABEL NAME")
+	if !r.IsSelectingColor {
+		inputLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("LABEL NAME")
+	}
+	b.WriteString(inputLabel + "\n")
+	b.WriteString(r.LabelInput.View() + "\n\n")
+
+	// Color Selection
+	colorLabel := styles.InputLabel.Copy().Render("COLOR")
 	if r.IsSelectingColor {
-		return r.renderColorPicker("Label Color")
+		colorLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("COLOR")
+	}
+	b.WriteString(colorLabel + "\n")
+
+	// Show selected color preview or list
+	if r.IsSelectingColor {
+		b.WriteString(r.renderColorSelectionList(5))
+	} else {
+		colorName := "Default"
+		if len(r.AvailableColors) > 0 && r.ColorCursor < len(r.AvailableColors) {
+			colorName = r.AvailableColors[r.ColorCursor]
+		}
+		hex := styles.GetColor(colorName)
+		preview := lipgloss.NewStyle().Background(hex).SetString("  ").String()
+		b.WriteString(fmt.Sprintf("%s %s", preview, colorName))
 	}
 
-	content := styles.Title.Render("🏷️ New Label") + "\n\n" +
-		r.LabelInput.View() + "\n\n" +
-		styles.HelpDesc.Render("Enter: next • Esc: cancel")
+	b.WriteString("\n\n")
 
-	return r.renderCenteredDialog(content, 50)
+	if r.IsSelectingColor {
+		b.WriteString(styles.HelpDesc.Render("j/k: select • Enter: create • Esc: back"))
+	} else {
+		b.WriteString(styles.HelpDesc.Render("Enter: pick color • Esc: cancel"))
+	}
+
+	return r.renderCenteredDialog(b.String(), 50)
 }
 
 // renderLabelEditDialog renders the edit label dialog.
@@ -499,13 +560,11 @@ func (r *Renderer) renderCommentDialog() string {
 	return r.renderCenteredDialog(content, 60)
 }
 
-// renderColorPicker renders the color selection dialog.
-func (r *Renderer) renderColorPicker(title string) string {
+// renderColorSelectionList renders the list of colors.
+func (r *Renderer) renderColorSelectionList(height int) string {
 	var b strings.Builder
-	b.WriteString(styles.Title.Render(title) + "\n\n")
 
 	// Calculate visible window
-	height := 8
 	start := 0
 	if r.ColorCursor > height/2 {
 		start = r.ColorCursor - height/2
@@ -537,7 +596,5 @@ func (r *Renderer) renderColorPicker(title string) string {
 		b.WriteString(style.Render(line) + "\n")
 	}
 
-	b.WriteString("\n" + styles.HelpDesc.Render("j/k: select • Enter: confirm • Esc: cancel"))
-
-	return r.renderCenteredDialog(b.String(), 40)
+	return b.String()
 }
