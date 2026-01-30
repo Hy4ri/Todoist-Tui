@@ -211,9 +211,34 @@ func (h *Handler) moveCursorToEnd() {
 	}
 }
 
-// switchPane toggles between sidebar and main pane (only in Projects tab).
+// switchPane toggles between panes.
 func (h *Handler) switchPane() {
-	// Only switch panes in Projects tab
+	// If detail panel is open, toggle between detail view and main view
+	if h.ShowDetailPanel {
+		if h.CurrentView == state.ViewTaskDetail {
+			// Switch back to list view
+			switch h.CurrentTab {
+			case state.TabInbox:
+				h.CurrentView = state.ViewInbox
+			case state.TabToday:
+				h.CurrentView = state.ViewToday
+			case state.TabUpcoming:
+				h.CurrentView = state.ViewUpcoming
+			case state.TabLabels:
+				h.CurrentView = state.ViewLabels
+			case state.TabCalendar:
+				h.CurrentView = state.ViewCalendar
+			case state.TabProjects:
+				h.CurrentView = state.ViewProject
+			}
+		} else {
+			// Switch to detail view
+			h.CurrentView = state.ViewTaskDetail
+		}
+		return
+	}
+
+	// Only switch panes in Projects tab (Sidebar <-> Main)
 	if h.CurrentTab != state.TabProjects {
 		return
 	}

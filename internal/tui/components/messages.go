@@ -30,3 +30,13 @@ type CursorMovedMsg struct {
 
 // RefreshRequestMsg is emitted when a component requests data refresh.
 type RefreshRequestMsg struct{}
+
+// EditCommentMsg is emitted to request editing a comment.
+type EditCommentMsg struct {
+	Comment *api.Comment
+}
+
+// DeleteCommentMsg is emitted to request deleting a comment.
+type DeleteCommentMsg struct {
+	CommentID string
+}

@@ -153,6 +153,8 @@ type sectionCreatedMsg struct{ section *api.Section }
 type sectionUpdatedMsg struct{ section *api.Section }
 type sectionDeletedMsg struct{ id string }
 type commentCreatedMsg struct{ comment *api.Comment }
+type commentUpdatedMsg struct{ comment *api.Comment }
+type commentDeletedMsg struct{ id string }
 type subtaskCreatedMsg struct{}
 type undoCompletedMsg struct{}
 type searchRefreshMsg struct{}

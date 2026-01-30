@@ -279,6 +279,14 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 
+	// Comment editing (Modal) - Check BEFORE view switching to capture input
+	if h.IsEditingComment {
+		return h.handleCommentEditKeyMsg(msg)
+	}
+	if h.ConfirmDeleteComment {
+		return h.handleDeleteCommentConfirmKeyMsg(msg)
+	}
+
 	// Route key messages based on current view - BEFORE tab switching
 	// This allows forms to capture number keys for text input
 	switch h.CurrentView {
@@ -286,6 +294,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleFormKeyMsg(msg)
 	case state.ViewSearch:
 		return h.handleSearchKeyMsg(msg)
+	case state.ViewTaskDetail:
+		return h.handleTaskDetailKeyMsg(msg)
 	}
 
 	// Handle all input/dialog states BEFORE tab switching
@@ -610,6 +620,22 @@ func (h *Handler) handleBack() tea.Cmd {
 		h.ShowDetailPanel = false
 		h.SelectedTask = nil
 		h.Comments = nil
+		h.DetailComp.Hide()
+
+		// If we are in ViewTaskDetail view (full screen detail), go back to previous view
+		// This happens when opening from a list and then maximizing or similar flow?
+		// Actually the user report says: "when i press esc on the task details the after the tab it shows a black screen"
+		// If ShowDetailPanel is true, we might be in ViewTaskDetail or just split view.
+
+		if h.CurrentView == state.ViewTaskDetail {
+			// Restore previous view
+			if h.PreviousView != state.ViewTaskDetail {
+				h.CurrentView = h.PreviousView
+			} else {
+				// Fallback if previous view is invalid
+				h.CurrentView = state.ViewInbox
+			}
+		}
 		return nil
 	}
 
@@ -878,4 +904,77 @@ func (h *Handler) moveSidebarCursor(delta int) {
 	}
 
 	h.SidebarCursor = newIdx
+}
+
+// handleTaskDetailKeyMsg handles keys for task detail view.
+func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	// If any modal state is active, let the specific handler deal with it
+	if h.IsEditingComment || h.ConfirmDeleteComment {
+		return nil
+	}
+
+	if msg.String() == "esc" {
+		return h.handleBack()
+	}
+	// Delegate to component
+	_, cmd := h.DetailComp.Update(msg)
+	return cmd
+}
+
+// handleCommentEditKeyMsg handles keys for comment editing.
+func (h *Handler) handleCommentEditKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		h.IsEditingComment = false
+		h.EditingComment = nil
+		h.CommentInput.Reset()
+		return nil
+	case "enter":
+		content := h.CommentInput.Value()
+		if content == "" {
+			return nil
+		}
+		h.IsEditingComment = false
+		h.Loading = true
+		h.StatusMsg = "Updating comment..."
+		commentID := h.EditingComment.ID
+		h.EditingComment = nil
+		h.CommentInput.Reset()
+
+		return func() tea.Msg {
+			c, err := h.Client.UpdateComment(commentID, api.UpdateCommentRequest{Content: content})
+			if err != nil {
+				return errMsg{err}
+			}
+			return commentUpdatedMsg{comment: c}
+		}
+	}
+	var cmd tea.Cmd
+	h.CommentInput, cmd = h.CommentInput.Update(msg)
+	return cmd
+}
+
+// handleDeleteCommentConfirmKeyMsg handles confirmation for comment deletion.
+func (h *Handler) handleDeleteCommentConfirmKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "y", "Y":
+		h.ConfirmDeleteComment = false
+		h.Loading = true
+		h.StatusMsg = "Deleting comment..."
+		commentID := h.EditingComment.ID
+		h.EditingComment = nil
+
+		return func() tea.Msg {
+			err := h.Client.DeleteComment(commentID)
+			if err != nil {
+				return errMsg{err}
+			}
+			return commentDeletedMsg{id: commentID}
+		}
+	case "n", "N", "esc":
+		h.ConfirmDeleteComment = false
+		h.EditingComment = nil
+		return nil
+	}
+	return nil
 }

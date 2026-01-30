@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
 
@@ -70,6 +72,36 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		h.StatusMsg = "Comment added"
 		return h.loadTaskComments()
 
+	case commentUpdatedMsg:
+		h.Loading = false
+		h.StatusMsg = "Comment updated"
+		return h.loadTaskComments()
+
+	case commentDeletedMsg:
+		h.Loading = false
+		h.StatusMsg = "Comment deleted"
+		return h.loadTaskComments()
+
+	case components.EditCommentMsg:
+		h.IsEditingComment = true
+		h.EditingComment = msg.Comment
+		h.CommentInput = textinput.New()
+		h.CommentInput.SetValue(msg.Comment.Content)
+		h.CommentInput.Focus()
+		h.CommentInput.Width = 50
+		return textinput.Blink
+
+	case components.DeleteCommentMsg:
+		// Find comment object for context
+		for i := range h.Comments {
+			if h.Comments[i].ID == msg.CommentID {
+				h.EditingComment = &h.Comments[i]
+				break
+			}
+		}
+		h.ConfirmDeleteComment = true
+		return nil
+
 	case subtaskCreatedMsg:
 		h.Loading = false
 		h.StatusMsg = "Subtask created"
@@ -99,6 +131,18 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 			return h.loadProjectTasks(h.CurrentProject.ID)
 		}
 		return nil
+	}
+
+	// Forward non-key messages (like blink) to active inputs
+	if h.IsEditingComment {
+		var cmd tea.Cmd
+		// We only want to update if it's NOT a key/mouse message because those are handled above
+		// But Wait, handleKeyMsg returns a Cmd, it doesn't return the updated model (handler is the model)
+		// and msg type check separates them.
+		// If we are here, it wasn't a KeyMsg, MouseMsg, WindowSizeMsg, etc caught above.
+		// It could be a BlinkMsg.
+		h.CommentInput, cmd = h.CommentInput.Update(msg)
+		return cmd
 	}
 
 	return nil

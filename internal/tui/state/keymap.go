@@ -219,6 +219,8 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "complete", true
 	case "ctrl+z":
 		return "undo", true
+	case "u":
+		return "undo", true
 	case "m":
 		return "move_task", true
 	case "M":

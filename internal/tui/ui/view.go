@@ -75,6 +75,8 @@ func (r *Renderer) View() string {
 		{r.ConfirmDeleteSection && r.EditingSection != nil, r.renderSectionDeleteDialog},
 		{r.IsMovingTask, r.renderMoveTaskDialog},
 		{r.IsAddingComment, r.renderCommentDialog},
+		{r.IsEditingComment, r.renderCommentEditDialog},
+		{r.ConfirmDeleteComment, r.renderCommentDeleteDialog},
 	}
 
 	for _, o := range overlays {

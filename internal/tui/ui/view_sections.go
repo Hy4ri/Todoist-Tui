@@ -20,7 +20,7 @@ func (r *Renderer) renderSections() string {
 		b.WriteString(styles.HelpDesc.Render("No sections found. Press 'a' to add one."))
 		b.WriteString("\n\n")
 		b.WriteString(styles.HelpDesc.Render("Esc: back"))
-		return b.String()
+		return styles.Dialog.Width(r.Width - 4).Render(b.String())
 	}
 
 	// Render list

@@ -189,8 +189,11 @@ type State struct {
 	MoveSectionCursor int
 
 	// Comment state
-	CommentInput    textinput.Model
-	IsAddingComment bool
+	CommentInput         textinput.Model
+	IsAddingComment      bool
+	IsEditingComment     bool
+	EditingComment       *api.Comment
+	ConfirmDeleteComment bool
 
 	// Viewport Data
 	ViewportContent    string

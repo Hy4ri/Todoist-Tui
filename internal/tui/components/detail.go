@@ -17,6 +17,7 @@ type DetailModel struct {
 	width, height int
 	showPanel     bool
 	focused       bool
+	CommentCursor int
 }
 
 // NewDetail creates a new DetailModel.
@@ -43,6 +44,33 @@ func (d *DetailModel) Update(msg tea.Msg) (Component, tea.Cmd) {
 			d.showPanel = false
 			d.task = nil
 			d.comments = nil
+			d.CommentCursor = 0
+		case "j", "down":
+			if d.focused && len(d.comments) > 0 {
+				if d.CommentCursor < len(d.comments)-1 {
+					d.CommentCursor++
+				}
+			}
+		case "k", "up":
+			if d.focused && len(d.comments) > 0 {
+				if d.CommentCursor > 0 {
+					d.CommentCursor--
+				}
+			}
+		case "e":
+			if d.focused && len(d.comments) > 0 {
+				c := d.comments[d.CommentCursor]
+				return d, func() tea.Msg {
+					return EditCommentMsg{Comment: &c}
+				}
+			}
+		case "d":
+			if d.focused && len(d.comments) > 0 {
+				c := d.comments[d.CommentCursor]
+				return d, func() tea.Msg {
+					return DeleteCommentMsg{CommentID: c.ID}
+				}
+			}
 		}
 	}
 	return d, nil
@@ -229,23 +257,29 @@ func (d *DetailModel) renderPanel() string {
 		b.WriteString(styles.Subtitle.Render("  Comments"))
 		b.WriteString("\n\n")
 
-		for _, c := range d.comments {
-			// Parse and format timestamp - using simpler formatting as time import is not added, or rely on string
-			// NOTE: view_details used time.Parse, but I don't want to add time import if not needed.
-			// Let's just use the string for now or use basic formatting if available.
-			// view_details used time import. I should check if time is imported. It is NOT imported in detail.go currently.
-			// I'll stick to string or add time import.
-			// Wait, I should add time import if I want to keep exact parity.
-			// Checking imports again...
-			// "fmt", "strings", "tea", "api", "styles" are currently imports.
-			// I'll use the string directly to avoid adding 'time' import for now unless needed.
-			// Actually, view_details:
-			// if t, err := time.Parse(time.RFC3339, c.PostedAt); err == nil { ... }
-			// Providing a cleaner string is better. I'll add "time" to imports.
-			b.WriteString(styles.CommentAuthor.Render(fmt.Sprintf("    %s", c.PostedAt)))
+		for i, c := range d.comments {
+			cursor := "  "
+			if d.focused && i == d.CommentCursor {
+				cursor = "> "
+			}
+
+			// Parse and format timestamp
+			b.WriteString(styles.CommentAuthor.Render(fmt.Sprintf("%s  %s", cursor, c.PostedAt)))
 			b.WriteString("\n")
 			b.WriteString(styles.CommentContent.Render(fmt.Sprintf("    %s", c.Content)))
-			b.WriteString("\n\n")
+			b.WriteString("\n")
+
+			// Render attachment if present
+			if c.FileAttachment != nil {
+				icon := "📎"
+				if strings.HasPrefix(c.FileAttachment.FileType, "image/") {
+					icon = "🖼️"
+				}
+				link := fmt.Sprintf("%s [%s](%s)", icon, c.FileAttachment.FileName, c.FileAttachment.FileURL)
+				b.WriteString(styles.CommentContent.Render(fmt.Sprintf("    %s", link)))
+				b.WriteString("\n")
+			}
+			b.WriteString("\n")
 		}
 	}
 
@@ -259,8 +293,12 @@ func (d *DetailModel) renderPanel() string {
 	b.WriteString(styles.HelpDesc.Render(" back  "))
 	b.WriteString(styles.HelpKey.Render("x"))
 	b.WriteString(styles.HelpDesc.Render(" complete  "))
+	b.WriteString(styles.HelpKey.Render("j/k"))
+	b.WriteString(styles.HelpDesc.Render(" nav comments  "))
 	b.WriteString(styles.HelpKey.Render("e"))
 	b.WriteString(styles.HelpDesc.Render(" edit  "))
+	b.WriteString(styles.HelpKey.Render("d"))
+	b.WriteString(styles.HelpDesc.Render(" delete  "))
 	b.WriteString(styles.HelpKey.Render("s"))
 	b.WriteString(styles.HelpDesc.Render(" add subtask"))
 
@@ -282,6 +320,12 @@ func (d *DetailModel) SetTask(task *api.Task) {
 // SetComments sets the comments for the task.
 func (d *DetailModel) SetComments(comments []api.Comment) {
 	d.comments = comments
+	if d.CommentCursor >= len(d.comments) {
+		d.CommentCursor = len(d.comments) - 1
+		if d.CommentCursor < 0 {
+			d.CommentCursor = 0
+		}
+	}
 }
 
 // SetProjects sets the projects for lookup.

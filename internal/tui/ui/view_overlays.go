@@ -598,3 +598,24 @@ func (r *Renderer) renderColorSelectionList(height int) string {
 
 	return b.String()
 }
+
+// renderCommentEditDialog renders the edit comment dialog.
+func (r *Renderer) renderCommentEditDialog() string {
+	content := styles.Title.Render("✏️ Edit Comment") + "\n\n" +
+		r.CommentInput.View() + "\n\n" +
+		styles.HelpDesc.Render("Enter: save • Esc: cancel")
+
+	return r.renderCenteredDialog(content, 60)
+}
+
+// renderCommentDeleteDialog renders the comment delete confirmation.
+func (r *Renderer) renderCommentDeleteDialog() string {
+	if r.EditingComment == nil {
+		return ""
+	}
+	content := styles.StatusBarError.Render("⚠️ Delete Comment?") + "\n\n" +
+		styles.HelpDesc.Render("Are you sure you want to delete this comment?") + "\n\n" +
+		styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
+
+	return r.renderCenteredDialog(content, 50)
+}
