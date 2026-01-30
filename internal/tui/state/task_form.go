@@ -201,11 +201,11 @@ func NewTaskForm(projects []api.Project, labels []api.Label) *TaskForm {
 
 	due := textinput.New()
 	due.Placeholder = "Due date (e.g. today)"
-	due.Width = 30
+	due.Width = 25
 
 	dueTime := textinput.New()
 	dueTime.Placeholder = "Time (e.g. 10pm)"
-	dueTime.Width = 20
+	dueTime.Width = 15
 
 	return &TaskForm{
 		Content:           content,
@@ -376,7 +376,14 @@ func (f *TaskForm) SetContext(context string) {
 
 // SetWidth sets width of inputs
 func (f *TaskForm) SetWidth(width int) {
-	f.Content.Width = width
-	f.Description.Width = width
-	f.DueString.Width = width
+	// Account for dialog borders/padding (~10 chars)
+	inputWidth := width - 10
+	if inputWidth < 10 {
+		inputWidth = 10
+	}
+
+	f.Content.Width = inputWidth
+	f.Description.Width = inputWidth
+	f.DueString.Width = 25
+	f.DueTime.Width = 15
 }

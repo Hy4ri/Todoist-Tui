@@ -56,13 +56,12 @@ func (r *Renderer) renderTaskForm() string {
 	b.WriteString(styles.InputLabel.Render("description") + "\n")
 	b.WriteString(f.Description.View() + "\n\n")
 
-	// 1. Due Date (On its own line as requested)
-	b.WriteString(styles.InputLabel.Render("due date") + "\n")
+	// 1. Due Date
+	b.WriteString(styles.InputLabel.Render("due date / time") + "\n")
 	dueStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Subtle).
-		Padding(0, 1).
-		Width(20) // Give it some width
+		Padding(0, 1)
 
 	if f.FocusIndex == state.FormFieldDue {
 		dueStyle = dueStyle.BorderForeground(styles.Highlight)
@@ -73,15 +72,14 @@ func (r *Renderer) renderTaskForm() string {
 	timeStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Subtle).
-		Padding(0, 1).
-		Width(15)
+		Padding(0, 1)
 
 	if f.FocusIndex == state.FormFieldDueTime {
 		timeStyle = timeStyle.BorderForeground(styles.Highlight)
 	}
 	timeBlock := timeStyle.Render("🕒 " + f.DueTime.View())
 
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, dueBlock, " ", timeBlock) + "\n\n")
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, dueBlock, "  ", timeBlock) + "\n\n")
 
 	// Metadata Bar (Priority, Project, Labels)
 
