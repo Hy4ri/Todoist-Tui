@@ -56,7 +56,17 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 	var title string
 	switch r.CurrentView {
 	case state.ViewToday:
-		title = time.Now().Format("Monday 2 Jan")
+		loc := time.Local
+		// Try to find a timezone hint from the tasks
+		for _, t := range r.Tasks {
+			if t.Due != nil && t.Due.Timezone != nil && *t.Due.Timezone != "" {
+				if l, err := time.LoadLocation(*t.Due.Timezone); err == nil {
+					loc = l
+					break
+				}
+			}
+		}
+		title = time.Now().In(loc).Format("Monday 2 Jan 3:04pm")
 	case state.ViewInbox:
 		title = "Inbox"
 	case state.ViewProject:
@@ -383,8 +393,7 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width
 	dueStr := ""
 	dueWidth := 0
 	if t.Due != nil {
-		rawDue := t.DueDisplay()
-		dueStr = "| " + rawDue
+		dueStr = "| " + t.DueDisplay()
 		dueWidth = lipgloss.Width(dueStr) + 1
 	}
 
@@ -627,7 +636,12 @@ func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 		if t.Due == nil {
 			continue
 		}
+		// Use only the date portion (YYYY-MM-DD) for grouping to avoid separate headers for times
 		date := t.Due.Date
+		if len(date) > 10 {
+			date = date[:10]
+		}
+
 		if _, exists := tasksByDate[date]; !exists {
 			dates = append(dates, date)
 		}

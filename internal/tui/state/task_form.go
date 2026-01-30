@@ -2,6 +2,7 @@ package state
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -226,9 +227,33 @@ func NewEditTaskForm(t *api.Task, projects []api.Project, labels []api.Label) *T
 	f.Description.SetValue(t.Description)
 	f.Priority = t.Priority
 	if t.Due != nil {
-		f.DueString.SetValue(t.Due.String)
-		// We don't try to parse time out of Due.String for now as it's complex
-		// or maybe we could if we wanted to be fancy, but keeping it simple.
+		if t.Due.Datetime != nil {
+			// Check for Datetime
+			dtStr := *t.Due.Datetime
+			var dt time.Time
+			var err error
+
+			// Try RFC3339 first
+			dt, err = time.Parse(time.RFC3339, dtStr)
+			if err != nil {
+				// Try straight ISO
+				dt, err = time.Parse("2006-01-02T15:04:05", dtStr)
+			}
+
+			if err == nil {
+				// Format time as HH:MM (24h) or similar
+				f.DueTime.SetValue(dt.Local().Format("15:04"))
+
+				// Use the ISO date for the date field to avoid duplication
+				f.DueString.SetValue(t.Due.Date)
+			} else {
+				// Fallback
+				f.DueString.SetValue(t.Due.String)
+			}
+		} else {
+			// No specific time, just use the string (e.g. "Tomorrow")
+			f.DueString.SetValue(t.Due.String)
+		}
 	}
 	f.ProjectID = t.ProjectID
 	f.SectionID = "" // need to lookup

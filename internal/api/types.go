@@ -3,6 +3,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -248,28 +249,72 @@ type TaskFilter struct {
 	IDs       []string
 }
 
-// IsOverdue returns true if the task is overdue.
+// Location returns the time location for the task's due date.
+func (t *Task) Location() *time.Location {
+	if t.Due != nil && t.Due.Timezone != nil && *t.Due.Timezone != "" {
+		if loc, err := time.LoadLocation(*t.Due.Timezone); err == nil {
+			return loc
+		}
+	}
+	return time.Local
+}
+
+// IsOverdue returns true if the task is overdue (including past due time today).
 func (t *Task) IsOverdue() bool {
 	if t.Due == nil || t.Checked {
 		return false
 	}
 
+	loc := t.Location()
 	var dueDate time.Time
-	var err error
+	var hasTime bool
 
 	if t.ParsedDate != nil {
-		dueDate = *t.ParsedDate
+		dueDate = t.ParsedDate.In(loc)
+		hasTime = t.Due.Datetime != nil && *t.Due.Datetime != ""
+		// Extra check: if someone put a timestamp in just the 'date' field
+		if !hasTime && len(t.Due.Date) > 10 {
+			hasTime = true
+		}
 	} else {
-		// Parse in local timezone to match time.Now()
-		dueDate, err = time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
-		if err != nil {
-			return false
+		// Fallback parsing (same as DueDisplay)
+		dateStr := t.Due.Date
+		if t.Due.Datetime != nil && *t.Due.Datetime != "" {
+			if parsed, err := time.Parse(time.RFC3339, *t.Due.Datetime); err == nil {
+				dueDate = parsed.In(loc)
+				hasTime = true
+			}
+		}
+		if !hasTime {
+			if parsed, err := time.Parse(time.RFC3339, dateStr); err == nil {
+				dueDate = parsed.In(loc)
+				hasTime = true
+			} else if parsed, err := time.ParseInLocation("2006-01-02T15:04:05", dateStr, loc); err == nil {
+				dueDate = parsed
+				hasTime = true
+			} else {
+				if len(dateStr) > 10 {
+					dateStr = dateStr[:10]
+				}
+				if parsed, err := time.ParseInLocation("2006-01-02", dateStr, loc); err == nil {
+					dueDate = parsed
+				} else {
+					return false
+				}
+			}
 		}
 	}
 
-	today := time.Now()
-	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	return dueDate.Before(today)
+	now := time.Now().In(loc)
+
+	if hasTime {
+		// Specific time: overdue if current time is after due time
+		return now.After(dueDate)
+	}
+
+	// Date only: overdue if it was due before today's start
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	return dueDate.Before(todayStart)
 }
 
 // IsDueToday returns true if the task is due today.
@@ -278,59 +323,113 @@ func (t *Task) IsDueToday() bool {
 		return false
 	}
 
+	loc := t.Location()
 	var dueDate time.Time
 	var err error
 
 	if t.ParsedDate != nil {
-		dueDate = *t.ParsedDate
+		dueDate = t.ParsedDate.In(loc)
 	} else {
-		// Parse in local timezone to match time.Now()
-		dueDate, err = time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
+		dueDate, err = time.ParseInLocation("2006-01-02", t.Due.Date[:10], loc)
 		if err != nil {
 			return false
 		}
 	}
 
-	today := time.Now()
-	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	return dueDate.Equal(today)
+	today := time.Now().In(loc)
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, loc)
+	return dueDate.Year() == today.Year() && dueDate.Month() == today.Month() && dueDate.Day() == today.Day()
 }
 
-// DueDisplay returns a human-readable due date string.
+// DueDisplay returns a human-readable due date string, including time if available.
 func (t *Task) DueDisplay() string {
 	if t.Due == nil {
 		return ""
 	}
 
+	loc := t.Location()
 	var dueDate time.Time
 	var err error
 
+	hasTime := t.Due.Datetime != nil && *t.Due.Datetime != ""
+
 	if t.ParsedDate != nil {
-		dueDate = *t.ParsedDate
+		dueDate = t.ParsedDate.In(loc)
 	} else {
-		// Parse in local timezone to match time.Now()
-		dueDate, err = time.ParseInLocation("2006-01-02", t.Due.Date[:10], time.Local)
-		if err != nil {
-			return t.Due.String
+		// Use Datetime if available for more precision
+		if hasTime {
+			dueDate, err = time.Parse(time.RFC3339, *t.Due.Datetime)
+			if err == nil {
+				dueDate = dueDate.In(loc)
+			}
+		}
+
+		if err != nil || !hasTime {
+			// Fallback to date field, which might also contain a timestamp in some API versions
+			dateStr := t.Due.Date
+
+			// Try to parse as full timestamp first
+			if parsed, err := time.Parse(time.RFC3339, dateStr); err == nil {
+				dueDate = parsed.In(loc)
+				hasTime = true
+			} else if parsed, err := time.ParseInLocation("2006-01-02T15:04:05", dateStr, loc); err == nil {
+				dueDate = parsed
+				hasTime = true
+			} else {
+				// Fallback to date only
+				if len(dateStr) > 10 {
+					dateStr = dateStr[:10]
+				}
+				dueDate, err = time.ParseInLocation("2006-01-02", dateStr, loc)
+				if err != nil {
+					return t.Due.String
+				}
+			}
 		}
 	}
 
-	today := time.Now()
-	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.Local)
-	diff := int(dueDate.Sub(today).Hours() / 24)
+	today := time.Now().In(loc)
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, loc)
 
+	// Calculate difference in days based on midnight of both dates
+	dueDay := time.Date(dueDate.Year(), dueDate.Month(), dueDate.Day(), 0, 0, 0, 0, loc)
+	diff := int(dueDay.Sub(today).Hours() / 24)
+
+	var display string
 	switch {
 	case diff < -1:
-		return fmt.Sprintf("%d days ago", -diff)
+		display = fmt.Sprintf("%d days ago", -diff)
 	case diff == -1:
-		return "yesterday"
+		display = "yesterday"
 	case diff == 0:
-		return "today"
+		display = "today"
 	case diff == 1:
-		return "tomorrow"
+		display = "tomorrow"
 	case diff < 7:
-		return dueDate.Weekday().String()
+		display = dueDate.Weekday().String()
 	default:
-		return dueDate.Format("Jan 2")
+		display = dueDate.Format("Jan 2")
 	}
+
+	// Append time if available
+	if hasTime {
+		display += " " + dueDate.Format("3:04pm")
+	} else if t.Due.String != "" {
+		// Fallback: If raw string contains a time but API didn't provide datetime (rare but possible),
+		// or if the user wants to see the specific string they typed which includes a time.
+		lowerStr := strings.ToLower(t.Due.String)
+		if strings.Contains(lowerStr, ":") || strings.Contains(lowerStr, "am") || strings.Contains(lowerStr, "pm") || strings.Contains(lowerStr, "at ") {
+			// If it's a "today" task, we can try to just use the raw string if it's informative
+			// but cleaning it up a bit if it's like "today at 10pm"
+			if diff == 0 {
+				display = t.Due.String
+			} else {
+				// For other days, maybe append the time portion?
+				// For now, just use it.
+				display = t.Due.String
+			}
+		}
+	}
+
+	return display
 }

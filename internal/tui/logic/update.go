@@ -203,8 +203,19 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 				}
 				h.TasksByDate[dateStr] = append(h.TasksByDate[dateStr], *t)
 
-				if parsed, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
-					t.ParsedDate = &parsed
+				// Parse full datetime if available, otherwise just date
+				if t.Due.Datetime != nil {
+					if parsed, err := time.Parse(time.RFC3339, *t.Due.Datetime); err == nil {
+						localParsed := parsed.Local()
+						t.ParsedDate = &localParsed
+					}
+				}
+
+				// Fallback to date only if Datetime not present or failed to parse
+				if t.ParsedDate == nil {
+					if parsed, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
+						t.ParsedDate = &parsed
+					}
 				}
 			}
 		}

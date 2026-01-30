@@ -37,18 +37,45 @@ func (h *Handler) sortTasks() {
 			// Use datetime if available, else use date
 			dateI := ti.Due.Date
 			dateJ := tj.Due.Date
+			var timeI, timeJ time.Time
+			var errI, errJ error
+
 			if ti.Due.Datetime != nil {
-				dateI = *ti.Due.Datetime
+				timeI, errI = time.Parse(time.RFC3339, *ti.Due.Datetime)
+			} else {
+				// No time? treat as end of day for sorting? or start?
+				// User wants "tasks with time are higher priority" -> "higher priority" usually means TOP.
+				// So if I have time, I should come BEFORE tasks without time if dates are equal.
+				// Let's assume dates are equal first.
 			}
 			if tj.Due.Datetime != nil {
-				dateJ = *tj.Due.Datetime
+				timeJ, errJ = time.Parse(time.RFC3339, *tj.Due.Datetime)
 			}
 
+			// First compare Date string (YYYY-MM-DD)
 			if dateI != dateJ {
 				return dateI < dateJ // Earlier dates first
 			}
+
+			// Dates are same.
+			// Compare presence of time.
+			hasTimeI := ti.Due.Datetime != nil
+			hasTimeJ := tj.Due.Datetime != nil
+
+			if hasTimeI && !hasTimeJ {
+				return true // I has time, J does not -> I first
+			}
+			if !hasTimeI && hasTimeJ {
+				return false // J has time, I does not -> J first
+			}
+
+			// Both have time, compare times
+			if hasTimeI && hasTimeJ && errI == nil && errJ == nil {
+				return timeI.Before(timeJ)
+			}
 		}
 
+		// Same due date or both no due date - sort by priority (higher = P1 = 4)
 		// Same due date or both no due date - sort by priority (higher = P1 = 4)
 		return ti.Priority > tj.Priority
 	})
@@ -824,11 +851,66 @@ func (h *Handler) submitForm() tea.Cmd {
 		createReq = h.TaskForm.ToCreateRequest()
 	}
 
-	// Optimistically close form
+	// Optimistically close form and update UI
 	h.CurrentView = h.PreviousView
-	h.TaskForm = nil
+
+	// Capture form values for optimistic update
+	formDate := h.TaskForm.DueString.Value()
+	formTime := h.TaskForm.DueTime.Value()
+	formParams := updateReq // Use the request object to get other fields if needed
 
 	if isEdit {
+		// Find and update local task
+		updateLocalTask := func(t *api.Task) {
+			if formParams.Content != nil {
+				t.Content = *formParams.Content
+			}
+			if formParams.Description != nil {
+				t.Description = *formParams.Description
+			}
+			if formParams.Priority != nil {
+				t.Priority = *formParams.Priority
+			}
+			// Handle Due Date/Time
+			if formDate != "" {
+				if t.Due == nil {
+					t.Due = &api.Due{}
+				}
+				t.Due.Date = formDate
+				t.Due.String = formDate // temporary
+
+				if formTime != "" {
+					// Construct local datetime for immediate display
+					// formDate is YYYY-MM-DD, formTime is HH:MM
+					// Append local timezone offset so time.Parse(RFC3339) works
+					offset := time.Now().Format("-07:00")
+					localDT := fmt.Sprintf("%sT%s:00%s", formDate, formTime, offset)
+					t.Due.Datetime = &localDT
+				} else {
+					t.Due.Datetime = nil
+				}
+			}
+		}
+
+		// Update in AllTasks
+		for i := range h.AllTasks {
+			if h.AllTasks[i].ID == taskID {
+				updateLocalTask(&h.AllTasks[i])
+				break
+			}
+		}
+		// Update in current Tasks view
+		for i := range h.Tasks {
+			if h.Tasks[i].ID == taskID {
+				updateLocalTask(&h.Tasks[i])
+				break
+			}
+		}
+
+		// Re-sort just in case priority/date changed
+		h.sortTasks()
+
+		h.TaskForm = nil
 		return func() tea.Msg {
 			_, err := h.Client.UpdateTask(taskID, updateReq)
 			if err != nil {
