@@ -780,14 +780,33 @@ func (h *Handler) submitForm() tea.Cmd {
 		return nil
 	}
 
-	h.Loading = true
+	if h.Loading {
+		return nil
+	}
 
-	if h.TaskForm.Mode == "edit" {
-		// Update existing task
-		taskID := h.TaskForm.TaskID
-		req := h.TaskForm.ToUpdateRequest()
+	h.Loading = true
+	h.StatusMsg = "Saving task..."
+
+	// Capture data before closing form
+	isEdit := h.TaskForm.Mode == "edit"
+	var taskID string
+	var updateReq api.UpdateTaskRequest
+	var createReq api.CreateTaskRequest
+
+	if isEdit {
+		taskID = h.TaskForm.TaskID
+		updateReq = h.TaskForm.ToUpdateRequest()
+	} else {
+		createReq = h.TaskForm.ToCreateRequest()
+	}
+
+	// Optimistically close form
+	h.CurrentView = h.PreviousView
+	h.TaskForm = nil
+
+	if isEdit {
 		return func() tea.Msg {
-			_, err := h.Client.UpdateTask(taskID, req)
+			_, err := h.Client.UpdateTask(taskID, updateReq)
 			if err != nil {
 				return errMsg{err}
 			}
@@ -796,9 +815,8 @@ func (h *Handler) submitForm() tea.Cmd {
 	}
 
 	// Create new task
-	req := h.TaskForm.ToCreateRequest()
 	return func() tea.Msg {
-		_, err := h.Client.CreateTask(req)
+		_, err := h.Client.CreateTask(createReq)
 		if err != nil {
 			return errMsg{err}
 		}

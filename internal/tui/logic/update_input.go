@@ -684,9 +684,15 @@ func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return nil
 
 	case "ctrl+enter":
+		if h.Loading {
+			return nil
+		}
 		return h.submitForm()
 
 	case "enter":
+		if h.Loading {
+			return nil
+		}
 		// If on task content or description input, submit immediately with defaults
 		if h.TaskForm.FocusIndex == state.FormFieldContent || h.TaskForm.FocusIndex == state.FormFieldDescription {
 			return h.submitForm()
