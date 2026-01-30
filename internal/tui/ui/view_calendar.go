@@ -514,62 +514,118 @@ func (r *Renderer) getContextualHints() []string {
 	key := func(k string) string { return styles.StatusBarKey.Render(k) }
 	desc := func(d string) string { return styles.StatusBarText.Render(d) }
 
-	switch r.CurrentTab {
-	case state.TabToday, state.TabUpcoming:
+	// 1. Check Overlays & Modals (Highest priority)
+	if r.IsCreatingProject || r.IsEditingProject {
+		return []string{
+			key("Enter") + desc(":save"),
+			key("Esc") + desc(":cancel"),
+		}
+	}
+	if r.IsCreatingLabel || r.IsEditingLabel {
+		return []string{
+			key("Enter") + desc(":save"),
+			key("Esc") + desc(":cancel"),
+		}
+	}
+	if r.IsCreatingSection || r.IsEditingSection {
+		return []string{
+			key("Enter") + desc(":save"),
+			key("Esc") + desc(":cancel"),
+		}
+	}
+	if r.IsCreatingSubtask {
+		return []string{
+			key("Enter") + desc(":save"),
+			key("Esc") + desc(":cancel"),
+		}
+	}
+	if r.IsAddingComment || r.IsEditingComment {
+		return []string{
+			key("Enter") + desc(":save"),
+			key("Esc") + desc(":cancel"),
+		}
+	}
+	if r.IsMovingTask {
+		return []string{
+			key("j/k") + desc(":move"),
+			key("Enter") + desc(":place"),
+			key("Esc") + desc(":cancel"),
+		}
+	}
+	if r.ConfirmDeleteProject || r.ConfirmDeleteLabel || r.ConfirmDeleteSection || r.ConfirmDeleteComment {
+		return []string{
+			key("y") + desc(":confirm"),
+			key("n") + desc(":cancel"),
+		}
+	}
+	if r.IsSelectingColor {
 		return []string{
 			key("j/k") + desc(":nav"),
+			key("Enter") + desc(":select"),
+			key("Esc") + desc(":back"),
+		}
+	}
+
+	// 2. Tab-based Context
+	switch r.CurrentTab {
+	case state.TabToday, state.TabUpcoming, state.TabInbox:
+		return []string{
+			key("j/k") + desc(":nav"),
+			key("a") + desc(":add"),
 			key("x") + desc(":done"),
 			key("e") + desc(":edit"),
-			key("</>") + desc(":due"),
-			key("r") + desc(":refresh"),
+			key("s") + desc(":subtask"),
 			key("?") + desc(":help"),
 		}
 	case state.TabLabels:
 		if r.CurrentLabel != nil {
+			// Inside a label view
 			return []string{
-				key("j/k") + desc(":nav"),
-				key("x") + desc(":done"),
-				key("e") + desc(":edit"),
 				key("Esc") + desc(":back"),
-				key("?") + desc(":help"),
+				key("j/k") + desc(":nav"),
+				key("a") + desc(":add"),
+				key("x") + desc(":done"),
 			}
 		}
+		// List of labels
 		return []string{
 			key("j/k") + desc(":nav"),
 			key("Enter") + desc(":select"),
-			key("?") + desc(":help"),
-			key("q") + desc(":quit"),
+			key("a") + desc(":create"),
+			key("d") + desc(":delete"),
 		}
 	case state.TabCalendar:
 		return []string{
 			key("h/l") + desc(":day"),
-			key("←/→") + desc(":month"),
+			key("j/k") + desc(":week"),
 			key("v") + desc(":view"),
-			key("Enter") + desc(":select"),
-			key("?") + desc(":help"),
+			key("Enter") + desc(":open"),
 		}
 	case state.TabProjects:
 		if r.FocusedPane == state.PaneSidebar {
 			return []string{
 				key("j/k") + desc(":nav"),
-				key("Enter") + desc(":select"),
-				key("state.Tab") + desc(":pane"),
-				key("?") + desc(":help"),
+				key("Enter") + desc(":open"),
+				key("n") + desc(":new"),
+				key("f") + desc(":fav"),
+				key("Tab") + desc(":tasks"),
 			}
 		}
+		// Focused on tasks in project
 		return []string{
+			key("Tab") + desc(":projects"),
 			key("j/k") + desc(":nav"),
+			key("a") + desc(":add"),
 			key("x") + desc(":done"),
-			key("e") + desc(":edit"),
-			key("state.Tab") + desc(":pane"),
-			key("?") + desc(":help"),
+			key("S") + desc(":sections"),
 		}
-	default:
-		return []string{
-			key("j/k") + desc(":nav"),
-			key("?") + desc(":help"),
-			key("q") + desc(":quit"),
-		}
+	}
+
+	// Default generic fallback
+	return []string{
+		key("j/k") + desc(":nav"),
+		key("?") + desc(":help"),
+		key("q") + desc(":quit"),
 	}
 }
 
