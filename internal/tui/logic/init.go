@@ -11,6 +11,7 @@ func (h *Handler) Init() tea.Cmd {
 	return tea.Batch(
 		h.Spinner.Tick,
 		h.LoadInitialData(),
+		checkDueCmd(),
 	)
 }
 

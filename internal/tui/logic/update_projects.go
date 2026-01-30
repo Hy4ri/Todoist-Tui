@@ -649,8 +649,23 @@ func (h *Handler) handleMoveTaskKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		}
 
 		h.IsMovingTask = false
-		h.Loading = true
 		h.StatusMsg = "Moving task..."
+		// Remove blocking loading state
+
+		// Optimistic update
+		// We capture the pointer sectionID, ensuring it has stable memory address if needed,
+		// but &sectionID is taking address of local var which is fine for local struct but...
+		// api.Task has SectionID *string. We should allocate a new string to be safe or use a helper.
+		safeSectionID := sectionID
+		task.SectionID = &safeSectionID
+
+		// Update AllTasks
+		for i := range h.AllTasks {
+			if h.AllTasks[i].ID == task.ID {
+				h.AllTasks[i].SectionID = &safeSectionID
+				break
+			}
+		}
 
 		return func() tea.Msg {
 			// Update task with new section_id using MoveTask (Sync API)
@@ -658,10 +673,7 @@ func (h *Handler) handleMoveTaskKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			if err != nil {
 				return errMsg{err}
 			}
-			return taskUpdatedMsg{task: task} // We don't get the updated task back, but we trigger a refresh usually. Or should we reload?
-			// taskUpdatedMsg usually expects a *Task. The old code returned taskUpdatedMsg{}.
-			// Let's return taskUpdatedMsg{} or maybe trigger reload if structure changed.
-			// Returning taskUpdatedMsg{} usually triggers list update.
+			return taskUpdatedMsg{task: task}
 		}
 
 	}
@@ -951,10 +963,15 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
 		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
 	}
-	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+	// Check specifically for section headers (negative indices)
+	if taskIndex < 0 {
+		return nil
+	}
+	if taskIndex >= len(h.Tasks) {
 		return nil
 	}
 
+	// Optimistic update
 	task := &h.Tasks[taskIndex]
 	var priority int
 	switch action {
@@ -968,14 +985,27 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 		priority = 1
 	}
 
-	h.Loading = true
+	// Apply change immediately to local state
+	task.Priority = priority
+
+	// Also update in AllTasks to maintain consistency across views/filters
+	for i := range h.AllTasks {
+		if h.AllTasks[i].ID == task.ID {
+			h.AllTasks[i].Priority = priority
+			break
+		}
+	}
+
+	// Perform API update in background without blocking UI
+	taskID := task.ID
 	return func() tea.Msg {
-		_, err := h.Client.UpdateTask(task.ID, api.UpdateTaskRequest{
+		_, err := h.Client.UpdateTask(taskID, api.UpdateTaskRequest{
 			Priority: &priority,
 		})
 		if err != nil {
 			return errMsg{err}
 		}
+		// Trigger silent refresh to sync with server eventually
 		return taskUpdatedMsg{}
 	}
 }
@@ -1003,8 +1033,34 @@ func (h *Handler) handleDueToday() tea.Cmd {
 	task := &h.Tasks[taskIndex]
 	dueString := "today"
 
-	h.Loading = true
+	// Optimistic update
+	now := time.Now()
+	dateStr := now.Format("2006-01-02")
+
+	// Create or update Due object
+	if task.Due == nil {
+		task.Due = &api.Due{}
+	}
+	task.Due.String = "today"
+	task.Due.Date = dateStr
+	task.Due.Datetime = nil // Clear specific time if moving to "today" broadly
+
+	// Update AllTasks
+	for i := range h.AllTasks {
+		if h.AllTasks[i].ID == task.ID {
+			if h.AllTasks[i].Due == nil {
+				h.AllTasks[i].Due = &api.Due{}
+			}
+			h.AllTasks[i].Due.String = "today"
+			h.AllTasks[i].Due.Date = dateStr
+			h.AllTasks[i].Due.Datetime = nil
+			break
+		}
+	}
+
 	h.StatusMsg = "Moving to today..."
+	// Remove blocking loading state
+
 	return func() tea.Msg {
 		_, err := h.Client.UpdateTask(task.ID, api.UpdateTaskRequest{
 			DueString: &dueString,
@@ -1039,8 +1095,32 @@ func (h *Handler) handleDueTomorrow() tea.Cmd {
 	task := &h.Tasks[taskIndex]
 	dueString := "tomorrow"
 
-	h.Loading = true
+	// Optimistic update
+	tomorrow := time.Now().AddDate(0, 0, 1)
+	dateStr := tomorrow.Format("2006-01-02")
+
+	if task.Due == nil {
+		task.Due = &api.Due{}
+	}
+	task.Due.String = "tomorrow"
+	task.Due.Date = dateStr
+	task.Due.Datetime = nil
+
+	// Update AllTasks
+	for i := range h.AllTasks {
+		if h.AllTasks[i].ID == task.ID {
+			if h.AllTasks[i].Due == nil {
+				h.AllTasks[i].Due = &api.Due{}
+			}
+			h.AllTasks[i].Due.String = "tomorrow"
+			h.AllTasks[i].Due.Date = dateStr
+			h.AllTasks[i].Due.Datetime = nil
+			break
+		}
+	}
+
 	h.StatusMsg = "Moving to tomorrow..."
+
 	return func() tea.Msg {
 		_, err := h.Client.UpdateTask(task.ID, api.UpdateTaskRequest{
 			DueString: &dueString,
@@ -1048,6 +1128,7 @@ func (h *Handler) handleDueTomorrow() tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
+		// Return taskUpdatedMsg to trigger eventual consistency refresh
 		return taskUpdatedMsg{}
 	}
 }

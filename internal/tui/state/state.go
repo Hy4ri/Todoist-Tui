@@ -204,6 +204,9 @@ type State struct {
 	// Selection state
 	SelectedTaskIDs map[string]bool
 
+	// Notification state
+	NotifiedTasks map[string]bool
+
 	// Cursor restoration
 	RestoreCursorToTaskID string
 }

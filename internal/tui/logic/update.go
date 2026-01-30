@@ -39,6 +39,9 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		h.Spinner, cmd = h.Spinner.Update(msg)
 		return cmd
 
+	case checkDueMsg:
+		return h.handleCheckDue(time.Time(msg))
+
 	case errMsg:
 		h.Loading = false
 		h.Err = msg.err

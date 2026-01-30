@@ -28,6 +28,7 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 
 		SearchResults:   []api.Task{},
 		SelectedTaskIDs: make(map[string]bool),
+		NotifiedTasks:   make(map[string]bool),
 	}
 
 	// Initialize UI components

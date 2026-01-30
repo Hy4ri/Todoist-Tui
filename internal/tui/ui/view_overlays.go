@@ -67,7 +67,21 @@ func (r *Renderer) renderTaskForm() string {
 	if f.FocusIndex == state.FormFieldDue {
 		dueStyle = dueStyle.BorderForeground(styles.Highlight)
 	}
-	b.WriteString(dueStyle.Render("📅 "+f.DueString.View()) + "\n\n")
+	dueBlock := dueStyle.Render("📅 " + f.DueString.View())
+
+	// Due Time
+	timeStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(styles.Subtle).
+		Padding(0, 1).
+		Width(15)
+
+	if f.FocusIndex == state.FormFieldDueTime {
+		timeStyle = timeStyle.BorderForeground(styles.Highlight)
+	}
+	timeBlock := timeStyle.Render("🕒 " + f.DueTime.View())
+
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, dueBlock, " ", timeBlock) + "\n\n")
 
 	// Metadata Bar (Priority, Project, Labels)
 

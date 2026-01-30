@@ -678,8 +678,32 @@ func (h *Handler) handleMoveTaskDate(days int) tea.Cmd {
 	}
 
 	newDateStr := newDate.Format("2006-01-02")
+
+	// Optimistic update
+	if task.Due == nil {
+		task.Due = &api.Due{}
+	}
+	task.Due.Date = newDateStr
+	// If recurring, we might need to be careful, but updating date is fine for display
+	// Note: We don't update task.Due.String here because we don't know the localized string for arbitrary date easily.
+	// But resetting it or leaving it might be ok. Todoist usually updates it.
+	// Let's rely on date for display mostly.
+	task.Due.Datetime = nil
+
+	// Update AllTasks
+	for i := range h.AllTasks {
+		if h.AllTasks[i].ID == task.ID {
+			if h.AllTasks[i].Due == nil {
+				h.AllTasks[i].Due = &api.Due{}
+			}
+			h.AllTasks[i].Due.Date = newDateStr
+			h.AllTasks[i].Due.Datetime = nil
+			break
+		}
+	}
+
 	h.StatusMsg = fmt.Sprintf("Moving task to %s...", newDateStr)
-	h.Loading = true
+	// Remove blocking loading state
 
 	// Prepare UpdateReq
 	updateReq := api.UpdateTaskRequest{

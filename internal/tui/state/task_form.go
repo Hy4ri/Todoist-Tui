@@ -13,13 +13,14 @@ const (
 	FormFieldContent = iota
 	FormFieldDescription
 	FormFieldDue
+	FormFieldDueTime // New field
 	FormFieldPriority
 	FormFieldShowProject
 	FormFieldLabels
 	FormFieldSubmit
 )
 
-const formFieldCount = 7
+const formFieldCount = 8
 
 // TaskForm represents the state of the task creation/editing form.
 type TaskForm struct {
@@ -27,6 +28,7 @@ type TaskForm struct {
 	Description textinput.Model
 	Priority    int
 	DueString   textinput.Model
+	DueTime     textinput.Model // New field
 	ProjectID   string
 	SectionID   string
 	Labels      []string
@@ -165,6 +167,10 @@ func (f *TaskForm) Update(msg tea.Msg) tea.Cmd {
 		f.DueString, cmd = f.DueString.Update(msg)
 		cmds = append(cmds, cmd)
 	}
+	if f.FocusIndex == FormFieldDueTime {
+		f.DueTime, cmd = f.DueTime.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 
 	return tea.Batch(cmds...)
 }
@@ -193,14 +199,19 @@ func NewTaskForm(projects []api.Project, labels []api.Label) *TaskForm {
 	desc.Width = 50
 
 	due := textinput.New()
-	due.Placeholder = "Due date (e.g. today, tomorrow)"
-	due.Width = 20
+	due.Placeholder = "Due date (e.g. today)"
+	due.Width = 30
+
+	dueTime := textinput.New()
+	dueTime.Placeholder = "Time (e.g. 10pm)"
+	dueTime.Width = 20
 
 	return &TaskForm{
 		Content:           content,
 		Description:       desc,
 		Priority:          1, // Default to P4 (1)
 		DueString:         due,
+		DueTime:           dueTime,
 		Labels:            []string{},
 		ShowProjectList:   false,
 		AvailableProjects: projects,
@@ -216,6 +227,8 @@ func NewEditTaskForm(t *api.Task, projects []api.Project, labels []api.Label) *T
 	f.Priority = t.Priority
 	if t.Due != nil {
 		f.DueString.SetValue(t.Due.String)
+		// We don't try to parse time out of Due.String for now as it's complex
+		// or maybe we could if we wanted to be fancy, but keeping it simple.
 	}
 	f.ProjectID = t.ProjectID
 	f.SectionID = "" // need to lookup
@@ -248,6 +261,11 @@ func (f *TaskForm) ToCreateRequest() api.CreateTaskRequest {
 	content := strings.TrimSpace(f.Content.Value())
 	desc := strings.TrimSpace(f.Description.Value())
 	due := strings.TrimSpace(f.DueString.Value())
+	dueTime := strings.TrimSpace(f.DueTime.Value())
+
+	if dueTime != "" {
+		due = due + " " + dueTime
+	}
 
 	// Priority mapping: UI 1-4 -> API 4-1
 	// UI P1 (Red) = 4, UI P2 (Orange) = 3, UI P3 (Blue) = 2, UI P4 (Grey) = 1
@@ -273,7 +291,12 @@ func (f *TaskForm) ToUpdateRequest() api.UpdateTaskRequest {
 	content := strings.TrimSpace(f.Content.Value())
 	desc := strings.TrimSpace(f.Description.Value())
 	due := strings.TrimSpace(f.DueString.Value())
+	dueTime := strings.TrimSpace(f.DueTime.Value())
 	priority := f.Priority
+
+	if dueTime != "" {
+		due = due + " " + dueTime
+	}
 
 	return api.UpdateTaskRequest{
 		Content:     &content,
@@ -285,24 +308,8 @@ func (f *TaskForm) ToUpdateRequest() api.UpdateTaskRequest {
 }
 
 // FocusedField returns the index of the focused field.
-// 0: Content, 1: Description, 2: Due, 3: Project, 4: Labels, 5: Submit
-// This logic was likely in Update but we can expose a helper.
-// Actually, `update_projects.go` uses `FocusedField`.
-// It likely expects an int. I need to implement logic to determine which is focused.
-// But `TaskForm` in state doesn't track "FocusedFieldIndex".
-// It tracks it via textinput.Focused()?
+// 0: Content, 1: Description, 2: Due, 3: DueTime, 4: Priority, 5: Project, 6: Labels, 7: Submit
 func (f *TaskForm) FocusedField() int {
-	if f.Content.Focused() {
-		return 0
-	}
-	if f.Description.Focused() {
-		return 1
-	}
-	if f.DueString.Focused() {
-		return 2
-	}
-	// How do we track Project/Labels/Submit focus if they aren't textinputs?
-	// We need a `FocusIndex` field in TaskForm struct!
 	return f.FocusIndex
 }
 
@@ -312,6 +319,7 @@ func (f *TaskForm) Focus(index int) {
 	f.Content.Blur()
 	f.Description.Blur()
 	f.DueString.Blur()
+	f.DueTime.Blur()
 
 	switch index {
 	case 0:
@@ -320,6 +328,8 @@ func (f *TaskForm) Focus(index int) {
 		f.Description.Focus()
 	case 2:
 		f.DueString.Focus()
+	case 3:
+		f.DueTime.Focus()
 	}
 }
 
