@@ -55,7 +55,7 @@ func (h *Handler) handleTabClick(x int) tea.Cmd {
 	useMinimalLabels := h.Width < 50
 
 	// Calculate actual rendered positions for each tab
-	currentPos := 2 // Start after state.TabBar left padding
+	currentPos := 1 // Start after styles.TabBar left padding
 
 	for _, t := range tabs {
 		var label string
@@ -67,11 +67,9 @@ func (h *Handler) handleTabClick(x int) tea.Cmd {
 			label = fmt.Sprintf("%s %s", t.Icon, t.Name)
 		}
 
-		// Render the tab to get its actual width (includes padding from state.Tab/state.TabActive style)
+		// Render the tab to get its actual width (includes padding from styles.Tab/styles.TabActive style)
 		var renderedTab string
 		if h.CurrentTab == t.Tab {
-			// Logic should not use styles directly for rendering, but this code is here.
-			// Assuming styles is imported.
 			renderedTab = styles.TabActive.Render(label)
 		} else {
 			renderedTab = styles.Tab.Render(label)
@@ -82,35 +80,7 @@ func (h *Handler) handleTabClick(x int) tea.Cmd {
 
 		// Check if click is within this tab
 		if x >= currentPos && x < endPos {
-			h.CurrentTab = t.Tab
-			h.TaskCursor = 0
-			h.CurrentLabel = nil
-
-			switch t.Tab {
-			case state.TabToday:
-				h.CurrentView = state.ViewToday
-				h.CurrentProject = nil
-				return h.filterTodayTasks()
-			case state.TabUpcoming:
-				h.CurrentView = state.ViewUpcoming
-				h.CurrentProject = nil
-				return h.filterUpcomingTasks()
-			case state.TabLabels:
-				h.CurrentView = state.ViewLabels
-				h.CurrentProject = nil
-				return nil
-			case state.TabCalendar:
-				h.CurrentView = state.ViewCalendar
-				h.CurrentProject = nil
-				h.CalendarDate = time.Now()
-				h.CalendarDay = time.Now().Day()
-				return h.filterCalendarTasks()
-			case state.TabProjects:
-				h.CurrentView = state.ViewProject
-				h.FocusedPane = state.PaneSidebar
-				h.SidebarCursor = 0
-				return nil
-			}
+			return h.switchToTab(t.Tab)
 		}
 
 		// Move to next tab position (+1 for space separator between tabs)
@@ -124,7 +94,7 @@ func (h *Handler) handleTabClick(x int) tea.Cmd {
 func (h *Handler) handleContentClick(x, y int) tea.Cmd {
 	// In Projects tab, check if click is in sidebar
 	if h.CurrentTab == state.TabProjects {
-		sidebarWidth := 25
+		sidebarWidth := 30
 		if x < sidebarWidth {
 			// Click in sidebar
 			h.FocusedPane = state.PaneSidebar
@@ -232,8 +202,9 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	case state.TabInbox:
 		h.CurrentView = state.ViewInbox
 		h.CurrentProject = nil
+		h.Sections = nil // Clear sections from previous project
 		h.FocusedPane = state.PaneMain
-		return h.filterInboxTasks()
+		return h.loadInboxTasks()
 	case state.TabToday:
 		h.CurrentView = state.ViewToday
 		h.CurrentProject = nil
@@ -544,7 +515,8 @@ func (h *Handler) handleSelect() tea.Cmd {
 		for i := range h.Projects {
 			if h.Projects[i].ID == item.ID {
 				h.CurrentProject = &h.Projects[i]
-				return h.filterProjectTasks(h.CurrentProject.ID)
+				h.Sections = nil // Clear sections before loading new ones
+				return h.loadProjectTasks(h.CurrentProject.ID)
 			}
 		}
 		return nil

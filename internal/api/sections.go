@@ -13,7 +13,7 @@ import (
 // GetSections returns all sections, optionally filtered by project.
 // Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetSections(projectID string) ([]Section, error) {
-	var allSections []Section
+	allSections := []Section{} // Non-nil empty slice
 	query := url.Values{}
 	if projectID != "" {
 		query.Set("project_id", projectID)

@@ -871,6 +871,17 @@ func (h *Handler) submitForm() tea.Cmd {
 			if formParams.Priority != nil {
 				t.Priority = *formParams.Priority
 			}
+			// Update Project/Section
+			if h.TaskForm.ProjectID != "" {
+				t.ProjectID = h.TaskForm.ProjectID
+			}
+			if h.TaskForm.SectionID != "" {
+				sid := h.TaskForm.SectionID
+				t.SectionID = &sid
+			}
+			// Update Labels
+			t.Labels = h.TaskForm.Labels
+
 			// Handle Due Date/Time
 			if formDate != "" {
 				if t.Due == nil {
@@ -947,7 +958,7 @@ func (h *Handler) filterInboxTasks() tea.Cmd {
 
 	// Filter tasks by project ID
 	var tasks []api.Task
-	// Us allTasks if available
+	// Use allTasks if available
 	tasksToFilter := h.AllTasks
 	if len(tasksToFilter) == 0 {
 		tasksToFilter = h.Tasks

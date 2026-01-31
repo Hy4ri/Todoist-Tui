@@ -18,14 +18,7 @@ func (h *Handler) Init() tea.Cmd {
 // loadInitialData loads all necessary data concurrently.
 func (h *Handler) LoadInitialData() tea.Cmd {
 	return func() tea.Msg {
-		var (
-			projects    []api.Project
-			labels      []api.Label
-			allTasks    []api.Task
-			allSections []api.Section
-		)
-
-		// Create channels for results
+		// Create buffered channels to prevent goroutine leaks on early return
 		type projectResult struct {
 			data []api.Project
 			err  error
@@ -43,10 +36,10 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			err  error
 		}
 
-		projChan := make(chan projectResult)
-		labelChan := make(chan labelResult)
-		taskChan := make(chan taskResult)
-		secChan := make(chan sectionResult)
+		projChan := make(chan projectResult, 1)
+		labelChan := make(chan labelResult, 1)
+		taskChan := make(chan taskResult, 1)
+		secChan := make(chan sectionResult, 1)
 
 		// Launch concurrent requests
 		go func() {
@@ -69,30 +62,30 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			secChan <- sectionResult{data: s, err: e}
 		}()
 
-		// Collect results
+		// Collect ALL results before processing errors to ensure all goroutines exit
 		pRes := <-projChan
+		lRes := <-labelChan
+		tRes := <-taskChan
+		sRes := <-secChan
+
+		// Now check for errors
 		if pRes.err != nil {
 			return errMsg{pRes.err}
 		}
-		projects = pRes.data
-
-		lRes := <-labelChan
 		if lRes.err != nil {
 			return errMsg{lRes.err}
 		}
-		labels = lRes.data
-
-		tRes := <-taskChan
 		if tRes.err != nil {
 			return errMsg{tRes.err}
 		}
-		allTasks = tRes.data
-
-		sRes := <-secChan
 		if sRes.err != nil {
 			return errMsg{sRes.err}
 		}
-		allSections = sRes.data
+
+		projects := pRes.data
+		labels := lRes.data
+		allTasks := tRes.data
+		allSections := sRes.data
 
 		// Filter tasks for the initial view
 		var initialTasks []api.Task
@@ -104,14 +97,25 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 				}
 			}
 		case state.TabCalendar:
-			// In calendar main view, we don't necessarily show a list initially,
-			// or we show allTasks. DataLoadedMsg handler will handle the display.
 			initialTasks = nil
 		case state.TabProjects, state.TabLabels:
-			// Items are selected from sidebar/list
 			initialTasks = nil
+		case state.TabInbox:
+			// Find inbox ID
+			var inboxID string
+			for _, p := range projects {
+				if p.InboxProject {
+					inboxID = p.ID
+					break
+				}
+			}
+			for _, t := range allTasks {
+				if t.ProjectID == inboxID && !t.Checked && !t.IsDeleted {
+					initialTasks = append(initialTasks, t)
+				}
+			}
 		default:
-			// state.TabToday or fallback
+			// TabToday or fallback
 			for _, t := range allTasks {
 				if t.IsOverdue() || t.IsDueToday() {
 					initialTasks = append(initialTasks, t)

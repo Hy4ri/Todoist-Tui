@@ -1235,6 +1235,31 @@ func (h *Handler) loadTodayTasks() tea.Cmd {
 	}
 }
 
+// loadInboxTasks loads inbox tasks using the project logic to include sections.
+func (h *Handler) loadInboxTasks() tea.Cmd {
+	// Find (or guess) Inbox project ID
+	var inboxID string
+	for _, p := range h.Projects {
+		if p.InboxProject {
+			inboxID = p.ID
+			break
+		}
+	}
+
+	if inboxID != "" {
+		return h.loadProjectTasks(inboxID)
+	}
+
+	return func() tea.Msg {
+		tasks, err := h.Client.GetTasksByFilter("inbox")
+		if err != nil {
+			return errMsg{err}
+		}
+		// Return empty sections explicitly to clear any old ones if filter is used
+		return dataLoadedMsg{tasks: tasks, sections: []api.Section{}}
+	}
+}
+
 // filterTodayTasks filters cached tasks for today/overdue.
 func (h *Handler) filterTodayTasks() tea.Cmd {
 	var tasks []api.Task

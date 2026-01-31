@@ -137,13 +137,50 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	// Forward non-key messages (like blink) to active inputs
-	if h.IsEditingComment {
+
+	// Task Form
+	if h.CurrentView == state.ViewTaskForm && h.TaskForm != nil {
+		return h.TaskForm.Update(msg)
+	}
+
+	// Search
+	if h.CurrentView == state.ViewSearch {
 		var cmd tea.Cmd
-		// We only want to update if it's NOT a key/mouse message because those are handled above
-		// But Wait, handleKeyMsg returns a Cmd, it doesn't return the updated model (handler is the model)
-		// and msg type check separates them.
-		// If we are here, it wasn't a KeyMsg, MouseMsg, WindowSizeMsg, etc caught above.
-		// It could be a BlinkMsg.
+		h.SearchInput, cmd = h.SearchInput.Update(msg)
+		return cmd
+	}
+
+	// Project Input
+	if h.IsCreatingProject || h.IsEditingProject {
+		var cmd tea.Cmd
+		h.ProjectInput, cmd = h.ProjectInput.Update(msg)
+		return cmd
+	}
+
+	// Label Input
+	if h.IsCreatingLabel || h.IsEditingLabel {
+		var cmd tea.Cmd
+		h.LabelInput, cmd = h.LabelInput.Update(msg)
+		return cmd
+	}
+
+	// Section Input
+	if h.IsCreatingSection || h.IsEditingSection {
+		var cmd tea.Cmd
+		h.SectionInput, cmd = h.SectionInput.Update(msg)
+		return cmd
+	}
+
+	// Subtask Input
+	if h.IsCreatingSubtask {
+		var cmd tea.Cmd
+		h.SubtaskInput, cmd = h.SubtaskInput.Update(msg)
+		return cmd
+	}
+
+	// Comment inputs
+	if h.IsEditingComment || h.IsAddingComment {
+		var cmd tea.Cmd
 		h.CommentInput, cmd = h.CommentInput.Update(msg)
 		return cmd
 	}
@@ -248,7 +285,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	if len(msg.labels) > 0 {
 		h.Labels = msg.labels
 	}
-	if len(msg.sections) > 0 {
+	if msg.sections != nil {
 		h.Sections = msg.sections
 		// Sort sections by SectionOrder
 		sort.Slice(h.Sections, func(i, j int) bool {
@@ -347,9 +384,12 @@ func (h *Handler) handleRefresh() tea.Cmd {
 	}
 
 	switch h.CurrentTab {
+	case state.TabInbox:
+		return h.loadInboxTasks()
 	case state.TabProjects:
 		if h.CurrentProject != nil {
 			// Reload current project
+			h.Sections = nil // Clear sections to ensure clean reload
 			return h.loadProjectTasks(h.CurrentProject.ID)
 		}
 		// Just reload project list
@@ -364,8 +404,9 @@ func (h *Handler) handleRefresh() tea.Cmd {
 			return h.loadLabelTasks(h.CurrentLabel.Name)
 		}
 		return h.loadLabels()
+	case state.TabToday:
+		return h.loadTodayTasks()
 	default:
-		// state.TabToday or fallback
 		return h.loadTodayTasks()
 	}
 }

@@ -44,7 +44,8 @@ type TaskForm struct {
 	Context         string
 
 	// Dropdown Cursors
-	LabelListCursor int
+	ProjectListCursor int
+	LabelListCursor   int
 
 	// Mode tracking
 	Mode   string // "create" or "edit"
@@ -94,19 +95,42 @@ func (f *TaskForm) Update(msg tea.Msg) tea.Cmd {
 			}
 			return nil
 		case FormFieldShowProject:
-			if f.ShowProjectList {
-				// Handle project list navigation if implemented here
-				// For now, project list navigation is handled by parent or logic
-				// We just handle opening/closing
-				if msg.String() == "enter" || msg.String() == "space" {
-					f.ShowProjectList = !f.ShowProjectList
-				}
-			} else {
+			if !f.ShowProjectList {
 				if msg.String() == "enter" || msg.String() == "space" {
 					f.ShowProjectList = true
+					// Initialize cursor to current project if found
+					for i, p := range f.AvailableProjects {
+						if p.ID == f.ProjectID {
+							f.ProjectListCursor = i
+							break
+						}
+					}
+					return nil
+				}
+			} else {
+				// Project list IS open
+				switch msg.String() {
+				case "esc":
+					f.ShowProjectList = false
+					return nil
+				case "up", "k":
+					if f.ProjectListCursor > 0 {
+						f.ProjectListCursor--
+					}
+				case "down", "j":
+					if f.ProjectListCursor < len(f.AvailableProjects)-1 {
+						f.ProjectListCursor++
+					}
+				case "enter", "space":
+					if len(f.AvailableProjects) > 0 && f.ProjectListCursor < len(f.AvailableProjects) {
+						selectedProject := f.AvailableProjects[f.ProjectListCursor]
+						f.ProjectID = selectedProject.ID
+						f.ProjectName = selectedProject.Name
+						f.ShowProjectList = false
+						return nil
+					}
 				}
 			}
-			// Don't return here, let parent handle project selection if needed
 		case FormFieldLabels:
 			// If dropdown is NOT open, Enter/Space opens it
 			if !f.ShowLabelList {
@@ -323,13 +347,22 @@ func (f *TaskForm) ToUpdateRequest() api.UpdateTaskRequest {
 		due = due + " " + dueTime
 	}
 
-	return api.UpdateTaskRequest{
+	req := api.UpdateTaskRequest{
 		Content:     &content,
 		Description: &desc,
 		Priority:    &priority,
 		DueString:   &due,
 		Labels:      f.Labels,
 	}
+
+	if f.ProjectID != "" {
+		req.ProjectID = &f.ProjectID
+	}
+	if f.SectionID != "" {
+		req.SectionID = &f.SectionID
+	}
+
+	return req
 }
 
 // FocusedField returns the index of the focused field.

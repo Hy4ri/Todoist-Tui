@@ -128,24 +128,54 @@ func (r *Renderer) renderTaskForm() string {
 	if f.ShowProjectList {
 		b.WriteString(styles.Subtitle.Render("Select Project:") + "\n")
 		var lines []string
-		count := 0
-		for _, p := range f.AvailableProjects {
-			if count > 5 {
-				break
+
+		if len(f.AvailableProjects) == 0 {
+			lines = append(lines, styles.HelpDesc.Render("No projects available"))
+		} else {
+			// Scrolling logic (showing 5 items)
+			windowHeight := 5
+			startIdx := 0
+			if f.ProjectListCursor >= windowHeight {
+				startIdx = f.ProjectListCursor - windowHeight + 1
 			}
-			cursor := "  "
-			style := styles.ProjectItem
-			if p.ID == f.ProjectID {
-				cursor = "✓ "
-				style = styles.ProjectSelected
+			endIdx := startIdx + windowHeight
+			if endIdx > len(f.AvailableProjects) {
+				endIdx = len(f.AvailableProjects)
 			}
-			lines = append(lines, style.Render(cursor+p.Name))
-			count++
+
+			if startIdx > 0 {
+				lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("▲ %d more", startIdx)))
+			}
+
+			for i := startIdx; i < endIdx; i++ {
+				p := f.AvailableProjects[i]
+				cursor := "  "
+				if i == f.ProjectListCursor {
+					cursor = "> "
+				}
+
+				style := styles.ProjectItem
+				if i == f.ProjectListCursor {
+					style = styles.ProjectSelected
+				}
+
+				checkMark := "  "
+				if p.ID == f.ProjectID {
+					checkMark = "✓ "
+					if i != f.ProjectListCursor {
+						style = style.Foreground(styles.Highlight)
+					}
+				}
+
+				lines = append(lines, style.Render(cursor+checkMark+p.Name))
+			}
+
+			if endIdx < len(f.AvailableProjects) {
+				remaining := len(f.AvailableProjects) - endIdx
+				lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("▼ %d more", remaining)))
+			}
 		}
-		if len(f.AvailableProjects) > 5 {
-			remaining := len(f.AvailableProjects) - 5
-			lines = append(lines, styles.HelpDesc.Render(fmt.Sprintf("...and %d more", remaining)))
-		}
+
 		list := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(styles.Highlight).
