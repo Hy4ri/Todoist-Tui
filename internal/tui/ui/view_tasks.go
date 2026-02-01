@@ -83,7 +83,7 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 		b.WriteString(" Loading...")
 	} else if r.Err != nil {
 		b.WriteString(styles.StatusBarError.Render(fmt.Sprintf("Error: %v", r.Err)))
-	} else if len(r.Tasks) == 0 {
+	} else if len(r.Tasks) == 0 && (len(r.Sections) == 0 || (r.CurrentView != state.ViewProject && r.CurrentView != state.ViewInbox)) {
 		msg := "No tasks found"
 		if r.CurrentView == state.ViewToday {
 			msg = "All done for today! \n" + styles.HelpDesc.Render("Enjoy your day off 🏝️")
