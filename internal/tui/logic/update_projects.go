@@ -617,64 +617,92 @@ func (h *Handler) handleMoveTaskKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 
-		// Get the correct task using ordered indices mapping
-		var task *api.Task
-		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-			taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-			if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-				task = &h.Tasks[taskIndex]
-			}
-		} else if h.TaskCursor < len(h.Tasks) {
-			task = &h.Tasks[h.TaskCursor]
-		}
-
-		if task == nil {
-			h.IsMovingTask = false
-			h.StatusMsg = "No task selected"
-			return nil
-		}
-
 		sectionID := h.Sections[h.MoveSectionCursor].ID
-
-		// Don't move if section ID is empty or if it's the same section
 		if sectionID == "" {
 			h.IsMovingTask = false
 			h.StatusMsg = "Invalid section"
 			return nil
 		}
-		if task.SectionID != nil && *task.SectionID == sectionID {
-			h.IsMovingTask = false
-			h.StatusMsg = "Task is already in this section"
+
+		h.IsMovingTask = false
+		h.StatusMsg = "Moving tasks..."
+
+		var tasksToMove []*api.Task
+
+		// Check if we have multiple selected tasks
+		if len(h.SelectedTaskIDs) > 0 {
+			for i := range h.Tasks {
+				if h.SelectedTaskIDs[h.Tasks[i].ID] {
+					tasksToMove = append(tasksToMove, &h.Tasks[i])
+				}
+			}
+		} else {
+			// Single task selection
+			var task *api.Task
+			if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+				taskIndex := h.TaskOrderedIndices[h.TaskCursor]
+				if taskIndex >= 0 && taskIndex < len(h.Tasks) {
+					task = &h.Tasks[taskIndex]
+				}
+			} else if h.TaskCursor < len(h.Tasks) {
+				task = &h.Tasks[h.TaskCursor]
+			}
+			if task != nil {
+				tasksToMove = append(tasksToMove, task)
+			}
+		}
+
+		if len(tasksToMove) == 0 {
+			h.StatusMsg = "No tasks selected"
 			return nil
 		}
 
-		h.IsMovingTask = false
-		h.StatusMsg = "Moving task..."
-		// Remove blocking loading state
+		var cmds []tea.Cmd
+		movedCount := 0
 
-		// Optimistic update
-		// We capture the pointer sectionID, ensuring it has stable memory address if needed,
-		// but &sectionID is taking address of local var which is fine for local struct but...
-		// api.Task has SectionID *string. We should allocate a new string to be safe or use a helper.
-		safeSectionID := sectionID
-		task.SectionID = &safeSectionID
-
-		// Update AllTasks
-		for i := range h.AllTasks {
-			if h.AllTasks[i].ID == task.ID {
-				h.AllTasks[i].SectionID = &safeSectionID
-				break
+		for _, task := range tasksToMove {
+			// Skip if already in section
+			if task.SectionID != nil && *task.SectionID == sectionID {
+				continue
 			}
+
+			movedCount++
+
+			// Optimistic update
+			safeSectionID := sectionID
+			task.SectionID = &safeSectionID
+
+			// Update AllTasks
+			for i := range h.AllTasks {
+				if h.AllTasks[i].ID == task.ID {
+					h.AllTasks[i].SectionID = &safeSectionID
+					break
+				}
+			}
+
+			// Capture loop variables
+			tID := task.ID
+			sID := sectionID
+			taskCopy := *task
+
+			cmds = append(cmds, func() tea.Msg {
+				err := h.Client.MoveTask(tID, &sID, nil, nil)
+				if err != nil {
+					return errMsg{err}
+				}
+				return taskUpdatedMsg{task: &taskCopy}
+			})
 		}
 
-		return func() tea.Msg {
-			// Update task with new section_id using MoveTask (Sync API)
-			err := h.Client.MoveTask(task.ID, &sectionID, nil, nil)
-			if err != nil {
-				return errMsg{err}
-			}
-			return taskUpdatedMsg{task: task}
+		if movedCount == 0 {
+			h.StatusMsg = "Tasks already in this section"
+			return nil
 		}
+
+		// Clear selection after move
+		h.SelectedTaskIDs = make(map[string]bool)
+
+		return tea.Batch(cmds...)
 
 	}
 	return nil

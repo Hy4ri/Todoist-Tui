@@ -516,6 +516,15 @@ func (h *Handler) handleSelect() tea.Cmd {
 			if h.Projects[i].ID == item.ID {
 				h.CurrentProject = &h.Projects[i]
 				h.Sections = nil // Clear sections before loading new ones
+
+				// Close detail panel when switching projects
+				if h.ShowDetailPanel {
+					h.ShowDetailPanel = false
+					h.SelectedTask = nil
+					h.Comments = nil
+					h.DetailComp.Hide()
+				}
+
 				return h.loadProjectTasks(h.CurrentProject.ID)
 			}
 		}

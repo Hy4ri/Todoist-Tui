@@ -76,6 +76,16 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 	default:
 		title = "Tasks"
 	}
+	// Truncate title to prevent wrapping which breaks layout
+	// width is the available inner width. reduce by 1 to be safe against border conditions.
+	safeTitleWidth := width - 1
+	if safeTitleWidth < 5 {
+		safeTitleWidth = 5
+	}
+	if len(title) > safeTitleWidth {
+		title = truncateString(title, safeTitleWidth)
+	}
+
 	b.WriteString(styles.Title.Copy().Underline(true).Render(strings.ToUpper(title)) + "\n\n")
 
 	if r.Loading {
@@ -416,9 +426,11 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width
 		labelWidth = lipgloss.Width(labelStr) + 1
 	}
 
-	// Calculate fixed overhead (cursor + selection + indent + checkbox + spaces)
+	// Calculate fixed overhead (cursor + selection + indent + checkbox + spaces + recurring icon)
 	// "> ●  [ ] " = 2 + 1 + indentLen + 4 = 7 + indentLen
-	overhead := 7 + len(indent) + dueWidth + labelWidth + 2 // +2 for safety margin
+	// recurring adds 1 char if present, plus potential spacing artifacts.
+	// We bump safety margin from 2 to 6 to be absolutely safe against wrapping.
+	overhead := 7 + len(indent) + dueWidth + labelWidth + 6
 
 	// Truncate content if needed
 	content := t.Content
@@ -484,9 +496,38 @@ func (r *Renderer) renderTaskDescription(desc string, width int) string {
 
 	// Descriptions can have multiple lines, take just the first one for the list view
 	firstLine := strings.Split(desc, "\n")[0]
-	truncated := truncateString(firstLine, maxDescWidth)
 
-	return styles.TaskListDescription.MaxWidth(width - 2).Render(truncated)
+	// Strip markdown links [text](url) -> text
+	// We do a simple pass for the specific format provided by user
+	if start := strings.Index(firstLine, "["); start >= 0 {
+		if end := strings.Index(firstLine[start:], "]"); end >= 0 {
+			end += start
+			if len(firstLine) > end+1 && firstLine[end+1] == '(' {
+				if closeParen := strings.Index(firstLine[end+1:], ")"); closeParen >= 0 {
+					closeParen += end + 1
+					// We found a link: [text](url)
+					// Replace with just text
+					linkText := firstLine[start+1 : end]
+					// Reconstruct string
+					firstLine = firstLine[:start] + linkText + firstLine[closeParen+1:]
+				}
+			}
+		}
+	}
+
+	// Indent padding is 10 (from styles.TaskListDescription)
+	padding := 10
+	availableWidth := width - padding - 2 // -2 for right margin/border safety
+
+	if availableWidth < 5 {
+		return "" // Too narrow to show description safely
+	}
+
+	if len(firstLine) > availableWidth {
+		firstLine = truncateString(firstLine, availableWidth)
+	}
+
+	return styles.TaskListDescription.MaxWidth(width - 2).Render(firstLine)
 }
 
 // renderScrollableLines renders lines with scrolling support using viewport and windowing.
