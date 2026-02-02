@@ -123,14 +123,24 @@ func (d *DetailModel) ViewPanel() string {
 	// Description
 	if t.Description != "" {
 		content.WriteString("\n" + styles.StatusBarKey.Render("Description:") + "\n")
-		content.WriteString(t.Description + "\n")
+		// Calculate available width: width - 2 (border) - 2 (padding) - 2 (extra safety)
+		descWidth := d.width - 6
+		if descWidth < 10 {
+			descWidth = 10
+		}
+		content.WriteString(styles.DetailDescription.Copy().Width(descWidth).Render(t.Description) + "\n")
 	}
 
 	// Comments
 	if len(d.comments) > 0 {
 		content.WriteString("\n" + styles.StatusBarKey.Render(fmt.Sprintf("Comments (%d):", len(d.comments))) + "\n")
+		// Calculate wrap width for comments
+		commentWidth := d.width - 6
+		if commentWidth < 10 {
+			commentWidth = 10
+		}
 		for _, c := range d.comments {
-			content.WriteString("• " + c.Content + "\n")
+			content.WriteString("• " + styles.CommentContent.Copy().Width(commentWidth).Render(c.Content) + "\n")
 		}
 	}
 
@@ -149,6 +159,15 @@ func (d *DetailModel) renderPanel() string {
 	t := d.task
 	var b strings.Builder
 
+	// Calculate content width
+	// Dialog width: d.width - 4 (set in return)
+	// Dialog padding: 2 left + 2 right = 4
+	// Total chrome: 8 (approx)
+	contentWidth := d.width - 10
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
 	// Title with checkbox status
 	checkbox := "[ ]"
 	if t.Checked {
@@ -162,7 +181,7 @@ func (d *DetailModel) renderPanel() string {
 	b.WriteString(fmt.Sprintf("  %s %s\n\n", checkbox, priorityStyle.Render(t.Content)))
 
 	// Horizontal divider
-	b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", 40)))
+	b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", contentWidth)))
 	b.WriteString("\n\n")
 
 	// Description (if present)
@@ -170,7 +189,9 @@ func (d *DetailModel) renderPanel() string {
 		b.WriteString(styles.DetailIcon.Render("  📝"))
 		b.WriteString(styles.DetailLabel.Render("Description"))
 		b.WriteString("\n")
-		b.WriteString(styles.DetailDescription.Render(t.Description))
+		// Apply wrapping to description
+		// DetailDescription has PaddingLeft(2), so subtract that from contentWidth
+		b.WriteString(styles.DetailDescription.Copy().Width(contentWidth - 2).Render(t.Description))
 		b.WriteString("\n\n")
 	}
 
@@ -252,7 +273,7 @@ func (d *DetailModel) renderPanel() string {
 	// Comments section
 	if len(d.comments) > 0 {
 		b.WriteString("\n")
-		b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", 40)))
+		b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", contentWidth)))
 		b.WriteString("\n")
 		b.WriteString(styles.Subtitle.Render("  Comments"))
 		b.WriteString("\n\n")
@@ -266,8 +287,9 @@ func (d *DetailModel) renderPanel() string {
 			// Parse and format timestamp
 			b.WriteString(styles.CommentAuthor.Render(fmt.Sprintf("%s  %s", cursor, c.PostedAt)))
 			b.WriteString("\n")
-			b.WriteString(styles.CommentContent.Render(fmt.Sprintf("    %s", c.Content)))
-			b.WriteString("\n")
+
+			// Apply wrapping to comment content
+			b.WriteString(styles.CommentContent.Copy().Width(contentWidth - 2).Render(c.Content))
 
 			// Render attachment if present
 			if c.FileAttachment != nil {

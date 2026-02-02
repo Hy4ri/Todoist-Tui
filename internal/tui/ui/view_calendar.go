@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
@@ -450,7 +449,7 @@ func (r *Renderer) renderCalendarDay() string {
 			})
 		}
 
-		content.WriteString(r.renderScrollableLines(lines, orderedIndices, taskHeight))
+		content.WriteString(r.renderScrollableLines(lines, orderedIndices, taskHeight, contentWidth))
 	}
 
 	// Wrap in a nice container with good padding
@@ -630,26 +629,3 @@ func (r *Renderer) getContextualHints() []string {
 }
 
 // updateSectionOrderCmd sends an API request to update the section order.
-
-// truncateString truncates a string to a given width and adds an ellipsis if truncated.
-func truncateString(s string, width int) string {
-	if lipgloss.Width(s) <= width {
-		return s
-	}
-
-	// Very basic truncation that handles some ANSI/multi-byte
-	// In a real app we'd use a more robust version, but this fits the immediate need.
-	if width <= 1 {
-		return "…"
-	}
-
-	// Fallback to simpler character-at-a-time width check if needed,
-	// but lipgloss.Width is usually reliable for measurement.
-	res := s
-	for lipgloss.Width(res+"…") > width && len(res) > 0 {
-		// Remove one character/byte at a time until it fits
-		_, size := utf8.DecodeLastRuneInString(res)
-		res = res[:len(res)-size]
-	}
-	return res + "…"
-}

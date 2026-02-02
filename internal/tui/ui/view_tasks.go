@@ -208,7 +208,7 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 		}
 	}
 
-	return r.renderScrollableLines(lines, orderedIndices, maxHeight)
+	return r.renderScrollableLines(lines, orderedIndices, maxHeight, width)
 }
 
 // renderGroupedTasks renders tasks grouped by due status.
@@ -300,7 +300,7 @@ func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 		}
 	}
 
-	return r.renderScrollableLines(lines, orderedIndices, maxHeight)
+	return r.renderScrollableLines(lines, orderedIndices, maxHeight, width)
 }
 
 // renderFlatTasks renders tasks in a flat list.
@@ -324,7 +324,7 @@ func (r *Renderer) renderFlatTasks(width, maxHeight int) string {
 		}
 	}
 
-	return r.renderScrollableLines(lines, orderedIndices, maxHeight)
+	return r.renderScrollableLines(lines, orderedIndices, maxHeight, width)
 }
 
 // renderSectionHeaderByIndex renders a section header with cursor highlighting for empty sections.
@@ -489,49 +489,43 @@ func (r *Renderer) renderTaskDescription(desc string, width int) string {
 	}
 
 	// Indent matches styles.TaskListDescription (10 spaces)
-	maxDescWidth := width - 12
-	if maxDescWidth < 5 {
-		maxDescWidth = 5
+	// We leave extra buffer for right border/padding
+	padding := 10
+	safeBuffer := 4 // Increased buffer
+	availableWidth := width - padding - safeBuffer
+
+	if availableWidth < 5 {
+		return "" // Too narrow to show description safely
 	}
 
 	// Descriptions can have multiple lines, take just the first one for the list view
 	firstLine := strings.Split(desc, "\n")[0]
 
 	// Strip markdown links [text](url) -> text
-	// We do a simple pass for the specific format provided by user
 	if start := strings.Index(firstLine, "["); start >= 0 {
 		if end := strings.Index(firstLine[start:], "]"); end >= 0 {
 			end += start
 			if len(firstLine) > end+1 && firstLine[end+1] == '(' {
 				if closeParen := strings.Index(firstLine[end+1:], ")"); closeParen >= 0 {
 					closeParen += end + 1
-					// We found a link: [text](url)
-					// Replace with just text
 					linkText := firstLine[start+1 : end]
-					// Reconstruct string
 					firstLine = firstLine[:start] + linkText + firstLine[closeParen+1:]
 				}
 			}
 		}
 	}
 
-	// Indent padding is 10 (from styles.TaskListDescription)
-	padding := 10
-	availableWidth := width - padding - 2 // -2 for right margin/border safety
+	// Strictly truncate using the runewidth-aware helper
+	truncated := truncateString(firstLine, availableWidth)
 
-	if availableWidth < 5 {
-		return "" // Too narrow to show description safely
-	}
-
-	if len(firstLine) > availableWidth {
-		firstLine = truncateString(firstLine, availableWidth)
-	}
-
-	return styles.TaskListDescription.MaxWidth(width - 2).Render(firstLine)
+	// Render with explicit MaxWidth to be safe, though usage of truncated string should suffice.
+	// We calculate explicit width for style to avoid Lipgloss padding adding to overflow.
+	// Style has PaddingLeft(10).
+	return styles.TaskListDescription.Copy().Width(availableWidth).MaxWidth(availableWidth).Render(truncated)
 }
 
 // renderScrollableLines renders lines with scrolling support using viewport and windowing.
-func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxHeight int) string {
+func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int, maxHeight int, width int) string {
 	// Store ordered indices for use in handleSelect
 	r.TaskOrderedIndices = orderedIndices
 
@@ -548,6 +542,12 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 	for _, line := range lines {
 		r.State.ViewportLines = append(r.State.ViewportLines, line.taskIndex)
 		r.State.ViewportSections = append(r.State.ViewportSections, line.sectionID)
+	}
+
+	// Update Viewport Width immediately to ensure correct line wrapping/truncation calculations
+	// if inner logic relies on it (though we pass width to renderFunc, the viewport needs to know too)
+	if width > 0 {
+		r.TaskViewport.Width = width
 	}
 
 	// Ensure viewport is initialized
@@ -616,7 +616,7 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 	renderStart := yOffset - buffer
 	renderEnd := yOffset + height + buffer
 
-	width := r.TaskViewport.Width
+	// width passed as argument
 
 	// Build content with windowing
 	var content strings.Builder
@@ -763,7 +763,7 @@ func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 
 	// Use common scrollable rendering - maxHeight already accounts for borders
 	// Subtract 2 for Title line + newline
-	result := r.renderScrollableLines(lines, orderedIndices, maxHeight-2)
+	result := r.renderScrollableLines(lines, orderedIndices, maxHeight-2, width)
 	b.WriteString(result)
 
 	return b.String()
@@ -813,7 +813,7 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 					})
 				}
 			}
-			b.WriteString(r.renderScrollableLines(lines, orderedIndices, taskHeight))
+			b.WriteString(r.renderScrollableLines(lines, orderedIndices, taskHeight, width))
 		}
 
 		b.WriteString("\n")
