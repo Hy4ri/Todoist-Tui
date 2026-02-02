@@ -708,54 +708,6 @@ func (h *Handler) handleMoveTaskKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// handleCommentInputKeyMsg handles keyboard input for adding a comment.
-func (h *Handler) handleCommentInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
-	switch msg.String() {
-	case "esc":
-		h.IsAddingComment = false
-		h.CommentInput.Reset()
-		return nil
-
-	case "enter":
-		content := strings.TrimSpace(h.CommentInput.Value())
-		if content == "" {
-			return nil
-		}
-
-		// determine task ID (from selection or cursor)
-		taskID := ""
-		if h.SelectedTask != nil {
-			taskID = h.SelectedTask.ID
-		} else if len(h.Tasks) > 0 && h.TaskCursor < len(h.Tasks) {
-			taskID = h.Tasks[h.TaskCursor].ID
-		} else {
-			h.IsAddingComment = false
-			return nil
-		}
-
-		h.IsAddingComment = false
-		h.CommentInput.Reset()
-		h.Loading = true
-		h.StatusMsg = "Adding comment..."
-
-		return func() tea.Msg {
-			comment, err := h.Client.CreateComment(api.CreateCommentRequest{
-				TaskID:  taskID,
-				Content: content,
-			})
-			if err != nil {
-				return errMsg{err}
-			}
-			return commentCreatedMsg{comment: comment}
-		}
-
-	default:
-		var cmd tea.Cmd
-		h.CommentInput, cmd = h.CommentInput.Update(msg)
-		return cmd
-	}
-}
-
 // renderSections renders the sections management view.
 func (h *Handler) renderSections() string {
 	var b strings.Builder

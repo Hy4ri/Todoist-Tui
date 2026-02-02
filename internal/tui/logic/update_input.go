@@ -2,6 +2,7 @@ package logic
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hy4ri/todoist-tui/internal/config"
@@ -323,17 +324,17 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	// state.Tab switching with number keys (1-5) - only when not in form/input modes
 	// state.Tab switching with number keys (1-5) and letters - only when not in form/input modes
 	switch msg.String() {
-	case "1", "I":
+	case "1":
 		return h.switchToTab(state.TabInbox)
-	case "2", "T":
+	case "2":
 		return h.switchToTab(state.TabToday)
-	case "3", "U":
+	case "3":
 		return h.switchToTab(state.TabUpcoming)
-	case "4", "L": // Shift+l to avoid calendar Nav conflict if any, or used to be 4
+	case "4":
 		return h.switchToTab(state.TabLabels)
-	case "5", "C":
+	case "5":
 		return h.switchToTab(state.TabCalendar)
-	case "6", "P":
+	case "6":
 		return h.switchToTab(state.TabProjects)
 	case "D": // Shift+d
 		return h.setDefaultView()
@@ -903,6 +904,19 @@ func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	if msg.String() == "esc" {
 		return h.handleBack()
 	}
+	// Check for global actions relevant to detail view
+	action, _ := h.KeyState.HandleKey(msg, h.Keymap)
+	if action == "add_comment" {
+		if h.SelectedTask != nil {
+			h.IsAddingComment = true
+			h.CommentInput = textinput.New()
+			h.CommentInput.Placeholder = "Write a comment..."
+			h.CommentInput.Focus()
+			h.CommentInput.Width = 50
+			return nil
+		}
+	}
+
 	// Delegate to component
 	_, cmd := h.DetailComp.Update(msg)
 	return cmd
@@ -964,4 +978,52 @@ func (h *Handler) handleDeleteCommentConfirmKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	return nil
+}
+
+// handleCommentInputKeyMsg handles keys for adding a comment.
+func (h *Handler) handleCommentInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		h.IsAddingComment = false
+		h.CommentInput.Reset()
+		return nil
+
+	case "enter":
+		content := strings.TrimSpace(h.CommentInput.Value())
+		if content == "" {
+			return nil
+		}
+
+		// determine task ID (from selection or cursor)
+		taskID := ""
+		if h.SelectedTask != nil {
+			taskID = h.SelectedTask.ID
+		} else if len(h.Tasks) > 0 && h.TaskCursor < len(h.Tasks) {
+			taskID = h.Tasks[h.TaskCursor].ID
+		} else {
+			h.IsAddingComment = false
+			return nil
+		}
+
+		h.IsAddingComment = false
+		h.CommentInput.Reset()
+		h.Loading = true
+		h.StatusMsg = "Adding comment..."
+
+		return func() tea.Msg {
+			comment, err := h.Client.CreateComment(api.CreateCommentRequest{
+				TaskID:  taskID,
+				Content: content,
+			})
+			if err != nil {
+				return errMsg{err}
+			}
+			return commentCreatedMsg{comment: comment}
+		}
+
+	default:
+		var cmd tea.Cmd
+		h.CommentInput, cmd = h.CommentInput.Update(msg)
+		return cmd
+	}
 }

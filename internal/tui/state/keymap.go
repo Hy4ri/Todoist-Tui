@@ -41,6 +41,7 @@ type KeymapData struct {
 	DueTomorrow     Key
 	MoveTaskPrevDay Key
 	MoveTaskNextDay Key
+	AddComment      Key
 
 	// Navigation between panes
 	SwitchPane    Key
@@ -94,6 +95,7 @@ func DefaultKeymap() KeymapData {
 		DueTomorrow:     Key{Key: ">", Help: "move +1 day"},
 		MoveTaskPrevDay: Key{Key: "<", Help: "move -1 day"},
 		MoveTaskNextDay: Key{Key: ">", Help: "move +1 day"},
+		AddComment:      Key{Key: "C", Help: "add/view comments"},
 
 		// Navigation between panes
 		SwitchPane:    Key{Key: "tab", Help: "switch pane"},
@@ -225,7 +227,7 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "move_task", true
 	case "M":
 		return "move_section", true
-	case "A": // Remapped from c
+	case keymap.AddComment.Key:
 		return "add_comment", true
 	case " ": // Space key for selection
 		return "toggle_select", true
@@ -317,7 +319,7 @@ func (k KeymapData) HelpItems() [][]string {
 		{"</>", "Move task date -1/+1 day"},
 		{"s", "Add subtask"},
 		{"m", "Move task to section"},
-		{"A", "Add/View comments"},
+		{k.AddComment.Key, "Add/View comments"},
 		{"", ""},
 
 		{"Label/Project Actions", ""},

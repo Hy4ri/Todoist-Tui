@@ -135,7 +135,7 @@ func (d *DetailModel) ViewPanel() string {
 	}
 
 	// Help
-	content.WriteString("\n" + styles.HelpDesc.Render("Esc to close"))
+	content.WriteString("\n" + styles.HelpDesc.Render("Esc to close, C to comment"))
 
 	return panelStyle.Render(content.String())
 }
@@ -300,7 +300,9 @@ func (d *DetailModel) renderPanel() string {
 	b.WriteString(styles.HelpKey.Render("d"))
 	b.WriteString(styles.HelpDesc.Render(" delete  "))
 	b.WriteString(styles.HelpKey.Render("s"))
-	b.WriteString(styles.HelpDesc.Render(" add subtask"))
+	b.WriteString(styles.HelpDesc.Render(" add subtask  "))
+	b.WriteString(styles.HelpKey.Render("C"))
+	b.WriteString(styles.HelpDesc.Render(" comment"))
 
 	return styles.Dialog.Width(d.width - 4).Render(b.String())
 }
