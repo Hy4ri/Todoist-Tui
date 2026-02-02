@@ -3,10 +3,10 @@ package logic
 import (
 	"log"
 	"os"
-	"os/exec"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gen2brain/beeep"
 )
 
 // Debug logger
@@ -39,29 +39,45 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 	// Check for due tasks
 	for _, task := range h.AllTasks {
-		// Skip if already notified, completed, or deleted
+		// Skip if already notified, checked, or deleted
 		if h.NotifiedTasks[task.ID] || task.Checked || task.IsDeleted {
 			continue
 		}
 
-		// Skip if no due date
-		if task.Due == nil || task.Due.Datetime == nil {
+		if task.Due == nil {
 			continue
 		}
 
-		// Parse due datetime
-		// Format is usually RFC3339: "2023-10-25T14:30:00Z" or similar
-		dueTime, err := time.Parse(time.RFC3339, *task.Due.Datetime)
-		if err != nil {
-			// Try other formats if needed
-			if debugLog != nil {
-				debugLog.Printf("Failed to parse datetime %s for task %s: %v", *task.Due.Datetime, task.Content, err)
+		// Determine the effective due time
+		var dueTime time.Time
+		var err error
+		var isDayOnly bool
+
+		if task.Due.Datetime != nil && *task.Due.Datetime != "" {
+			// Time-specific task
+			dueTime, err = time.Parse(time.RFC3339, *task.Due.Datetime)
+			if err != nil {
+				if debugLog != nil {
+					debugLog.Printf("Failed to parse datetime %s for task %s: %v", *task.Due.Datetime, task.Content, err)
+				}
+				continue
 			}
+			dueTime = dueTime.Local()
+		} else if task.Due.Date != "" {
+			// Day-only task: default to 9:00 AM local time
+			// We parse the date (YYYY-MM-DD) and add 9 hours
+			parsedDate, err := time.ParseInLocation("2006-01-02", task.Due.Date[:10], time.Local)
+			if err != nil {
+				if debugLog != nil {
+					debugLog.Printf("Failed to parse date %s for task %s: %v", task.Due.Date, task.Content, err)
+				}
+				continue
+			}
+			dueTime = parsedDate.Add(9 * time.Hour)
+			isDayOnly = true
+		} else {
 			continue
 		}
-
-		// Adjust to local time if needed
-		dueTime = dueTime.Local()
 
 		if debugLog != nil {
 			debugLog.Printf("Task '%s' due at %v (Now: %v)", task.Content, dueTime, t)
@@ -69,9 +85,15 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 		// Check if due time has passed
 		if t.After(dueTime) || t.Equal(dueTime) {
-			// Only notify if it was due recently (e.g. within last 2 minutes)
-			// This prevents a flood of notifications for old overdue tasks on startup
-			if t.Sub(dueTime) > 2*time.Minute {
+			// For notifications, we want to be reasonably timely.
+			// Ideally fewer than X minutes past the due time to avoid spamming on startup.
+			// However, for day-only tasks (09:00 AM), user might open app at 09:05 and expect it.
+			threshold := 5 * time.Minute
+			if isDayOnly {
+				threshold = 60 * time.Minute // Wider window for day tasks on startup
+			}
+
+			if t.Sub(dueTime) > threshold {
 				if debugLog != nil {
 					debugLog.Printf("Skipping old task '%s' (diff: %v)", task.Content, t.Sub(dueTime))
 				}
@@ -89,10 +111,14 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 			// Capture task content for closure
 			content := task.Content
+			project := "Todoist"
+			if p, ok := h.getProjectName(task.ProjectID); ok {
+				project = p
+			}
 
 			// Add notification command
 			cmds = append(cmds, func() tea.Msg {
-				err := exec.Command("notify-send", "Todoist", "Task Due: "+content).Run()
+				err := beeep.Notify(project, "Task Due: "+content, "")
 				if err != nil && debugLog != nil {
 					debugLog.Printf("Failed to send notification: %v", err)
 				}
@@ -102,4 +128,13 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 	}
 
 	return tea.Batch(cmds...)
+}
+
+func (h *Handler) getProjectName(id string) (string, bool) {
+	for _, p := range h.Projects {
+		if p.ID == id {
+			return p.Name, true
+		}
+	}
+	return "", false
 }
