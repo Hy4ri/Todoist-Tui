@@ -12,7 +12,7 @@ func (c *Client) GetLabels() ([]Label, error) {
 	query := url.Values{}
 
 	for {
-		var response LabelsPaginatedResponse
+		var response PaginatedResponse[Label]
 		if err := c.GetWithQuery("/labels", query, &response); err != nil {
 			return nil, fmt.Errorf("failed to get labels: %w", err)
 		}

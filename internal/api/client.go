@@ -147,37 +147,20 @@ func buildFilterQuery(filter TaskFilter) url.Values {
 	return query
 }
 
-// PaginatedResponse represents a paginated API response for tasks.
-type TasksPaginatedResponse struct {
-	Results    []Task  `json:"results"`
+// PaginatedResponse is a generic paginated API response.
+type PaginatedResponse[T any] struct {
+	Results    []T     `json:"results"`
 	NextCursor *string `json:"next_cursor"`
 }
 
-// ProjectsPaginatedResponse represents a paginated API response for projects.
-type ProjectsPaginatedResponse struct {
-	Results    []Project `json:"results"`
-	NextCursor *string   `json:"next_cursor"`
-}
-
-// SectionsPaginatedResponse represents a paginated API response for sections.
-type SectionsPaginatedResponse struct {
-	Results    []Section `json:"results"`
-	NextCursor *string   `json:"next_cursor"`
-}
-
-// LabelsPaginatedResponse represents a paginated API response for labels.
-type LabelsPaginatedResponse struct {
-	Results    []Label `json:"results"`
-	NextCursor *string `json:"next_cursor"`
-}
-
-// CommentsPaginatedResponse represents a paginated API response for comments.
-type CommentsPaginatedResponse struct {
-	Results    []Comment `json:"results"`
-	NextCursor *string   `json:"next_cursor"`
-}
+// Pointer helper functions for building optional request fields.
 
 // BoolPtr returns a pointer to the given boolean.
-func BoolPtr(b bool) *bool {
-	return &b
-}
+func BoolPtr(b bool) *bool { return &b }
+
+// IntPtr returns a pointer to the given int.
+func IntPtr(i int) *int { return &i }
+
+// StringPtr returns a pointer to the given string.
+func StringPtr(s string) *string { return &s }
+

@@ -410,5 +410,3 @@ func (h *Handler) handleRefresh() tea.Cmd {
 		return h.loadTodayTasks()
 	}
 }
-
-// handleMouseMsg processes mouse input.

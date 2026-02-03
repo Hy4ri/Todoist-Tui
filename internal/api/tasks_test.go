@@ -250,7 +250,7 @@ func TestUpdateTask(t *testing.T) {
 		{
 			name: "update priority",
 			request: UpdateTaskRequest{
-				Priority: intPtr(4),
+				Priority: IntPtr(4),
 			},
 			response: Task{
 				ID:       taskID,
@@ -263,8 +263,8 @@ func TestUpdateTask(t *testing.T) {
 		{
 			name: "update content and due",
 			request: UpdateTaskRequest{
-				Content:   strPtr("Updated content"),
-				DueString: strPtr("next week"),
+				Content:   StringPtr("Updated content"),
+				DueString: StringPtr("next week"),
 			},
 			response: Task{
 				ID:      taskID,
@@ -279,7 +279,7 @@ func TestUpdateTask(t *testing.T) {
 		{
 			name: "task not found",
 			request: UpdateTaskRequest{
-				Content: strPtr("Update"),
+				Content: StringPtr("Update"),
 			},
 			statusCode: http.StatusNotFound,
 			wantErr:    true,
@@ -406,13 +406,4 @@ func TestDeleteTask(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-}
-
-// Helper functions for pointer types
-func intPtr(i int) *int {
-	return &i
-}
-
-func strPtr(s string) *string {
-	return &s
 }

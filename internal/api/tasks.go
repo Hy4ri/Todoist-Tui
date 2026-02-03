@@ -19,7 +19,7 @@ func (c *Client) GetTasks(filter TaskFilter) ([]Task, error) {
 	query := buildFilterQuery(filter)
 
 	for {
-		var response TasksPaginatedResponse
+		var response PaginatedResponse[Task]
 		if err := c.GetWithQuery("/tasks", query, &response); err != nil {
 			return nil, fmt.Errorf("failed to get tasks: %w", err)
 		}
@@ -49,7 +49,7 @@ func (c *Client) GetTasksByFilter(filterQuery string) ([]Task, error) {
 	query.Set("query", filterQuery)
 
 	for {
-		var response TasksPaginatedResponse
+		var response PaginatedResponse[Task]
 		if err := c.GetWithQuery("/tasks/filter", query, &response); err != nil {
 			return nil, fmt.Errorf("failed to get filtered tasks: %w", err)
 		}
