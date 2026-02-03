@@ -13,14 +13,19 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/views"
 )
 
 type Handler struct {
 	*state.State
+	coordinator *views.Coordinator
 }
 
 func NewHandler(s *state.State) *Handler {
-	return &Handler{State: s}
+	return &Handler{
+		State:       s,
+		coordinator: views.NewCoordinator(s),
+	}
 }
 
 func (h *Handler) Update(msg tea.Msg) tea.Cmd {
