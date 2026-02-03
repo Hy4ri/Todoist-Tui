@@ -82,7 +82,6 @@ type State struct {
 	FocusedPane  Pane
 
 	// Data
-	// Data
 	Projects []api.Project
 	Tasks    []api.Task
 

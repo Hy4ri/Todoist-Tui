@@ -18,7 +18,7 @@ func (c *Client) GetComments(taskID, projectID string) ([]Comment, error) {
 	}
 
 	for {
-		var response CommentsPaginatedResponse
+		var response PaginatedResponse[Comment]
 		if err := c.GetWithQuery("/comments", query, &response); err != nil {
 			return nil, fmt.Errorf("failed to get comments: %w", err)
 		}

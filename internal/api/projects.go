@@ -12,7 +12,7 @@ func (c *Client) GetProjects() ([]Project, error) {
 	query := url.Values{}
 
 	for {
-		var response ProjectsPaginatedResponse
+		var response PaginatedResponse[Project]
 		if err := c.GetWithQuery("/projects", query, &response); err != nil {
 			return nil, fmt.Errorf("failed to get projects: %w", err)
 		}

@@ -179,7 +179,7 @@ func (h *Handler) handleTaskClick(y int) tea.Cmd {
 	return nil
 }
 
-// switchToTab switches to a specific tab.
+// switchToTab switches to a specific tab using the view coordinator.
 func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	// Reset detail panel state when switching tabs
 	if h.ShowDetailPanel {
@@ -190,20 +190,20 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	}
 
 	// Don't switch if in modal views
-
 	if h.CurrentView == state.ViewHelp || h.CurrentView == state.ViewTaskForm || h.CurrentView == state.ViewSearch || h.CurrentView == state.ViewTaskDetail {
 		return nil
 	}
 
-	h.CurrentTab = tab
 	h.TaskCursor = 0
 	h.CurrentLabel = nil
 
+	// Update state via coordinator (sets CurrentTab, CurrentView, FocusedPane)
+	h.CurrentTab = tab
 	switch tab {
 	case state.TabInbox:
 		h.CurrentView = state.ViewInbox
 		h.CurrentProject = nil
-		h.Sections = nil // Clear sections from previous project
+		h.Sections = nil
 		h.FocusedPane = state.PaneMain
 		return h.loadInboxTasks()
 	case state.TabToday:

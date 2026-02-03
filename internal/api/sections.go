@@ -20,7 +20,7 @@ func (c *Client) GetSections(projectID string) ([]Section, error) {
 	}
 
 	for {
-		var response SectionsPaginatedResponse
+		var response PaginatedResponse[Section]
 		if err := c.GetWithQuery("/sections", query, &response); err != nil {
 			return nil, fmt.Errorf("failed to get sections: %w", err)
 		}
