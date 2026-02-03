@@ -11,13 +11,15 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 	"github.com/hy4ri/todoist-tui/internal/tui/ui"
+	"github.com/hy4ri/todoist-tui/internal/tui/views"
 )
 
 // App is the main Bubble Tea model for the application.
 type App struct {
 	*state.State
-	handler  *logic.Handler
-	renderer *ui.Renderer
+	handler     *logic.Handler
+	renderer    *ui.Renderer
+	coordinator *views.Coordinator
 }
 
 // NewApp creates a new App instance.
@@ -105,6 +107,7 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 	}
 	app.handler = logic.NewHandler(s)
 	app.renderer = ui.NewRenderer(s)
+	app.coordinator = views.NewCoordinator(s)
 
 	return app
 }
