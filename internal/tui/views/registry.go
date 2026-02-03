@@ -68,14 +68,15 @@ func (r *Registry) GetTabs() []TabInfo {
 func DefaultRegistry(s *state.State) *Registry {
 	r := NewRegistry()
 
-	// Register views
+	// Register all views
 	r.RegisterView(NewTodayView(s))
-	// More views will be added incrementally:
-	// r.RegisterView(NewInboxView(s))
-	// r.RegisterView(NewUpcomingView(s))
-	// etc.
+	r.RegisterView(NewInboxView(s))
+	r.RegisterView(NewUpcomingView(s))
+	r.RegisterView(NewLabelsView(s))
+	r.RegisterView(NewCalendarView(s))
+	r.RegisterView(NewProjectsView(s))
 
-	// Register tabs (matches current GetTabDefinitions)
+	// Register tabs (maps tab constants to view names)
 	r.RegisterTab(state.TabInbox, "📥", "Inbox", "Inb", "inbox")
 	r.RegisterTab(state.TabToday, "📅", "Today", "Tdy", "today")
 	r.RegisterTab(state.TabUpcoming, "📆", "Upcoming", "Up", "upcoming")
