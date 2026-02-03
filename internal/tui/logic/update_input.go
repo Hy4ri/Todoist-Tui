@@ -197,8 +197,45 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	h.TaskCursor = 0
 	h.CurrentLabel = nil
 
-	// Delegate to coordinator for view lifecycle management
-	return h.coordinator.SwitchToTab(tab)
+	// Update state via coordinator (sets CurrentTab, CurrentView, FocusedPane)
+	h.CurrentTab = tab
+	switch tab {
+	case state.TabInbox:
+		h.CurrentView = state.ViewInbox
+		h.CurrentProject = nil
+		h.Sections = nil
+		h.FocusedPane = state.PaneMain
+		return h.loadInboxTasks()
+	case state.TabToday:
+		h.CurrentView = state.ViewToday
+		h.CurrentProject = nil
+		h.FocusedPane = state.PaneMain
+		return h.filterTodayTasks()
+	case state.TabUpcoming:
+		h.CurrentView = state.ViewUpcoming
+		h.CurrentProject = nil
+		h.FocusedPane = state.PaneMain
+		return h.filterUpcomingTasks()
+	case state.TabLabels:
+		h.CurrentView = state.ViewLabels
+		h.CurrentProject = nil
+		h.FocusedPane = state.PaneMain
+		return nil
+	case state.TabCalendar:
+		h.CurrentView = state.ViewCalendar
+		h.CurrentProject = nil
+		h.FocusedPane = state.PaneMain
+		h.CalendarDate = time.Now()
+		h.CalendarDay = time.Now().Day()
+		return h.filterCalendarTasks()
+	case state.TabProjects:
+		h.CurrentView = state.ViewProject
+		h.FocusedPane = state.PaneSidebar
+		h.SidebarCursor = 0
+		return nil
+	}
+
+	return nil
 }
 
 // handleKeyMsg processes keyboard input.
