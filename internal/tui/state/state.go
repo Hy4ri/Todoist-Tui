@@ -89,6 +89,15 @@ type State struct {
 	// DataVersion tracks the version of data to help with caching
 	DataVersion int64
 
+	// Performance optimization: track when data was last fetched from API
+	LastDataFetch time.Time
+
+	// Performance optimization: cache comments per task to avoid re-fetching
+	CommentCache map[string][]api.Comment
+
+	// Performance optimization: track if tasks are already sorted
+	TasksSorted bool
+
 	// UI Elements
 	SidebarItems []components.SidebarItem
 
@@ -212,6 +221,11 @@ type State struct {
 
 	// Cursor restoration
 	RestoreCursorToTaskID string
+
+	// Performance optimization: cached tab bar rendering
+	CachedTabBar      string
+	CachedTabBarTab   Tab
+	CachedTabBarWidth int
 }
 
 // TabInfo holds tab metadata.

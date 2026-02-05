@@ -27,10 +27,20 @@ type Client struct {
 }
 
 // NewClient creates a new Todoist API client with the given access token.
+// Uses connection pooling for better performance.
 func NewClient(accessToken string) *Client {
+	transport := &http.Transport{
+		MaxIdleConns:        20,               // Total max idle connections
+		MaxIdleConnsPerHost: 10,               // Max idle connections per host
+		MaxConnsPerHost:     20,               // Max total connections per host
+		IdleConnTimeout:     90 * time.Second, // How long idle connections stay in pool
+		DisableKeepAlives:   false,            // Enable keep-alive for connection reuse
+	}
+
 	return &Client{
 		httpClient: &http.Client{
-			Timeout: DefaultTimeout,
+			Timeout:   DefaultTimeout,
+			Transport: transport,
 		},
 		baseURL:     BaseURL,
 		accessToken: accessToken,
@@ -163,4 +173,3 @@ func IntPtr(i int) *int { return &i }
 
 // StringPtr returns a pointer to the given string.
 func StringPtr(s string) *string { return &s }
-

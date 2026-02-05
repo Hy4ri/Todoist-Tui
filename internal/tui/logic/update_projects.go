@@ -1387,11 +1387,24 @@ func (h *Handler) filterCalendarTasks() tea.Cmd {
 }
 
 // loadTaskComments loads comments for the selected task.
+// Uses caching to avoid re-fetching comments for the same task.
 func (h *Handler) loadTaskComments() tea.Cmd {
 	if h.SelectedTask == nil {
 		return nil
 	}
 	taskID := h.SelectedTask.ID
+
+	// Initialize cache if nil
+	if h.CommentCache == nil {
+		h.CommentCache = make(map[string][]api.Comment)
+	}
+
+	// Check cache first for instant response
+	if cached, ok := h.CommentCache[taskID]; ok {
+		h.Comments = cached
+		return nil
+	}
+
 	return func() tea.Msg {
 		comments, err := h.Client.GetComments(taskID, "")
 		if err != nil {

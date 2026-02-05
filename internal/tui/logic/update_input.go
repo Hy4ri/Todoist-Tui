@@ -528,6 +528,15 @@ func (h *Handler) handleSelect() tea.Cmd {
 					h.DetailComp.Hide()
 				}
 
+				// Use cached data if fresh (within 30s) for instant project switching
+				dataIsFresh := len(h.AllTasks) > 0 && time.Since(h.LastDataFetch) < 30*time.Second
+				if dataIsFresh {
+					h.TasksSorted = false // Reset sorted flag
+					return h.filterProjectTasks(h.CurrentProject.ID)
+				}
+
+				// Otherwise fetch from API
+				h.Loading = true
 				return h.loadProjectTasks(h.CurrentProject.ID)
 			}
 		}

@@ -88,16 +88,28 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case commentCreatedMsg:
 		h.Loading = false
 		h.StatusMsg = "Comment added"
+		// Invalidate cache for this task
+		if h.SelectedTask != nil && h.CommentCache != nil {
+			delete(h.CommentCache, h.SelectedTask.ID)
+		}
 		return h.loadTaskComments()
 
 	case commentUpdatedMsg:
 		h.Loading = false
 		h.StatusMsg = "Comment updated"
+		// Invalidate cache for this task
+		if h.SelectedTask != nil && h.CommentCache != nil {
+			delete(h.CommentCache, h.SelectedTask.ID)
+		}
 		return h.loadTaskComments()
 
 	case commentDeletedMsg:
 		h.Loading = false
 		h.StatusMsg = "Comment deleted"
+		// Invalidate cache for this task
+		if h.SelectedTask != nil && h.CommentCache != nil {
+			delete(h.CommentCache, h.SelectedTask.ID)
+		}
 		return h.loadTaskComments()
 
 	case components.EditCommentMsg:
@@ -142,6 +154,13 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 
 	case commentsLoadedMsg:
 		h.Comments = msg.comments
+		// Store in cache for instant retrieval next time
+		if h.SelectedTask != nil {
+			if h.CommentCache == nil {
+				h.CommentCache = make(map[string][]api.Comment)
+			}
+			h.CommentCache[h.SelectedTask.ID] = msg.comments
+		}
 		return nil
 
 	case reorderCompleteMsg:
@@ -249,6 +268,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 		h.AllTasks = msg.allTasks
 		dataChanged = true
 		h.TasksByDate = make(map[string][]api.Task)
+		h.LastDataFetch = time.Now() // Track when data was fetched
 
 		// Optimization: Pre-parse task dates and group by date
 		for i := range h.AllTasks {
@@ -299,6 +319,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	}
 	if msg.tasks != nil {
 		h.Tasks = msg.tasks
+		h.TasksSorted = false // Reset sorted flag since tasks changed
 		h.sortTasks()
 		dataChanged = true
 	}
@@ -405,36 +426,67 @@ func (h *Handler) handleRefresh() tea.Cmd {
 	if len(h.Tasks) > 0 && h.TaskCursor >= 0 && h.TaskCursor < len(h.Tasks) {
 		h.RestoreCursorToTaskID = h.Tasks[h.TaskCursor].ID
 	}
-	h.Loading = true
 
 	if h.CurrentView == state.ViewSearch {
+		h.Loading = true
 		return h.refreshSearchResults()
 	}
 
+	// Check if data is fresh (fetched within last 30 seconds)
+	// If fresh, use local filtering for instant response
+	dataIsFresh := len(h.AllTasks) > 0 && time.Since(h.LastDataFetch) < 30*time.Second
+
 	switch h.CurrentTab {
 	case state.TabInbox:
+		// Inbox filtering is already instant (uses AllTasks cache)
 		return h.loadInboxTasks()
 	case state.TabProjects:
 		if h.CurrentProject != nil {
-			// Reload current project
+			if dataIsFresh {
+				// Use cached data for instant filtering
+				return h.filterProjectTasks(h.CurrentProject.ID)
+			}
+			// Reload current project from API
+			h.Loading = true
 			h.Sections = nil // Clear sections to ensure clean reload
 			return h.loadProjectTasks(h.CurrentProject.ID)
 		}
 		// Just reload project list
+		h.Loading = true
 		return h.loadProjects()
 	case state.TabUpcoming:
+		if dataIsFresh {
+			return h.filterUpcomingTasks()
+		}
+		h.Loading = true
 		return h.loadUpcomingTasks()
 	case state.TabCalendar:
-		// Preserve calendar date and reload all tasks
+		if dataIsFresh {
+			return h.filterCalendarTasks()
+		}
+		h.Loading = true
 		return h.loadAllTasks()
 	case state.TabLabels:
 		if h.CurrentLabel != nil {
+			if dataIsFresh {
+				return h.filterLabelTasks(h.CurrentLabel.Name)
+			}
+			h.Loading = true
 			return h.loadLabelTasks(h.CurrentLabel.Name)
 		}
+		h.Loading = true
 		return h.loadLabels()
 	case state.TabToday:
+		if dataIsFresh {
+			return h.filterTodayTasks()
+		}
+		h.Loading = true
 		return h.loadTodayTasks()
 	default:
+		if dataIsFresh {
+			return h.filterTodayTasks()
+		}
+		h.Loading = true
 		return h.loadTodayTasks()
 	}
 }

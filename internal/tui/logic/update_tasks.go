@@ -18,6 +18,11 @@ import (
 const maxConcurrentRequests = 5
 
 func (h *Handler) sortTasks() {
+	// Skip if already sorted to avoid redundant work
+	if h.TasksSorted {
+		return
+	}
+
 	sort.Slice(h.Tasks, func(i, j int) bool {
 		ti, tj := h.Tasks[i], h.Tasks[j]
 
@@ -79,6 +84,8 @@ func (h *Handler) sortTasks() {
 		// Same due date or both no due date - sort by priority (higher = P1 = 4)
 		return ti.Priority > tj.Priority
 	})
+
+	h.TasksSorted = true
 }
 
 // handleComplete handles the task completion with optimistic updates.
