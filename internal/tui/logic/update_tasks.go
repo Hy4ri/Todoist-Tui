@@ -598,6 +598,13 @@ func (h *Handler) handleAdd() tea.Cmd {
 	}
 
 	h.QuickAddForm.SetContext(projectID, projectName, sectionID, sectionName)
+
+	// If in Today view, pre-populate "today "
+	if h.CurrentTab == state.TabToday {
+		h.QuickAddForm.Input.SetValue("today ")
+		h.QuickAddForm.Input.SetCursor(6)
+	}
+
 	return nil
 }
 
