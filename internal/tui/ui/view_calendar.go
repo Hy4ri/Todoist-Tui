@@ -468,7 +468,7 @@ func (r *Renderer) renderCalendarDay() string {
 
 // renderStatusBar renders the bottom status bar.
 func (r *Renderer) renderStatusBar() string {
-	// Left side: status message or error
+	// Left side: status message or error, followed by goals
 	left := ""
 	if r.Err != nil {
 		errStr := strings.ReplaceAll(r.Err.Error(), "\n", " ")
@@ -476,6 +476,16 @@ func (r *Renderer) renderStatusBar() string {
 	} else if r.StatusMsg != "" {
 		msgStr := strings.ReplaceAll(r.StatusMsg, "\n", " ")
 		left = styles.StatusBarSuccess.Render(msgStr)
+	}
+
+	// Add productivity goals display
+	goalsDisplay := r.renderGoalsDisplay()
+	if goalsDisplay != "" {
+		if left != "" {
+			left = left + "  " + goalsDisplay
+		} else {
+			left = goalsDisplay
+		}
 	}
 
 	// Right side: context-specific key hints (or just toggle hint if hidden)
@@ -506,6 +516,64 @@ func (r *Renderer) renderStatusBar() string {
 	}
 
 	return styles.StatusBar.Width(r.Width - padding).Render(left + strings.Repeat(" ", spacing) + right)
+}
+
+// renderGoalsDisplay renders the daily/weekly goal progress.
+func (r *Renderer) renderGoalsDisplay() string {
+	if r.ProductivityStats == nil {
+		return ""
+	}
+
+	goals := r.ProductivityStats.Goals
+	if goals.DailyGoal == 0 && goals.WeeklyGoal == 0 {
+		return ""
+	}
+
+	// Get today's completed count
+	todayCompleted := 0
+	todayStr := time.Now().Format("2006-01-02")
+	for _, day := range r.ProductivityStats.DaysItems {
+		if day.Date == todayStr {
+			todayCompleted = day.TotalCompleted
+			break
+		}
+	}
+
+	// Get this week's completed count (use first week item which is current week)
+	weekCompleted := 0
+	if len(r.ProductivityStats.WeekItems) > 0 {
+		weekCompleted = r.ProductivityStats.WeekItems[0].TotalCompleted
+	}
+
+	var parts []string
+
+	// Daily goal
+	if goals.DailyGoal > 0 {
+		dailyStyle := styles.StatusBarText
+		icon := "📅"
+		if todayCompleted >= goals.DailyGoal {
+			dailyStyle = styles.StatusBarSuccess
+			icon = "✓"
+		}
+		parts = append(parts, dailyStyle.Render(fmt.Sprintf("%s %d/%d", icon, todayCompleted, goals.DailyGoal)))
+	}
+
+	// Weekly goal
+	if goals.WeeklyGoal > 0 {
+		weeklyStyle := styles.StatusBarText
+		icon := "📆"
+		if weekCompleted >= goals.WeeklyGoal {
+			weeklyStyle = styles.StatusBarSuccess
+			icon = "✓"
+		}
+		parts = append(parts, weeklyStyle.Render(fmt.Sprintf("%s %d/%d", icon, weekCompleted, goals.WeeklyGoal)))
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // getContextualHints returns context-specific key hints for the status bar.

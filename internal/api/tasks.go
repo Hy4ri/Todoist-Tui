@@ -153,6 +153,36 @@ func (c *Client) QuickAddTask(text string) (*Task, error) {
 	return &task, nil
 }
 
+// GetProductivityStats returns the user's productivity statistics including goals.
+func (c *Client) GetProductivityStats() (*ProductivityStats, error) {
+	statsURL := "https://api.todoist.com/sync/v9/completed/get_stats"
+
+	req, err := http.NewRequest("GET", statsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stats request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("stats request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("stats API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var stats ProductivityStats
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		return nil, fmt.Errorf("failed to decode stats response: %w", err)
+	}
+
+	return &stats, nil
+}
+
 // MoveTask moves a task to a different section, parent, or project using Sync API.
 func (c *Client) MoveTask(id string, sectionID *string, projectID *string, parentID *string) error {
 	type moveArgs struct {

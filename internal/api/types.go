@@ -433,3 +433,53 @@ func (t *Task) DueDisplay() string {
 
 	return display
 }
+
+// ProductivityStats represents the user's productivity statistics.
+type ProductivityStats struct {
+	Goals      ProductivityGoals `json:"goals"`
+	DaysItems  []DayItems        `json:"days_items"`
+	WeekItems  []WeekItems       `json:"week_items"`
+	Karma      int               `json:"karma"`
+	KarmaTrend string            `json:"karma_trend"` // "up", "down", or ""
+}
+
+// ProductivityGoals represents the user's configured goals.
+type ProductivityGoals struct {
+	DailyGoal          int `json:"daily_goal"`
+	WeeklyGoal         int `json:"weekly_goal"`
+	CurrentDailyStreak struct {
+		Count int    `json:"count"`
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"current_daily_streak"`
+	CurrentWeeklyStreak struct {
+		Count int    `json:"count"`
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"current_weekly_streak"`
+	MaxDailyStreak struct {
+		Count int    `json:"count"`
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"max_daily_streak"`
+	MaxWeeklyStreak struct {
+		Count int    `json:"count"`
+		Start string `json:"start"`
+		End   string `json:"end"`
+	} `json:"max_weekly_streak"`
+	IgnoreDays    []int `json:"ignore_days"`
+	VacationMode  int   `json:"vacation_mode"`
+	KarmaDisabled int   `json:"karma_disabled"`
+}
+
+// DayItems represents completed items for a specific day.
+type DayItems struct {
+	Date           string `json:"date"`
+	TotalCompleted int    `json:"total_completed"`
+}
+
+// WeekItems represents completed items for a specific week.
+type WeekItems struct {
+	Date           string `json:"date"`
+	TotalCompleted int    `json:"total_completed"`
+}

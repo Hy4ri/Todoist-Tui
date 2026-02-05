@@ -92,15 +92,16 @@ type State struct {
 	// UI Elements
 	SidebarItems []components.SidebarItem
 
-	AllTasks       []api.Task
-	Sections       []api.Section
-	AllSections    []api.Section
-	Labels         []api.Label
-	Comments       []api.Comment
-	TasksByDate    map[string][]api.Task
-	SelectedTask   *api.Task
-	CurrentProject *api.Project
-	CurrentLabel   *api.Label
+	AllTasks          []api.Task
+	Sections          []api.Section
+	AllSections       []api.Section
+	Labels            []api.Label
+	Comments          []api.Comment
+	TasksByDate       map[string][]api.Task
+	SelectedTask      *api.Task
+	CurrentProject    *api.Project
+	CurrentLabel      *api.Label
+	ProductivityStats *api.ProductivityStats
 
 	// Sidebar items
 

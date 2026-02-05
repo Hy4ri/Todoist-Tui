@@ -310,6 +310,9 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	if len(msg.allSections) > 0 {
 		h.AllSections = msg.allSections
 	}
+	if msg.stats != nil {
+		h.ProductivityStats = msg.stats
+	}
 
 	// Restore cursor position if we have a task ID to restore to
 	if h.RestoreCursorToTaskID != "" {

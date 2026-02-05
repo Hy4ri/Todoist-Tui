@@ -35,11 +35,16 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			data []api.Section
 			err  error
 		}
+		type statsResult struct {
+			data *api.ProductivityStats
+			err  error
+		}
 
 		projChan := make(chan projectResult, 1)
 		labelChan := make(chan labelResult, 1)
 		taskChan := make(chan taskResult, 1)
 		secChan := make(chan sectionResult, 1)
+		statsChan := make(chan statsResult, 1)
 
 		// Launch concurrent requests
 		go func() {
@@ -62,11 +67,17 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			secChan <- sectionResult{data: s, err: e}
 		}()
 
+		go func() {
+			s, e := h.Client.GetProductivityStats()
+			statsChan <- statsResult{data: s, err: e}
+		}()
+
 		// Collect ALL results before processing errors to ensure all goroutines exit
 		pRes := <-projChan
 		lRes := <-labelChan
 		tRes := <-taskChan
 		sRes := <-secChan
+		statsRes := <-statsChan
 
 		// Now check for errors
 		if pRes.err != nil {
@@ -80,6 +91,11 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 		}
 		if sRes.err != nil {
 			return errMsg{sRes.err}
+		}
+		// Stats errors are non-fatal - just log and continue
+		var prodStats *api.ProductivityStats
+		if statsRes.err == nil {
+			prodStats = statsRes.data
 		}
 
 		projects := pRes.data
@@ -129,6 +145,7 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			allTasks:    allTasks,
 			labels:      labels,
 			allSections: allSections,
+			stats:       prodStats,
 		}
 	}
 }
@@ -143,6 +160,7 @@ type dataLoadedMsg struct {
 	sections    []api.Section
 	allSections []api.Section
 	labels      []api.Label
+	stats       *api.ProductivityStats
 }
 type taskUpdatedMsg struct{ task *api.Task }
 type taskDeletedMsg struct{ id string }
