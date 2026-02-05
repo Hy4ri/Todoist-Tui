@@ -38,28 +38,6 @@ CONFIGURATION:
     3. Add your token to the config file
     4. Run 'todoist-tui'
 
-KEYBINDINGS:
-    Navigation:
-        j/k         Move down/up
-        gg/G        Go to top/bottom
-        Ctrl+d/u    Half page down/up
-        Tab         Switch between sidebar and tasks
-        Enter       Select / Open details
-        Esc         Go back
-
-    Task Actions:
-        a           Add new task
-        e           Edit selected task
-        x           Complete/uncomplete task
-        dd          Delete task
-        1-4         Set priority (1=highest)
-
-    Other:
-        /           Search tasks
-        r           Refresh
-        ?           Show help
-        q           Quit
-
 For more information, see: https://github.com/hy4ri/todoist-tui
 `
 
@@ -82,16 +60,33 @@ ui:
 
   # Theme configuration (uncomment to override defaults)
   # theme:
+  #   # Core colors
   #   highlight: "#874BFD"
   #   subtle: "#666666"
   #   error: "#FF0000"
   #   success: "#00AA00"
   #   warning: "#FFAA00"
+  #
+  #   # Priority colors
   #   priority_1: "#D0473D"
   #   priority_2: "#EA8811"
   #   priority_3: "#296FDF"
-  #   task_selected_bg: "#2A2A2A" # Dark mode default
-  #   status_bar_bg: "#1F1F1F"    # Dark mode default
+  #
+  #   # Task colors
+  #   task_selected_bg: "#2A2A2A"
+  #   task_recurring: "#00CCCC"
+  #
+  #   # Calendar colors
+  #   calendar_selected_bg: "#874BFD" # Defaults to highlight
+  #   calendar_selected_fg: "#FFFFFF"
+  #
+  #   # Tab colors
+  #   tab_active_bg: "#874BFD"        # Defaults to highlight
+  #   tab_active_fg: "#FFFFFF"
+  #
+  #   # Status bar colors
+  #   status_bar_bg: "#1F1F1F"
+  #   status_bar_fg: "#DDDDDD"
 `
 
 func main() {

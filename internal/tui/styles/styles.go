@@ -90,6 +90,7 @@ var (
 )
 
 // rebuildStyles recreates styles that depend on color variables.
+// rebuildStyles recreates styles that depend on color variables.
 func rebuildStyles() {
 	// Title
 	Title = lipgloss.NewStyle().Bold(true).Foreground(Highlight)
@@ -114,6 +115,39 @@ func rebuildStyles() {
 	TaskPriority2 = lipgloss.NewStyle().Foreground(Priority2Color)
 	TaskPriority3 = lipgloss.NewStyle().Foreground(Priority3Color)
 
+	// Project styles
+	ProjectSelected = lipgloss.NewStyle().
+		PaddingLeft(1).
+		Bold(true).
+		Background(taskSelectedBg)
+
+	// Sidebar styles
+	SidebarFocused = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(Highlight).
+		Padding(0, 1)
+	SidebarActive = lipgloss.NewStyle().
+		PaddingLeft(1).
+		Foreground(Highlight).
+		Bold(true)
+	SidebarSeparator = lipgloss.NewStyle().Foreground(Subtle).Faint(true)
+
+	// Main content & details
+	MainContent = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(Subtle).Padding(0, 1)
+	MainContentFocused = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(Highlight).Padding(0, 1)
+	DetailPanel = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(Subtle).Padding(0, 1)
+	DetailPanelFocused = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(Highlight).Padding(0, 1)
+
+	// Input styles
+	Input = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(Subtle).Padding(0, 1)
+	InputFocused = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(Highlight).Padding(0, 1)
+	InputLabel = lipgloss.NewStyle().Bold(true).MarginBottom(1)
+
+	// Dialog styles
+	Dialog = lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).BorderForeground(Highlight).Padding(1, 2)
+	DialogTitle = lipgloss.NewStyle().Bold(true).Foreground(Highlight).MarginBottom(1)
+	Spinner = lipgloss.NewStyle().Foreground(Highlight)
+
 	// Calendar styles
 	bg := calendarSelectedBg
 	if bg == "" {
@@ -122,6 +156,8 @@ func rebuildStyles() {
 	CalendarDaySelected = lipgloss.NewStyle().Bold(true).Background(bg).Foreground(calendarSelectedFg)
 	CalendarDayToday = lipgloss.NewStyle().Bold(true).Foreground(SuccessColor)
 	CalendarDayWithTasks = lipgloss.NewStyle().Foreground(WarningColor)
+	CalendarHeader = lipgloss.NewStyle().Bold(true).Foreground(Highlight).Align(lipgloss.Center)
+	CalendarWeekday = lipgloss.NewStyle().Foreground(Subtle)
 
 	// Tab styles
 	tabBg := tabActiveBg
@@ -129,6 +165,13 @@ func rebuildStyles() {
 		tabBg = lipgloss.Color(Highlight.Dark)
 	}
 	TabActive = lipgloss.NewStyle().Padding(0, 2).Bold(true).Foreground(tabActiveFg).Background(tabBg)
+	TabHover = lipgloss.NewStyle().Padding(0, 2).Foreground(Highlight)
+	TabBar = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).BorderBottom(true).BorderForeground(Subtle).PaddingLeft(1).PaddingRight(1)
+	Tab = lipgloss.NewStyle().Padding(0, 2).Foreground(Subtle)
+
+	// Label styles
+	LabelSelected = lipgloss.NewStyle().PaddingLeft(1).Bold(true).Background(taskSelectedBg)
+	LabelBadge = lipgloss.NewStyle().Foreground(Highlight).Bold(true)
 
 	// Status bar styles
 	StatusBar = lipgloss.NewStyle().Foreground(statusBarFg).Background(statusBarBg).Padding(0, 1).Height(1)
@@ -140,14 +183,24 @@ func rebuildStyles() {
 	// Help styles
 	HelpKey = lipgloss.NewStyle().Bold(true).Foreground(Highlight)
 	HelpDesc = lipgloss.NewStyle().Foreground(Subtle)
+	HelpSeparator = lipgloss.NewStyle().Foreground(Subtle)
 
 	// Other styles that reference Highlight/Subtle
 	DateGroupHeader = lipgloss.NewStyle().Bold(true).Foreground(Highlight).Underline(true)
-	CalendarHeader = lipgloss.NewStyle().Bold(true).Foreground(Highlight).Align(lipgloss.Center)
-	CalendarWeekday = lipgloss.NewStyle().Foreground(Subtle)
 	SectionHeader = lipgloss.NewStyle().Bold(true).Foreground(Subtle).Underline(true)
-	LabelBadge = lipgloss.NewStyle().Foreground(Highlight).Bold(true)
 	DetailIcon = lipgloss.NewStyle().Foreground(Highlight).PaddingRight(1)
+	DetailLabel = lipgloss.NewStyle().Foreground(Subtle).Bold(true).Width(12)
+	DetailDescription = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#444444", Dark: "#CCCCCC"}).PaddingLeft(2).MarginTop(1)
+	DetailSection = lipgloss.NewStyle().Foreground(Subtle).MarginTop(1).MarginBottom(1)
+
+	// Scroll indicators
+	ScrollIndicatorUp = lipgloss.NewStyle().Foreground(Subtle).Italic(true).PaddingLeft(2)
+	ScrollIndicatorDown = lipgloss.NewStyle().Foreground(Subtle).Italic(true).PaddingLeft(2)
+
+	// Calendar Expanded extra
+	CalendarCellBorder = lipgloss.NewStyle().Foreground(Subtle)
+	CalendarDayWeekend = lipgloss.NewStyle().Foreground(Subtle)
+	CalendarMoreTasks = lipgloss.NewStyle().Foreground(Subtle).Italic(true)
 }
 
 // Terminal-adaptive colors that work in both light and dark terminals.
