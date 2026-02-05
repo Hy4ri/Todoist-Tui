@@ -18,9 +18,6 @@ type Config struct {
 
 // AuthConfig holds authentication-related settings.
 type AuthConfig struct {
-	// APIToken is the personal API token (for simple auth without OAuth)
-	APIToken string `yaml:"api_token,omitempty"`
-
 	// OAuth2 credentials
 	ClientID     string `yaml:"client_id,omitempty"`
 	ClientSecret string `yaml:"client_secret,omitempty"`
@@ -151,23 +148,15 @@ func Save(cfg *Config) error {
 	return nil
 }
 
-// HasValidAuth returns true if the config has valid authentication credentials.
+// HasValidAuth returns true if authentication is available.
+// Checks secure credential storage and OAuth access token.
 func (c *Config) HasValidAuth() bool {
-	return c.Auth.APIToken != "" || c.Auth.AccessToken != ""
+	return HasToken() || c.Auth.AccessToken != ""
 }
 
 // HasOAuthCredentials returns true if OAuth client credentials are configured.
 func (c *Config) HasOAuthCredentials() bool {
 	return c.Auth.ClientID != "" && c.Auth.ClientSecret != ""
-}
-
-// GetToken returns the best available token for API authentication.
-// Prefers AccessToken (from OAuth) over APIToken.
-func (c *Config) GetToken() string {
-	if c.Auth.AccessToken != "" {
-		return c.Auth.AccessToken
-	}
-	return c.Auth.APIToken
 }
 
 // UpdateDefaultView updates the default_view setting in the config file

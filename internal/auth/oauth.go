@@ -45,9 +45,9 @@ func GetAccessToken(cfg *config.Config) (string, error) {
 		return cfg.Auth.AccessToken, nil
 	}
 
-	// Fall back to API token if available
-	if cfg.Auth.APIToken != "" {
-		return cfg.Auth.APIToken, nil
+	// Fall back to secure token storage if available
+	if token, _ := config.GetToken(); token != "" {
+		return token, nil
 	}
 
 	// Check for OAuth credentials from environment
@@ -80,12 +80,7 @@ func GetAccessToken(cfg *config.Config) (string, error) {
 	}
 
 	// No authentication method available
-	return "", fmt.Errorf(
-		"no authentication configured. Please either:\n" +
-			"  1. Set TODOIST_CLIENT_ID and TODOIST_CLIENT_SECRET environment variables for OAuth, or\n" +
-			"  2. Add 'api_token' to ~/.config/todoist-tui/config.yaml\n" +
-			"     (Get your API token from https://app.todoist.com/app/settings/integrations/developer)",
-	)
+	return "", fmt.Errorf("no authentication configured")
 }
 
 // performOAuthFlow initiates the OAuth2 authorization flow.

@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
-	"github.com/hy4ri/todoist-tui/internal/auth"
 	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
@@ -43,16 +42,12 @@ For more information, see: https://github.com/hy4ri/todoist-tui
 
 const configTemplate = `# Todoist TUI Configuration
 # Location: ~/.config/todoist-tui/config.yaml
+# Note: API token is stored securely, not in this file.
 
-auth:
-  # Option 1: API Token (recommended for personal use)
-  # Get your token from: https://app.todoist.com/app/settings/integrations/developer
-  api_token: ""
-
-  # Option 2: OAuth2 (for apps/integrations)
-  # Create an app at: https://developer.todoist.com/appconsole.html
-  # client_id: ""
-  # client_secret: ""
+# OAuth2 (optional, for apps/integrations)
+# auth:
+#   client_id: ""
+#   client_secret: ""
 
 ui:
   # Enable Vim-style keybindings (default: true)
@@ -213,6 +208,11 @@ func createConfigTemplate() error {
 
 // runApp starts the main TUI application.
 func runApp(initialView string) error {
+	// Ensure config exists (auto-create if needed)
+	if err := ensureConfig(); err != nil {
+		return err
+	}
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -222,33 +222,24 @@ func runApp(initialView string) error {
 	// Apply user theme
 	styles.InitTheme(&cfg.UI.Theme)
 
-	// Check if config exists and has auth
-	if !cfg.HasValidAuth() && !cfg.HasOAuthCredentials() {
-		path, _ := config.ConfigPath()
-		fmt.Println("No authentication configured.")
-		fmt.Println()
-		fmt.Println("To get started:")
-		fmt.Printf("  1. Run 'todoist-tui --init' to create a config file at:\n     %s\n", path)
-		fmt.Println("  2. Add your API token to the config file")
-		fmt.Println("  3. Run 'todoist-tui' again")
-		fmt.Println()
-		fmt.Println("Get your API token from:")
-		fmt.Println("  https://app.todoist.com/app/settings/integrations/developer")
-		return nil
-	}
-
-	// Get access token (OAuth or API token)
-	token, err := auth.GetAccessToken(cfg)
+	// Get token from secure storage
+	token, err := config.GetToken()
 	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
+		return fmt.Errorf("failed to get token: %w", err)
 	}
 
-	// Update config with new token if OAuth was used
-	if token != cfg.Auth.APIToken && token != cfg.Auth.AccessToken {
-		cfg.Auth.AccessToken = token
-		if err := config.Save(cfg); err != nil {
-			// Non-fatal: just warn
-			fmt.Fprintf(os.Stderr, "Warning: failed to save config: %v\n", err)
+	// If no token, prompt for it
+	if token == "" {
+		token, err = promptForToken()
+		if err != nil {
+			return err
+		}
+		if token == "" {
+			return fmt.Errorf("no token provided")
+		}
+		// Save the token securely
+		if err := config.SaveToken(token); err != nil {
+			return fmt.Errorf("failed to save token: %w", err)
 		}
 	}
 
@@ -266,23 +257,57 @@ func runApp(initialView string) error {
 	return nil
 }
 
+// ensureConfig creates a default config file if it doesn't exist.
+func ensureConfig() error {
+	path, err := config.ConfigPath()
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// Create config directory
+		if _, err := config.ConfigDir(); err != nil {
+			return fmt.Errorf("failed to create config directory: %w", err)
+		}
+		// Write default config
+		if err := os.WriteFile(path, []byte(configTemplate), 0600); err != nil {
+			return fmt.Errorf("failed to create config file: %w", err)
+		}
+		fmt.Printf("Created config file: %s\n", path)
+	}
+
+	return nil
+}
+
+// promptForToken shows a TUI prompt for the user to enter their API token.
+func promptForToken() (string, error) {
+	fmt.Println("┌─────────────────────────────────────────────────────────────┐")
+	fmt.Println("│  Todoist TUI - First Time Setup                             │")
+	fmt.Println("└─────────────────────────────────────────────────────────────┘")
+	fmt.Println()
+	fmt.Println("Get your API token from:")
+	fmt.Println("  https://app.todoist.com/app/settings/integrations/developer")
+	fmt.Println()
+	fmt.Print("Enter your API token: ")
+
+	var token string
+	_, err := fmt.Scanln(&token)
+	if err != nil {
+		return "", nil // User cancelled
+	}
+
+	return strings.TrimSpace(token), nil
+}
+
 // runJSONOutput fetches today's and overdue tasks and outputs them as JSON.
 func runJSONOutput() error {
-	// Load configuration
-	cfg, err := config.Load()
+	// Get token from secure storage
+	token, err := config.GetToken()
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("failed to get token: %w", err)
 	}
-
-	// Check if config exists and has auth
-	if !cfg.HasValidAuth() && !cfg.HasOAuthCredentials() {
-		return fmt.Errorf("no authentication configured. Run 'todoist-tui --init' first")
-	}
-
-	// Get access token
-	token, err := auth.GetAccessToken(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
+	if token == "" {
+		return fmt.Errorf("no token configured. Run 'todoist-tui' first to set up")
 	}
 
 	// Create API client
