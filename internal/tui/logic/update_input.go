@@ -31,6 +31,13 @@ func (h *Handler) handleMouseMsg(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 
+	// If command line is active, check if click is outside (to dismiss)
+	if h.CommandLine != nil && h.CommandLine.Active {
+		// For now, any click dismisses command line
+		h.CommandLine.Active = false
+		return nil
+	}
+
 	x, y := msg.X, msg.Y
 
 	// Check if click is on tab bar (first 3 lines: border + tabs + border)
@@ -240,9 +247,19 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 
 // handleKeyMsg processes keyboard input.
 func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	// Command line handling - Highest priority when active
+	if h.CommandLine != nil && h.CommandLine.Active {
+		return h.handleCommandLineKeyMsg(msg)
+	}
+
 	// Only ctrl+c is truly global
 	if msg.String() == "ctrl+c" {
 		return tea.Quit
+	}
+
+	// Activate command line
+	if msg.String() == ":" && h.CurrentView != state.ViewTaskForm && h.CurrentView != state.ViewQuickAdd && h.CurrentView != state.ViewSearch && !h.IsEditingComment && !h.IsCreatingProject && !h.IsCreatingLabel && !h.IsCreatingSection && !h.IsCreatingSubtask {
+		return h.activateCommandLine()
 	}
 
 	// If we're in help view, any key goes back
@@ -1114,4 +1131,34 @@ func (h *Handler) handleCommentInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		h.CommentInput, cmd = h.CommentInput.Update(msg)
 		return cmd
 	}
+}
+
+// activateCommandLine initializes and shows the command line.
+func (h *Handler) activateCommandLine() tea.Cmd {
+	h.CommandLine = state.NewCommandLine()
+	h.CommandLine.Active = true
+	h.CommandLine.Input.Focus()
+	return textinput.Blink
+}
+
+// handleCommandLineKeyMsg handles input when the command line is active.
+func (h *Handler) handleCommandLineKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "enter":
+		return h.executeCommand(h.CommandLine.Input.Value())
+	case "esc":
+		h.CommandLine.Active = false
+		return nil
+	case "tab":
+		return h.autocompleteCommand()
+	case "up":
+		return h.commandHistoryPrev()
+	case "down":
+		return h.commandHistoryNext()
+	}
+
+	// Forward to input
+	var cmd tea.Cmd
+	h.CommandLine.Input, cmd = h.CommandLine.Input.Update(msg)
+	return tea.Batch(cmd, h.updateSuggestions())
 }

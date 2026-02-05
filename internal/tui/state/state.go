@@ -226,6 +226,9 @@ type State struct {
 	CachedTabBar      string
 	CachedTabBarTab   Tab
 	CachedTabBarWidth int
+
+	// Command line state (vim-style :)
+	CommandLine *CommandLine
 }
 
 // TabInfo holds tab metadata.

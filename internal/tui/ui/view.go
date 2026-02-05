@@ -95,13 +95,18 @@ func (r *Renderer) renderMainView() string {
 	// Render tab bar
 	tabBar := r.renderTabBar()
 
-	// Add status bar
-	statusBar := r.renderStatusBar()
-	statusBarHeight := lipgloss.Height(statusBar)
+	// Add status bar or command line
+	var bottomBar string
+	if r.CommandLine != nil && r.CommandLine.Active {
+		bottomBar = r.renderCommandLine()
+	} else {
+		bottomBar = r.renderStatusBar()
+	}
+	bottomBarHeight := lipgloss.Height(bottomBar)
 
-	// Calculate content height dynamically (total - tab bar - status bar)
+	// Calculate content height dynamically (total - tab bar - bottom bar)
 	tabBarHeight := lipgloss.Height(tabBar)
-	contentHeight := r.Height - tabBarHeight - statusBarHeight
+	contentHeight := r.Height - tabBarHeight - bottomBarHeight
 
 	var mainContent string
 
@@ -196,11 +201,50 @@ func (r *Renderer) renderMainView() string {
 		}
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, tabBar, mainContent, statusBar)
+	return lipgloss.JoinVertical(lipgloss.Left, tabBar, mainContent, bottomBar)
+}
+
+// renderCommandLine renders the vim-style command line.
+func (r *Renderer) renderCommandLine() string {
+	if r.CommandLine == nil {
+		return ""
+	}
+
+	prompt := styles.CommandPrompt.Render(":")
+	input := styles.CommandInput.Render(r.CommandLine.Input.View())
+
+	// Render suggestions if any
+	var suggestionsView string
+	if len(r.CommandLine.Suggestions) > 0 {
+		var suggestionItems []string
+		for i, s := range r.CommandLine.Suggestions {
+			if i == r.CommandLine.SuggestionCursor {
+				suggestionItems = append(suggestionItems, styles.CommandSuggestionSelected.Render(s))
+			} else {
+				suggestionItems = append(suggestionItems, styles.CommandSuggestion.Render(s))
+			}
+		}
+		suggestionsView = lipgloss.JoinHorizontal(lipgloss.Left, suggestionItems...)
+		suggestionsView = lipgloss.NewStyle().Padding(0, 1).Render(suggestionsView)
+	}
+
+	cmdLine := lipgloss.JoinHorizontal(lipgloss.Left, prompt, input)
+	cmdLine = styles.CommandLineContainer.Width(r.Width).Render(cmdLine)
+
+	if suggestionsView != "" {
+		return lipgloss.JoinVertical(lipgloss.Left, suggestionsView, cmdLine)
+	}
+	return cmdLine
 }
 
 // renderTabBar renders the top tab bar.
+// Uses caching to avoid re-rendering when tab and width haven't changed.
 func (r *Renderer) renderTabBar() string {
+	// Check cache: reuse if tab and width are unchanged
+	if r.CachedTabBar != "" && r.CachedTabBarTab == r.CurrentTab && r.CachedTabBarWidth == r.Width {
+		return r.CachedTabBar
+	}
+
 	tabs := state.GetTabDefinitions()
 
 	// Determine label style based on available width
@@ -247,5 +291,12 @@ func (r *Renderer) renderTabBar() string {
 		tabLine = lipgloss.NewStyle().MaxWidth(maxWidth).Render(tabLine)
 	}
 
-	return styles.TabBar.Width(r.Width).Render(tabLine)
+	result := styles.TabBar.Width(r.Width).Render(tabLine)
+
+	// Cache the result
+	r.CachedTabBar = result
+	r.CachedTabBarTab = r.CurrentTab
+	r.CachedTabBarWidth = r.Width
+
+	return result
 }
