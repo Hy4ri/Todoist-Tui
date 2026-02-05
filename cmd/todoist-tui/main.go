@@ -13,6 +13,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/auth"
 	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui"
+	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
 const version = "0.9.9"
@@ -203,6 +204,9 @@ func runApp(initialView string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
+
+	// Apply user theme
+	styles.InitTheme(&cfg.UI.Theme)
 
 	// Check if config exists and has auth
 	if !cfg.HasValidAuth() && !cfg.HasOAuthCredentials() {

@@ -1,7 +1,154 @@
 // Package styles provides Lip Gloss styles for the TUI.
 package styles
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/hy4ri/todoist-tui/internal/config"
+)
+
+// InitTheme applies user-configured theme colors.
+// Call this after loading config but before rendering.
+func InitTheme(cfg *config.ThemeConfig) {
+	if cfg == nil {
+		return
+	}
+
+	// Core colors
+	if cfg.Highlight != "" {
+		Highlight = lipgloss.AdaptiveColor{Light: cfg.Highlight, Dark: cfg.Highlight}
+	}
+	if cfg.Subtle != "" {
+		Subtle = lipgloss.AdaptiveColor{Light: cfg.Subtle, Dark: cfg.Subtle}
+	}
+	if cfg.Error != "" {
+		ErrorColor = lipgloss.AdaptiveColor{Light: cfg.Error, Dark: cfg.Error}
+	}
+	if cfg.Success != "" {
+		SuccessColor = lipgloss.AdaptiveColor{Light: cfg.Success, Dark: cfg.Success}
+	}
+	if cfg.Warning != "" {
+		WarningColor = lipgloss.AdaptiveColor{Light: cfg.Warning, Dark: cfg.Warning}
+	}
+
+	// Priority colors
+	if cfg.Priority1 != "" {
+		Priority1Color = lipgloss.Color(cfg.Priority1)
+	}
+	if cfg.Priority2 != "" {
+		Priority2Color = lipgloss.Color(cfg.Priority2)
+	}
+	if cfg.Priority3 != "" {
+		Priority3Color = lipgloss.Color(cfg.Priority3)
+	}
+
+	// Task colors
+	if cfg.TaskSelectedBg != "" {
+		taskSelectedBg = lipgloss.AdaptiveColor{Light: cfg.TaskSelectedBg, Dark: cfg.TaskSelectedBg}
+	}
+	if cfg.TaskRecurring != "" {
+		taskRecurringColor = lipgloss.AdaptiveColor{Light: cfg.TaskRecurring, Dark: cfg.TaskRecurring}
+	}
+
+	// Calendar colors
+	if cfg.CalendarSelectedBg != "" {
+		calendarSelectedBg = lipgloss.Color(cfg.CalendarSelectedBg)
+	}
+	if cfg.CalendarSelectedFg != "" {
+		calendarSelectedFg = lipgloss.Color(cfg.CalendarSelectedFg)
+	}
+
+	// Tab colors
+	if cfg.TabActiveBg != "" {
+		tabActiveBg = lipgloss.Color(cfg.TabActiveBg)
+	}
+	if cfg.TabActiveFg != "" {
+		tabActiveFg = lipgloss.Color(cfg.TabActiveFg)
+	}
+
+	// Status bar colors
+	if cfg.StatusBarBg != "" {
+		statusBarBg = lipgloss.AdaptiveColor{Light: cfg.StatusBarBg, Dark: cfg.StatusBarBg}
+	}
+	if cfg.StatusBarFg != "" {
+		statusBarFg = lipgloss.AdaptiveColor{Light: cfg.StatusBarFg, Dark: cfg.StatusBarFg}
+	}
+
+	// Rebuild all dependent styles
+	rebuildStyles()
+}
+
+// Internal color variables for styles that need rebuilding
+var (
+	taskSelectedBg     = lipgloss.AdaptiveColor{Light: "#EEEEEE", Dark: "#2A2A2A"}
+	taskRecurringColor = lipgloss.AdaptiveColor{Light: "#00AAAA", Dark: "#00CCCC"}
+	calendarSelectedBg = lipgloss.Color("")
+	calendarSelectedFg = lipgloss.Color("#ffffff")
+	tabActiveBg        = lipgloss.Color("")
+	tabActiveFg        = lipgloss.Color("#FFFFFF")
+	statusBarBg        = lipgloss.AdaptiveColor{Light: "#E8E8E8", Dark: "#1F1F1F"}
+	statusBarFg        = lipgloss.AdaptiveColor{Light: "#333333", Dark: "#DDDDDD"}
+)
+
+// rebuildStyles recreates styles that depend on color variables.
+func rebuildStyles() {
+	// Title
+	Title = lipgloss.NewStyle().Bold(true).Foreground(Highlight)
+	Subtitle = lipgloss.NewStyle().Bold(true).Foreground(Subtle)
+
+	// Task styles
+	TaskSelected = lipgloss.NewStyle().
+		PaddingLeft(1).
+		BorderLeft(true).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderLeftForeground(Highlight).
+		Bold(true).
+		Background(taskSelectedBg)
+
+	TaskDueOverdue = lipgloss.NewStyle().Foreground(ErrorColor).PaddingLeft(1)
+	TaskDueToday = lipgloss.NewStyle().Foreground(SuccessColor).PaddingLeft(1)
+	TaskLabel = lipgloss.NewStyle().Foreground(Highlight).PaddingLeft(1)
+	TaskRecurring = lipgloss.NewStyle().Foreground(taskRecurringColor).PaddingLeft(1)
+
+	// Priority styles
+	TaskPriority1 = lipgloss.NewStyle().Foreground(Priority1Color)
+	TaskPriority2 = lipgloss.NewStyle().Foreground(Priority2Color)
+	TaskPriority3 = lipgloss.NewStyle().Foreground(Priority3Color)
+
+	// Calendar styles
+	bg := calendarSelectedBg
+	if bg == "" {
+		bg = lipgloss.Color(Highlight.Dark)
+	}
+	CalendarDaySelected = lipgloss.NewStyle().Bold(true).Background(bg).Foreground(calendarSelectedFg)
+	CalendarDayToday = lipgloss.NewStyle().Bold(true).Foreground(SuccessColor)
+	CalendarDayWithTasks = lipgloss.NewStyle().Foreground(WarningColor)
+
+	// Tab styles
+	tabBg := tabActiveBg
+	if tabBg == "" {
+		tabBg = lipgloss.Color(Highlight.Dark)
+	}
+	TabActive = lipgloss.NewStyle().Padding(0, 2).Bold(true).Foreground(tabActiveFg).Background(tabBg)
+
+	// Status bar styles
+	StatusBar = lipgloss.NewStyle().Foreground(statusBarFg).Background(statusBarBg).Padding(0, 1).Height(1)
+	StatusBarKey = lipgloss.NewStyle().Bold(true).Foreground(Highlight).Background(statusBarBg)
+	StatusBarText = lipgloss.NewStyle().Foreground(Subtle).Background(statusBarBg)
+	StatusBarError = lipgloss.NewStyle().Foreground(ErrorColor).Background(statusBarBg).Bold(true)
+	StatusBarSuccess = lipgloss.NewStyle().Foreground(SuccessColor).Background(statusBarBg).Bold(true)
+
+	// Help styles
+	HelpKey = lipgloss.NewStyle().Bold(true).Foreground(Highlight)
+	HelpDesc = lipgloss.NewStyle().Foreground(Subtle)
+
+	// Other styles that reference Highlight/Subtle
+	DateGroupHeader = lipgloss.NewStyle().Bold(true).Foreground(Highlight).Underline(true)
+	CalendarHeader = lipgloss.NewStyle().Bold(true).Foreground(Highlight).Align(lipgloss.Center)
+	CalendarWeekday = lipgloss.NewStyle().Foreground(Subtle)
+	SectionHeader = lipgloss.NewStyle().Bold(true).Foreground(Subtle).Underline(true)
+	LabelBadge = lipgloss.NewStyle().Foreground(Highlight).Bold(true)
+	DetailIcon = lipgloss.NewStyle().Foreground(Highlight).PaddingRight(1)
+}
 
 // Terminal-adaptive colors that work in both light and dark terminals.
 var (

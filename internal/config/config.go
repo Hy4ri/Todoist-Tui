@@ -31,9 +31,43 @@ type AuthConfig struct {
 
 // UIConfig holds UI-related settings.
 type UIConfig struct {
-	VimMode             bool   `yaml:"vim_mode"`
-	DefaultView         string `yaml:"default_view,omitempty"`          // "inbox", "today", "upcoming", "projects", "calendar"
-	CalendarDefaultView string `yaml:"calendar_default_view,omitempty"` // "compact" or "expanded"
+	VimMode             bool        `yaml:"vim_mode"`
+	DefaultView         string      `yaml:"default_view,omitempty"`          // "inbox", "today", "upcoming", "projects", "calendar"
+	CalendarDefaultView string      `yaml:"calendar_default_view,omitempty"` // "compact" or "expanded"
+	Theme               ThemeConfig `yaml:"theme,omitempty"`
+}
+
+// ThemeConfig holds color theme settings.
+// All colors should be hex strings (e.g., "#FF6B6B").
+// Empty values use built-in defaults.
+type ThemeConfig struct {
+	// Core colors
+	Highlight string `yaml:"highlight,omitempty"` // Accent color (default: #874BFD)
+	Subtle    string `yaml:"subtle,omitempty"`    // Muted text (default: #666666)
+	Error     string `yaml:"error,omitempty"`     // Error red (default: #FF0000)
+	Success   string `yaml:"success,omitempty"`   // Success green (default: #00AA00)
+	Warning   string `yaml:"warning,omitempty"`   // Warning orange (default: #FFAA00)
+
+	// Priority colors
+	Priority1 string `yaml:"priority_1,omitempty"` // P1 red (default: #D0473D)
+	Priority2 string `yaml:"priority_2,omitempty"` // P2 orange (default: #EA8811)
+	Priority3 string `yaml:"priority_3,omitempty"` // P3 blue (default: #296FDF)
+
+	// Task colors
+	TaskSelectedBg string `yaml:"task_selected_bg,omitempty"` // Selected task background
+	TaskRecurring  string `yaml:"task_recurring,omitempty"`   // Recurring indicator
+
+	// Calendar colors
+	CalendarSelectedBg string `yaml:"calendar_selected_bg,omitempty"` // Selected day background
+	CalendarSelectedFg string `yaml:"calendar_selected_fg,omitempty"` // Selected day text
+
+	// Tab colors
+	TabActiveBg string `yaml:"tab_active_bg,omitempty"` // Active tab background
+	TabActiveFg string `yaml:"tab_active_fg,omitempty"` // Active tab text
+
+	// Status bar colors
+	StatusBarBg string `yaml:"status_bar_bg,omitempty"` // Status bar background
+	StatusBarFg string `yaml:"status_bar_fg,omitempty"` // Status bar text
 }
 
 // DefaultConfig returns a new Config with default values.
