@@ -31,23 +31,11 @@ OPTIONS:
 CONFIGURATION:
     Config file: ~/.config/todoist-tui/config.yaml
 
-    To get started:
-    1. Run 'todoist-tui --init' to create a config template
-    2. Get your API token from: https://app.todoist.com/app/settings/integrations/developer
-    3. Add your token to the config file
-    4. Run 'todoist-tui'
-
 For more information, see: https://github.com/hy4ri/todoist-tui
 `
 
 const configTemplate = `# Todoist TUI Configuration
 # Location: ~/.config/todoist-tui/config.yaml
-# Note: API token is stored securely, not in this file.
-
-# OAuth2 (optional, for apps/integrations)
-# auth:
-#   client_id: ""
-#   client_secret: ""
 
 ui:
   # Enable Vim-style keybindings (default: true)
@@ -60,34 +48,34 @@ ui:
   calendar_default_view: "compact"
 
   # Theme configuration (uncomment to override defaults)
-  # theme:
-  #   # Core colors
-  #   highlight: "#874BFD"
-  #   subtle: "#666666"
-  #   error: "#FF0000"
-  #   success: "#00AA00"
-  #   warning: "#FFAA00"
-  #
-  #   # Priority colors
-  #   priority_1: "#D0473D"
-  #   priority_2: "#EA8811"
-  #   priority_3: "#296FDF"
-  #
-  #   # Task colors
-  #   task_selected_bg: "#2A2A2A"
-  #   task_recurring: "#00CCCC"
-  #
-  #   # Calendar colors
-  #   calendar_selected_bg: "#874BFD" # Defaults to highlight
-  #   calendar_selected_fg: "#FFFFFF"
-  #
-  #   # Tab colors
-  #   tab_active_bg: "#874BFD"        # Defaults to highlight
-  #   tab_active_fg: "#FFFFFF"
-  #
-  #   # Status bar colors
-  #   status_bar_bg: "#1F1F1F"
-  #   status_bar_fg: "#DDDDDD"
+  theme:
+     # Core colors
+     highlight: "#990000"
+     subtle: "#666666"
+     error: "#FF0000"
+     success: "#00AA00"
+     warning: "#FFAA00"
+  
+     # Priority colors
+     priority_1: "#D0473D"
+     priority_2: "#EA8811"
+     priority_3: "#296FDF"
+  
+     # Task colors
+     task_selected_bg: "#2A2A2A"
+     task_recurring: "#00CCCC"
+  
+     # Calendar colors
+     calendar_selected_bg: "#990000" 
+     calendar_selected_fg: "#FFFFFF"
+  
+     # Tab colors
+     tab_active_bg: "#990000"        
+     tab_active_fg: "#FFFFFF"
+  
+     # Status bar colors
+     status_bar_bg: "#1F1F1F"
+     status_bar_fg: "#DDDDDD"
 `
 
 func main() {
@@ -198,10 +186,6 @@ func createConfigTemplate() error {
 	}
 
 	fmt.Printf("Config file created: %s\n\n", path)
-	fmt.Println("Next steps:")
-	fmt.Println("  1. Get your API token from: https://app.todoist.com/app/settings/integrations/developer")
-	fmt.Println("  2. Edit the config file and add your api_token")
-	fmt.Println("  3. Run 'todoist-tui' to start")
 
 	return nil
 }
