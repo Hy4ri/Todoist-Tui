@@ -95,6 +95,7 @@ func run() error {
 		viewUpcoming bool
 		viewCalendar bool
 		viewLabels   bool
+		viewToday    bool
 		viewInbox    bool
 		outputJSON   bool
 	)
@@ -109,6 +110,7 @@ func run() error {
 	flag.BoolVar(&viewCalendar, "calendar", false, "Start in calendar view")
 	flag.BoolVar(&viewLabels, "labels", false, "Start in labels view")
 	flag.BoolVar(&viewInbox, "inbox", false, "Start in inbox view")
+	flag.BoolVar(&viewToday, "today", false, "Start in today view")
 	flag.BoolVar(&outputJSON, "json", false, "Output tasks in JSON format")
 
 	flag.Usage = func() {
@@ -148,6 +150,8 @@ func run() error {
 		initialView = "labels"
 	} else if viewInbox {
 		initialView = "inbox"
+	} else if viewToday {
+		initialView = "today"
 	}
 
 	// Normal application flow
@@ -181,7 +185,7 @@ func createConfigTemplate() error {
 	}
 
 	// Write template
-	if err := os.WriteFile(path, []byte(configTemplate), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(configTemplate), 0o600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
@@ -254,7 +258,7 @@ func ensureConfig() error {
 			return fmt.Errorf("failed to create config directory: %w", err)
 		}
 		// Write default config
-		if err := os.WriteFile(path, []byte(configTemplate), 0600); err != nil {
+		if err := os.WriteFile(path, []byte(configTemplate), 0o600); err != nil {
 			return fmt.Errorf("failed to create config file: %w", err)
 		}
 		fmt.Printf("Created config file: %s\n", path)

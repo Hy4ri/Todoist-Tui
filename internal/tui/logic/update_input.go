@@ -958,23 +958,45 @@ func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 
-	if msg.String() == "esc" {
+	// Check for global actions relevant to detail view
+	action, consumed := h.KeyState.HandleKey(msg, h.Keymap)
+
+	// Handle explicit ESC if not consumed by keymap (or if keymap maps ESC to back)
+	if msg.String() == "esc" || action == "back" {
 		return h.handleBack()
 	}
-	// Check for global actions relevant to detail view
-	action, _ := h.KeyState.HandleKey(msg, h.Keymap)
-	if action == "add_comment" {
-		if h.SelectedTask != nil {
-			h.IsAddingComment = true
-			h.CommentInput = textinput.New()
-			h.CommentInput.Placeholder = "Write a comment..."
-			h.CommentInput.Focus()
-			h.CommentInput.Width = 50
-			return nil
+
+	if consumed {
+		switch action {
+		case "quit":
+			return tea.Quit
+		case "add_comment":
+			if h.SelectedTask != nil {
+				h.IsAddingComment = true
+				h.CommentInput = textinput.New()
+				h.CommentInput.Placeholder = "Write a comment..."
+				h.CommentInput.Focus()
+				h.CommentInput.Width = 50
+				return nil
+			}
+		case "edit":
+			return h.handleEdit()
+		case "delete":
+			return h.handleDelete()
+		case "complete":
+			return h.handleComplete()
+		case "priority1", "priority2", "priority3", "priority4":
+			return h.handlePriority(action)
+		case "due_tomorrow":
+			return h.handleDueTomorrow()
+		case "move_task_prev_day":
+			return h.handleMoveTaskDate(-1)
+		case "move_task_next_day":
+			return h.handleMoveTaskDate(1)
 		}
 	}
 
-	// Delegate to component
+	// Delegate to component (handles j/k scrolling, etc.)
 	_, cmd := h.DetailComp.Update(msg)
 	return cmd
 }
