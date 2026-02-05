@@ -477,26 +477,30 @@ func (r *Renderer) renderStatusBar() string {
 		msgStr := strings.ReplaceAll(r.StatusMsg, "\n", " ")
 		left = styles.StatusBarSuccess.Render(msgStr)
 	}
+	var rightParts []string
 
-	// Add productivity goals display
+	// Add goals to right side
 	goalsDisplay := r.renderGoalsDisplay()
 	if goalsDisplay != "" {
-		if left != "" {
-			left = left + "  " + goalsDisplay
-		} else {
-			left = goalsDisplay
-		}
+		rightParts = append(rightParts, goalsDisplay)
+	} else if r.StatsError != "" {
+		// Show the error in red
+		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+		rightParts = append(rightParts, errStyle.Render("Stats Err: "+r.StatsError))
+	} else if r.ProductivityStats == nil {
+		// Debug: show if stats are missing
+		// rightParts = append(rightParts, styles.StatusBarText.Render("[No Stats]"))
 	}
 
-	// Right side: context-specific key hints (or just toggle hint if hidden)
-	var right string
 	if r.ShowHints {
 		hints := r.getContextualHints()
 		hints = append(hints, styles.StatusBarKey.Render("F1")+styles.StatusBarText.Render(":hide"))
-		right = strings.Join(hints, " ")
+		rightParts = append(rightParts, strings.Join(hints, " "))
 	} else {
-		right = styles.StatusBarKey.Render("F1") + styles.StatusBarText.Render(":keys")
+		rightParts = append(rightParts, styles.StatusBarKey.Render("F1")+styles.StatusBarText.Render(":keys"))
 	}
+
+	right := strings.Join(rightParts, "  ") // Spacer between goals and keys
 
 	// Calculate spacing
 	leftWidth := lipgloss.Width(left)

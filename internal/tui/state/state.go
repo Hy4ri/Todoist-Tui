@@ -102,6 +102,7 @@ type State struct {
 	CurrentProject    *api.Project
 	CurrentLabel      *api.Label
 	ProductivityStats *api.ProductivityStats
+	StatsError        string
 
 	// Sidebar items
 

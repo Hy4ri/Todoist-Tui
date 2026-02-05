@@ -318,6 +318,11 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	if msg.stats != nil {
 		h.ProductivityStats = msg.stats
 	}
+	if msg.statsErr != nil {
+		h.StatsError = msg.statsErr.Error()
+	} else {
+		h.StatsError = ""
+	}
 
 	// Restore cursor position if we have a task ID to restore to
 	if h.RestoreCursorToTaskID != "" {

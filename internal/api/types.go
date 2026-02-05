@@ -439,7 +439,7 @@ type ProductivityStats struct {
 	Goals      ProductivityGoals `json:"goals"`
 	DaysItems  []DayItems        `json:"days_items"`
 	WeekItems  []WeekItems       `json:"week_items"`
-	Karma      int               `json:"karma"`
+	Karma      float64           `json:"karma"`
 	KarmaTrend string            `json:"karma_trend"` // "up", "down", or ""
 }
 

@@ -92,10 +92,13 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 		if sRes.err != nil {
 			return errMsg{sRes.err}
 		}
-		// Stats errors are non-fatal - just log and continue
+		// Stats errors are non-fatal - just capture them
 		var prodStats *api.ProductivityStats
+		var statsErr error
 		if statsRes.err == nil {
 			prodStats = statsRes.data
+		} else {
+			statsErr = statsRes.err
 		}
 
 		projects := pRes.data
@@ -146,6 +149,7 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			labels:      labels,
 			allSections: allSections,
 			stats:       prodStats,
+			statsErr:    statsErr,
 		}
 	}
 }
@@ -161,6 +165,7 @@ type dataLoadedMsg struct {
 	allSections []api.Section
 	labels      []api.Label
 	stats       *api.ProductivityStats
+	statsErr    error
 }
 type taskUpdatedMsg struct{ task *api.Task }
 type taskDeletedMsg struct{ id string }
