@@ -59,7 +59,12 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case dataLoadedMsg:
 		return h.handleDataLoaded(msg)
 
-	case taskCompletedMsg, taskDeletedMsg:
+	case taskCompletedMsg:
+		h.Loading = false
+		h.updateStatsOnCompletion()
+		return nil
+
+	case taskDeletedMsg:
 		h.Loading = false
 		return nil
 
@@ -426,5 +431,57 @@ func (h *Handler) handleRefresh() tea.Cmd {
 		return h.loadTodayTasks()
 	default:
 		return h.loadTodayTasks()
+	}
+}
+
+// updateStatsOnCompletion updates the productivity stats when a task is completed.
+func (h *Handler) updateStatsOnCompletion() {
+	if h.ProductivityStats == nil {
+		return
+	}
+
+	todayStr := time.Now().Format("2006-01-02")
+	goals := h.ProductivityStats.Goals
+	var msg string
+
+	// Update daily stats
+	foundToday := false
+	for i := range h.ProductivityStats.DaysItems {
+		if h.ProductivityStats.DaysItems[i].Date == todayStr {
+			h.ProductivityStats.DaysItems[i].TotalCompleted++
+			newCount := h.ProductivityStats.DaysItems[i].TotalCompleted
+			if newCount == goals.DailyGoal {
+				msg = "Daily goal reached! 🎉"
+			} else if newCount > goals.DailyGoal {
+				msg = fmt.Sprintf("Daily goal exceeded! (%d/%d) 🔥", newCount, goals.DailyGoal)
+			}
+			foundToday = true
+			break
+		}
+	}
+	if !foundToday {
+		h.ProductivityStats.DaysItems = append(h.ProductivityStats.DaysItems, api.DayItems{
+			Date:           todayStr,
+			TotalCompleted: 1,
+		})
+		if goals.DailyGoal == 1 {
+			msg = "Daily goal reached! 🎉"
+		}
+	}
+
+	// Update weekly stats
+	if len(h.ProductivityStats.WeekItems) > 0 {
+		h.ProductivityStats.WeekItems[0].TotalCompleted++
+		// Only celebrate weekly if daily wasn't just celebrated (avoid spam)
+		if msg == "" {
+			newCount := h.ProductivityStats.WeekItems[0].TotalCompleted
+			if newCount == goals.WeeklyGoal {
+				msg = "Weekly goal reached! 🚀"
+			}
+		}
+	}
+
+	if msg != "" {
+		h.StatusMsg = msg
 	}
 }
