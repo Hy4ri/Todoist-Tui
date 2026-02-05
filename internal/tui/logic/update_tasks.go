@@ -549,80 +549,47 @@ func (h *Handler) handleDelete() tea.Cmd {
 	}
 }
 
-// handleAdd opens the add task form.
+// handleAdd opens the quick add popup.
 func (h *Handler) handleAdd() tea.Cmd {
 	h.PreviousView = h.CurrentView
-	h.CurrentView = state.ViewTaskForm
-	h.TaskForm = state.NewTaskForm(h.Projects, h.Labels)
-	h.TaskForm.SetWidth(h.Width)
+	h.CurrentView = state.ViewQuickAdd
+	h.QuickAddForm = state.NewQuickAddForm()
+	h.QuickAddForm.SetWidth(h.Width)
 
-	// If in project view, default to that project
+	// Set context from current view
+	var projectID, projectName, sectionID, sectionName string
+
 	if h.CurrentProject != nil {
-		h.TaskForm.ProjectID = h.CurrentProject.ID
-		h.TaskForm.ProjectName = h.CurrentProject.Name
+		projectID = h.CurrentProject.ID
+		projectName = h.CurrentProject.Name
 
 		// Try to detect current section based on cursor position
-		// First, check if we can map cursor to a viewport line
-		cursorViewportLine := -1
 		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
 			taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-			// Find which viewport line this task is on
-			for i, vTaskIdx := range h.State.ViewportLines {
-				if vTaskIdx == taskIndex {
-					cursorViewportLine = i
-					break
-				}
-			}
-		}
 
-		// Check if cursor is on an empty section header (taskIndex <= -100)
-		if cursorViewportLine >= 0 && cursorViewportLine < len(h.State.ViewportLines) {
-			taskIdx := h.State.ViewportLines[cursorViewportLine]
-			if taskIdx <= -100 {
-				// Cursor is on an empty section header, get the section ID
-				if cursorViewportLine < len(h.State.ViewportSections) {
-					sectionID := h.State.ViewportSections[cursorViewportLine]
-					if sectionID != "" {
-						h.TaskForm.SectionID = sectionID
-						// Find section name
+			// Check if cursor is on an empty section header (taskIndex <= -100)
+			if taskIndex <= -100 {
+				for i, vIdx := range h.State.ViewportLines {
+					if vIdx == taskIndex && i < len(h.State.ViewportSections) {
+						sectionID = h.State.ViewportSections[i]
 						for _, s := range h.Sections {
 							if s.ID == sectionID {
-								h.TaskForm.SectionName = s.Name
+								sectionName = s.Name
 								break
 							}
 						}
+						break
 					}
 				}
-			} else if taskIdx >= 0 {
+			} else if taskIndex >= 0 && taskIndex < len(h.Tasks) {
 				// Cursor is on a task, use its section
-				if taskIdx < len(h.Tasks) {
-					task := h.Tasks[taskIdx]
-					if task.SectionID != nil && *task.SectionID != "" {
-						h.TaskForm.SectionID = *task.SectionID
-						// Find section name
-						for _, s := range h.Sections {
-							if s.ID == *task.SectionID {
-								h.TaskForm.SectionName = s.Name
-								break
-							}
-						}
-					}
-				}
-			}
-		} else {
-			// Fallback: Use the old method
-			if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-				taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-				if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-					task := h.Tasks[taskIndex]
-					if task.SectionID != nil && *task.SectionID != "" {
-						h.TaskForm.SectionID = *task.SectionID
-						// Find section name
-						for _, s := range h.Sections {
-							if s.ID == *task.SectionID {
-								h.TaskForm.SectionName = s.Name
-								break
-							}
+				task := h.Tasks[taskIndex]
+				if task.SectionID != nil && *task.SectionID != "" {
+					sectionID = *task.SectionID
+					for _, s := range h.Sections {
+						if s.ID == sectionID {
+							sectionName = s.Name
+							break
 						}
 					}
 				}
@@ -630,34 +597,7 @@ func (h *Handler) handleAdd() tea.Cmd {
 		}
 	}
 
-	// Set default due date based on view context
-	switch h.PreviousView {
-	case state.ViewToday:
-		h.TaskForm.SetDue(time.Now().Format("2006-01-02"))
-		h.TaskForm.SetContext("Today")
-	case state.ViewUpcoming:
-		h.TaskForm.SetDue(time.Now().Format("2006-01-02"))
-		h.TaskForm.SetContext("Upcoming")
-	case state.ViewCalendar, state.ViewCalendarDay:
-		selectedDate := time.Date(h.CalendarDate.Year(), h.CalendarDate.Month(), h.CalendarDay, 0, 0, 0, 0, time.Local)
-		h.TaskForm.SetDue(selectedDate.Format("2006-01-02"))
-		h.TaskForm.SetContext(selectedDate.Format("Jan 2"))
-	case state.ViewProject:
-		h.TaskForm.SetDue("")
-		h.TaskForm.SetContext("Project")
-	case state.ViewLabels:
-		h.TaskForm.SetDue("")
-		if h.CurrentLabel != nil {
-			h.TaskForm.Labels = []string{h.CurrentLabel.Name}
-			h.TaskForm.SetContext("@" + h.CurrentLabel.Name)
-		} else {
-			h.TaskForm.SetContext("Labels")
-		}
-	default:
-		h.TaskForm.SetDue("")
-		h.TaskForm.SetContext("")
-	}
-
+	h.QuickAddForm.SetContext(projectID, projectName, sectionID, sectionName)
 	return nil
 }
 

@@ -116,6 +116,43 @@ func (c *Client) DeleteTask(id string) error {
 	return nil
 }
 
+// QuickAddTask creates a task using natural language parsing.
+// Supports: dates ("tomorrow", "every monday"), priorities (p1-p4),
+// labels (@label), projects (#project), assignees (+name).
+// Example: "Buy milk tomorrow at 3pm @errands #Shopping p1"
+func (c *Client) QuickAddTask(text string) (*Task, error) {
+	quickAddURL := "https://api.todoist.com/sync/v9/quick/add"
+
+	formData := url.Values{}
+	formData.Set("text", text)
+
+	req, err := http.NewRequest("POST", quickAddURL, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create quick add request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("quick add request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("quick add API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var task Task
+	if err := json.NewDecoder(resp.Body).Decode(&task); err != nil {
+		return nil, fmt.Errorf("failed to decode quick add response: %w", err)
+	}
+
+	return &task, nil
+}
+
 // MoveTask moves a task to a different section, parent, or project using Sync API.
 func (c *Client) MoveTask(id string, sectionID *string, projectID *string, parentID *string) error {
 	type moveArgs struct {

@@ -24,6 +24,7 @@ const (
 	ViewProject
 	ViewTaskDetail
 	ViewTaskForm
+	ViewQuickAdd
 	ViewSearch
 	ViewHelp
 	ViewSections
@@ -135,7 +136,8 @@ type State struct {
 	HelpComp    *components.HelpModel
 
 	// Form state
-	TaskForm *TaskForm
+	TaskForm     *TaskForm
+	QuickAddForm *QuickAddForm
 
 	// Search state
 	SearchQuery   string

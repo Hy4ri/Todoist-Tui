@@ -27,7 +27,7 @@ func (h *Handler) handleMouseMsg(msg tea.MouseMsg) tea.Cmd {
 	}
 
 	// Skip if in modal views
-	if h.CurrentView == state.ViewHelp || h.CurrentView == state.ViewTaskForm || h.CurrentView == state.ViewSearch || h.CurrentView == state.ViewTaskDetail {
+	if h.CurrentView == state.ViewHelp || h.CurrentView == state.ViewTaskForm || h.CurrentView == state.ViewQuickAdd || h.CurrentView == state.ViewSearch || h.CurrentView == state.ViewTaskDetail {
 		return nil
 	}
 
@@ -190,7 +190,7 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	}
 
 	// Don't switch if in modal views
-	if h.CurrentView == state.ViewHelp || h.CurrentView == state.ViewTaskForm || h.CurrentView == state.ViewSearch || h.CurrentView == state.ViewTaskDetail {
+	if h.CurrentView == state.ViewHelp || h.CurrentView == state.ViewTaskForm || h.CurrentView == state.ViewQuickAdd || h.CurrentView == state.ViewSearch || h.CurrentView == state.ViewTaskDetail {
 		return nil
 	}
 
@@ -264,6 +264,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	switch h.CurrentView {
 	case state.ViewTaskForm:
 		return h.handleFormKeyMsg(msg)
+	case state.ViewQuickAdd:
+		return h.handleQuickAddKeyMsg(msg)
 	case state.ViewSearch:
 		return h.handleSearchKeyMsg(msg)
 	case state.ViewTaskDetail:
@@ -689,6 +691,58 @@ func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 	// Forward to form
 	return h.TaskForm.Update(msg)
+}
+
+// handleQuickAddKeyMsg handles keyboard input for the Quick Add popup.
+func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	if h.QuickAddForm == nil {
+		return nil
+	}
+
+	switch msg.String() {
+	case "esc":
+		// Close Quick Add and return to previous view
+		h.CurrentView = h.PreviousView
+		h.QuickAddForm = nil
+		return nil
+
+	case "enter":
+		// Submit task if there's content
+		if !h.QuickAddForm.IsValid() {
+			h.StatusMsg = "Enter task content"
+			return nil
+		}
+
+		// Capture form values
+		content := h.QuickAddForm.Value()
+		projectName := h.QuickAddForm.ProjectName
+
+		// Clear input and increment count (stays open)
+		h.QuickAddForm.Clear()
+		h.QuickAddForm.IncrementCount()
+		h.StatusMsg = "Adding task..."
+
+		// Create task in background using Quick Add API
+		return func() tea.Msg {
+			// Build the quick add text - append project if context exists
+			text := content
+			if projectName != "" {
+				// Only append #project if user didn't already specify one
+				if !strings.Contains(content, "#") {
+					text = content + " #" + projectName
+				}
+			}
+
+			_, err := h.Client.QuickAddTask(text)
+			if err != nil {
+				return errMsg{err}
+			}
+			return quickAddTaskCreatedMsg{}
+		}
+	}
+
+	// Forward other keys to the form input
+	return h.QuickAddForm.Update(msg)
 }
 
 // setDefaultView saves the current view as the default.

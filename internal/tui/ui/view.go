@@ -44,6 +44,8 @@ func (r *Renderer) View() string {
 		content = r.DetailComp.View()
 	case state.ViewTaskForm:
 		content = r.renderTaskForm()
+	case state.ViewQuickAdd:
+		content = r.renderQuickAdd()
 	case state.ViewSearch:
 		content = r.renderSearch()
 	case state.ViewCalendarDay:

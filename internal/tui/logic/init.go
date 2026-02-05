@@ -148,6 +148,7 @@ type taskUpdatedMsg struct{ task *api.Task }
 type taskDeletedMsg struct{ id string }
 type taskCompletedMsg struct{ id string }
 type taskCreatedMsg struct{}
+type quickAddTaskCreatedMsg struct{}
 type projectCreatedMsg struct{ project *api.Project }
 type projectUpdatedMsg struct{ project *api.Project }
 type projectDeletedMsg struct{ id string }

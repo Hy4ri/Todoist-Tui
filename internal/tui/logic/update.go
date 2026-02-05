@@ -66,6 +66,11 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case taskUpdatedMsg, taskCreatedMsg:
 		return h.handleTaskMsgs(msg)
 
+	case quickAddTaskCreatedMsg:
+		// Task added via Quick Add - refresh but keep popup open
+		h.StatusMsg = "Task added!"
+		return h.refreshTasks()
+
 	case projectCreatedMsg, projectUpdatedMsg, projectDeletedMsg:
 		return h.handleProjectMsgs(msg)
 
@@ -146,6 +151,11 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	// Task Form
 	if h.CurrentView == state.ViewTaskForm && h.TaskForm != nil {
 		return h.TaskForm.Update(msg)
+	}
+
+	// Quick Add Form
+	if h.CurrentView == state.ViewQuickAdd && h.QuickAddForm != nil {
+		return h.QuickAddForm.Update(msg)
 	}
 
 	// Search
