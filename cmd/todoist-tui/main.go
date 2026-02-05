@@ -79,6 +79,19 @@ auth:
 ui:
   # Enable Vim-style keybindings (default: true)
   vim_mode: true
+
+  # Theme configuration (uncomment to override defaults)
+  # theme:
+  #   highlight: "#874BFD"
+  #   subtle: "#666666"
+  #   error: "#FF0000"
+  #   success: "#00AA00"
+  #   warning: "#FFAA00"
+  #   priority_1: "#D0473D"
+  #   priority_2: "#EA8811"
+  #   priority_3: "#296FDF"
+  #   task_selected_bg: "#2A2A2A" # Dark mode default
+  #   status_bar_bg: "#1F1F1F"    # Dark mode default
 `
 
 func main() {
