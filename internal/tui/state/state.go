@@ -28,6 +28,7 @@ const (
 	ViewSearch
 	ViewHelp
 	ViewSections
+	ViewFilters
 )
 
 // Tab represents a top-level tab.
@@ -40,6 +41,7 @@ const (
 	TabLabels
 	TabCalendar
 	TabProjects
+	TabFilters
 )
 
 // Pane represents which pane is currently focused (only used in Projects tab).
@@ -142,9 +144,10 @@ type State struct {
 	Keymap  Keymap // Using interface to allow different implementations
 
 	// UI Components
-	SidebarComp *components.SidebarModel
-	DetailComp  *components.DetailModel
-	HelpComp    *components.HelpModel
+	SidebarComp       *components.SidebarModel
+	FilterSidebarComp *components.SidebarModel
+	DetailComp        *components.DetailModel
+	HelpComp          *components.HelpModel
 
 	// Form state
 	TaskForm     *TaskForm
@@ -186,6 +189,15 @@ type State struct {
 	KeyState *KeyState
 
 	ConfirmDeleteSection bool
+
+	// Filter creation/editing state
+	FilterNameInput     textinput.Model
+	FilterQueryInput    textinput.Model
+	IsCreatingFilter    bool
+	IsEditingFilter     bool
+	EditingFilter       *api.Filter
+	ConfirmDeleteFilter bool
+	FilterFormStep      int // 0=name, 1=query
 
 	// Subtask creation state
 	SubtaskInput      textinput.Model
@@ -229,6 +241,15 @@ type State struct {
 
 	// Command line state (vim-style :)
 	CommandLine *CommandLine
+
+	// Filter state
+	Filters           []api.Filter
+	CurrentFilter     *api.Filter
+	FilterCursor      int
+	FilterInput       textinput.Model
+	IsFilterSearch    bool
+	FilterSearchQuery string
+	HiddenFilters     map[string]bool // Track hidden built-in filters by ID
 }
 
 // TabInfo holds tab metadata.
@@ -246,6 +267,7 @@ func GetTabDefinitions() []TabInfo {
 		{TabToday, "📅", "Today", "Tdy"},
 		{TabUpcoming, "📆", "Upcoming", "Up"},
 		{TabLabels, "🏷️", "Labels", "Lbl"},
+		{TabFilters, "🔍", "Filters", "Flt"},
 		{TabCalendar, "🗓️", "Calendar", "Cal"},
 		{TabProjects, "📂", "Projects", "Prj"},
 	}

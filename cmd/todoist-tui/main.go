@@ -15,7 +15,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
 )
 
-const version = "0.9.9"
+const version = "2.0.0"
 
 const helpText = `todoist-tui - Terminal-based Todoist client with Vim keybindings
 

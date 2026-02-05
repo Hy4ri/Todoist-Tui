@@ -59,6 +59,25 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case dataLoadedMsg:
 		return h.handleDataLoaded(msg)
 
+	case filtersLoadedMsg:
+		h.Filters = msg.filters
+		return nil
+
+	case filterCreatedMsg:
+		h.Loading = false
+		h.StatusMsg = "Filter created: " + msg.filter.Name
+		return h.loadFilters() // Refresh list
+
+	case filterDeletedMsg:
+		h.Loading = false
+		h.StatusMsg = "Filter deleted"
+		h.EditingFilter = nil
+		// Re-adjust cursor if needed
+		if h.FilterCursor >= len(h.Filters)-1 && h.FilterCursor > 0 {
+			h.FilterCursor--
+		}
+		return h.loadFilters() // Refresh list
+
 	case taskCompletedMsg:
 		h.Loading = false
 		h.updateStatsOnCompletion()

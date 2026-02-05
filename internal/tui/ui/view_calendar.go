@@ -690,6 +690,22 @@ func (r *Renderer) getContextualHints() []string {
 			key("x") + desc(":done"),
 			key("S") + desc(":sections"),
 		}
+	case state.TabFilters:
+		if r.FocusedPane == state.PaneSidebar {
+			return []string{
+				key("j/k") + desc(":nav"),
+				key("/") + desc(":search"),
+				key("Enter") + desc(":run"),
+				key("h/l") + desc(":pane"),
+			}
+		}
+		// Focused on tasks from filter
+		return []string{
+			key("Tab") + desc(":filters"),
+			key("j/k") + desc(":nav"),
+			key("a") + desc(":add"),
+			key("x") + desc(":done"),
+		}
 	}
 
 	// Default generic fallback

@@ -121,6 +121,27 @@ func (h *Handler) handleContentClick(x, y int) tea.Cmd {
 			h.FocusedPane = state.PaneMain
 			return h.handleTaskClick(y)
 		}
+	} else if h.CurrentTab == state.TabFilters {
+		sidebarWidth := 25
+		if h.Width < 80 {
+			sidebarWidth = 20
+		}
+
+		if x < sidebarWidth {
+			// Click in sidebar
+			h.FocusedPane = state.PaneSidebar
+			itemIdx := y - 2 // Header + Separator
+
+			visible := h.getVisibleFilters()
+			if itemIdx >= 0 && itemIdx < len(visible) {
+				h.FilterCursor = itemIdx
+				return h.handleFilterSelect()
+			}
+		} else {
+			// Click in main content
+			h.FocusedPane = state.PaneMain
+			return h.handleTaskClick(y)
+		}
 	} else if h.CurrentView == state.ViewCalendar {
 		return h.handleCalendarClick(x, y)
 	} else {
@@ -240,6 +261,18 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 		h.FocusedPane = state.PaneSidebar
 		h.SidebarCursor = 0
 		return nil
+	case state.TabFilters:
+		h.CurrentView = state.ViewFilters
+		h.CurrentProject = nil
+		h.CurrentFilter = nil // Clear any previous filter
+		h.Tasks = nil         // Clear tasks until user selects a filter
+		h.FocusedPane = state.PaneSidebar
+		h.FilterCursor = 0
+		h.FilterInput = textinput.New()
+		h.FilterInput.Placeholder = "Search filters..."
+		h.IsFilterSearch = false
+		h.FilterSearchQuery = ""
+		return h.loadFilters()
 	}
 
 	return nil
@@ -325,6 +358,14 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleSectionDeleteConfirmKeyMsg(msg)
 	}
 
+	// Filter state handling
+	if h.IsCreatingFilter || h.IsEditingFilter {
+		return h.handleFilterFormKeyMsg(msg)
+	}
+	if h.ConfirmDeleteFilter {
+		return h.handleDeleteFilterConfirmKeyMsg(msg)
+	}
+
 	// Subtask creation handling
 	if h.IsCreatingSubtask {
 		return h.handleSubtaskInputKeyMsg(msg)
@@ -352,8 +393,10 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	case "4":
 		return h.switchToTab(state.TabLabels)
 	case "5":
-		return h.switchToTab(state.TabCalendar)
+		return h.switchToTab(state.TabFilters)
 	case "6":
+		return h.switchToTab(state.TabCalendar)
+	case "7":
 		return h.switchToTab(state.TabProjects)
 	case "D": // Shift+d
 		return h.setDefaultView()
@@ -367,6 +410,70 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	// If we're in calendar view, handle calendar-specific keys
 	if h.CurrentView == state.ViewCalendar && h.FocusedPane == state.PaneMain {
 		return h.handleCalendarKeyMsg(msg)
+	}
+
+	// Filters Tab specific key handling
+	if h.CurrentTab == state.TabFilters {
+		// If searching, handle input
+		if h.IsFilterSearch {
+			switch msg.String() {
+			case "enter":
+				h.IsFilterSearch = false
+				h.FilterInput.Blur()
+				visible := h.getVisibleFilters()
+				if len(visible) > 0 {
+					return h.handleFilterSelect()
+				}
+				return nil
+			case "esc":
+				h.IsFilterSearch = false
+				h.FilterInput.Blur()
+				h.FilterInput.SetValue("")
+				// Recalculate generic sidebar items or refresh?
+				// h.moveFilterCursor(0)
+				return nil
+			}
+
+			var cmd tea.Cmd
+			h.FilterInput, cmd = h.FilterInput.Update(msg)
+			return cmd
+		}
+
+		switch msg.String() {
+		case "/":
+			h.IsFilterSearch = true
+			h.FilterInput.Focus()
+			return textinput.Blink
+		case "tab":
+			if h.FocusedPane == state.PaneSidebar {
+				h.FocusedPane = state.PaneMain
+			} else {
+				h.FocusedPane = state.PaneSidebar
+			}
+			return nil
+		case "j", "down":
+			if h.FocusedPane == state.PaneSidebar {
+				h.moveFilterCursor(1)
+				return nil
+			}
+		case "k", "up":
+			if h.FocusedPane == state.PaneSidebar {
+				h.moveFilterCursor(-1)
+				return nil
+			}
+		case "enter":
+			if h.FocusedPane == state.PaneSidebar {
+				return h.handleFilterSelect()
+			}
+		case "n":
+			if h.FocusedPane == state.PaneSidebar {
+				return h.handleNewFilter()
+			}
+		case "d":
+			if h.FocusedPane == state.PaneSidebar {
+				return h.handleDeleteFilter()
+			}
+		}
 	}
 
 	// Process key through keymap
@@ -398,13 +505,13 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	case "half_down":
 		h.moveCursor(10)
 	case "left":
-		// h key - move to sidebar in Projects tab
-		if h.CurrentTab == state.TabProjects && h.FocusedPane == state.PaneMain {
+		// h key - move to sidebar in Projects/Filters tab
+		if (h.CurrentTab == state.TabProjects || h.CurrentTab == state.TabFilters) && h.FocusedPane == state.PaneMain {
 			h.FocusedPane = state.PaneSidebar
 		}
 	case "right":
-		// l key - move to main pane in Projects tab
-		if h.CurrentTab == state.TabProjects && h.FocusedPane == state.PaneSidebar {
+		// l key - move to main pane in Projects/Filters tab
+		if (h.CurrentTab == state.TabProjects || h.CurrentTab == state.TabFilters) && h.FocusedPane == state.PaneSidebar {
 			h.FocusedPane = state.PaneMain
 		}
 	case "switch_pane":

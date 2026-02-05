@@ -97,6 +97,12 @@ func registerCommands() {
 			Handler:     handleSortCommand,
 		},
 		{
+			Name:        "filter",
+			Aliases:     []string{"f"},
+			Description: "Run a filter query",
+			Handler:     handleFilterCommand,
+		},
+		{
 			Name:        "commands",
 			Aliases:     []string{"list", "ls"},
 			Description: "List all available commands",
@@ -240,6 +246,20 @@ func handleHelpCommand(h *Handler, args []string) tea.Cmd {
 	h.PreviousView = h.CurrentView
 	h.CurrentView = state.ViewHelp
 	return nil
+}
+
+func handleFilterCommand(h *Handler, args []string) tea.Cmd {
+	if len(args) == 0 {
+		return h.switchToTab(state.TabFilters)
+	}
+
+	query := strings.Join(args, " ")
+
+	if h.CurrentTab != state.TabFilters {
+		h.switchToTab(state.TabFilters)
+	}
+
+	return h.runAdHocFilter(query)
 }
 
 func handleCommandsCommand(h *Handler, args []string) tea.Cmd {

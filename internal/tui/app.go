@@ -35,6 +35,9 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 
 	// Initialize UI components
 	s.SidebarComp = components.NewSidebar()
+	s.FilterSidebarComp = components.NewSidebar()
+	s.FilterSidebarComp.Title = "Filters"
+	s.FilterSidebarComp.Hint = "/: search  Tab: switch pane"
 	s.DetailComp = components.NewDetail()
 	s.HelpComp = components.NewHelp()
 
@@ -82,6 +85,10 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 		case "inbox":
 			s.CurrentView = state.ViewInbox
 			s.CurrentTab = state.TabInbox
+		case "filters":
+			s.CurrentView = state.ViewFilters
+			s.CurrentTab = state.TabFilters
+			s.FocusedPane = state.PaneSidebar
 		}
 	}
 

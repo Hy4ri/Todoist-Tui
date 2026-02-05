@@ -13,6 +13,8 @@ import (
 // SidebarModel manages the project sidebar navigation.
 type SidebarModel struct {
 	items           []SidebarItem
+	Title           string
+	Hint            string
 	cursor          int
 	scrollOffset    int
 	width, height   int
@@ -89,7 +91,11 @@ func (s *SidebarModel) View() string {
 	var b strings.Builder
 
 	// Title
-	b.WriteString(styles.Title.Render("Projects"))
+	title := s.Title
+	if title == "" {
+		title = "Projects"
+	}
+	b.WriteString(styles.Title.Render(title))
 	b.WriteString("\n\n")
 
 	// Calculate available height for the list
@@ -249,7 +255,11 @@ func (s *SidebarModel) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(styles.HelpDesc.Render("n: new project"))
+	hint := s.Hint
+	if hint == "" {
+		hint = "n: new project"
+	}
+	b.WriteString(styles.HelpDesc.Render(hint))
 
 	// Apply container style
 	if innerHeight < 3 {

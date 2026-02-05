@@ -79,6 +79,8 @@ func (r *Renderer) View() string {
 		{r.IsAddingComment, r.renderCommentDialog},
 		{r.IsEditingComment, r.renderCommentEditDialog},
 		{r.ConfirmDeleteComment, r.renderCommentDeleteDialog},
+		{r.IsCreatingFilter || r.IsEditingFilter, r.renderFilterFormDialog},
+		{r.ConfirmDeleteFilter && r.EditingFilter != nil, r.renderFilterDeleteDialog},
 	}
 
 	for _, o := range overlays {
@@ -195,6 +197,9 @@ func (r *Renderer) renderMainView() string {
 		if r.CurrentTab == state.TabProjects {
 			// Projects tab shows sidebar + content
 			mainContent = r.renderProjectsTabContent(r.Width, contentHeight)
+		} else if r.CurrentTab == state.TabFilters {
+			// Filters tab showing sidebar with fuzzy search + content
+			mainContent = r.renderFiltersTab(r.Width, contentHeight)
 		} else {
 			// Other tabs show content only (full width)
 			mainContent = r.renderTaskList(r.Width-2, contentHeight)
