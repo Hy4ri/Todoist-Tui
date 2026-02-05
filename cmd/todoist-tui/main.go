@@ -58,6 +58,12 @@ ui:
   # Enable Vim-style keybindings (default: true)
   vim_mode: true
 
+  # Default view on startup (projects, upcoming, calendar, labels, inbox)
+  default_view: "inbox"
+
+  # Calendar default view (compact, expanded)
+  calendar_default_view: "compact"
+
   # Theme configuration (uncomment to override defaults)
   # theme:
   #   # Core colors

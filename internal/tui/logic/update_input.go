@@ -764,8 +764,11 @@ func (h *Handler) setDefaultView() tea.Cmd {
 	}
 
 	if viewName != "" {
+		// Update in memory
 		h.Config.UI.DefaultView = viewName
-		if err := config.Save(h.Config); err != nil {
+
+		// Update on disk (preserving comments)
+		if err := config.UpdateDefaultView(viewName); err != nil {
 			h.StatusMsg = fmt.Sprintf("Failed to save config: %v", err)
 		} else {
 			h.StatusMsg = fmt.Sprintf("Default view set to: %s", viewName)
