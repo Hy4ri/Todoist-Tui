@@ -684,3 +684,18 @@ func (r *Renderer) renderRescheduleDialog() string {
 
 	return r.renderCenteredDialog(b.String(), 40)
 }
+
+// renderSectionAddTaskDialog renders the specialized section-aware add dialog.
+func (r *Renderer) renderSectionAddTaskDialog() string {
+	var b strings.Builder
+	title := fmt.Sprintf("➕ Add Task to [%s]", r.TargetSectionName)
+	b.WriteString(styles.Title.Render(title) + "\n\n")
+
+	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("TASK NAME") + "\n")
+	b.WriteString(r.SectionAddInput.View() + "\n\n")
+
+	b.WriteString(styles.HelpDesc.Render("Quick Add syntax supported (dates, priorities, etc.)") + "\n")
+	b.WriteString(styles.HelpDesc.Render("Enter: create • Esc: cancel"))
+
+	return r.renderCenteredDialog(b.String(), 70)
+}

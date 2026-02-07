@@ -372,6 +372,11 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleSubtaskInputKeyMsg(msg)
 	}
 
+	// Section task addition handling
+	if h.IsAddingToSection {
+		return h.handleSectionAddInputKeyMsg(msg)
+	}
+
 	// Comment input handling
 	if h.IsAddingComment {
 		return h.handleCommentInputKeyMsg(msg)
@@ -555,6 +560,10 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		// Context-aware add for Labels tab
 		if h.CurrentTab == state.TabLabels && h.CurrentLabel == nil {
 			return h.handleNewLabel()
+		}
+		// Specialized section-aware add for Project/Inbox views
+		if h.CurrentView == state.ViewProject || h.CurrentView == state.ViewInbox {
+			return h.handleSectionAdd()
 		}
 		return h.handleAdd()
 	case "edit":
@@ -889,6 +898,7 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		// Capture form values
 		content := h.QuickAddForm.Value()
 		projectName := h.QuickAddForm.ProjectName
+		sectionName := h.QuickAddForm.SectionName
 
 		// Clear input and increment count (stays open)
 		h.QuickAddForm.Clear()
@@ -897,12 +907,18 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 		// Create task in background using Quick Add API
 		return func() tea.Msg {
-			// Build the quick add text - append project if context exists
+			// Build the quick add text - append project/section if context exists
 			text := content
 			if projectName != "" {
 				// Only append #project if user didn't already specify one
 				if !strings.Contains(content, "#") {
-					text = content + " #" + projectName
+					text += " #" + projectName
+				}
+			}
+			if sectionName != "" {
+				// Only append /section if user didn't already specify one
+				if !strings.Contains(content, "/") {
+					text += " /" + sectionName
 				}
 			}
 

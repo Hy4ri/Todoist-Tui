@@ -84,6 +84,7 @@ func (r *Renderer) View() string {
 		{r.IsCreatingFilter || r.IsEditingFilter, r.renderFilterFormDialog},
 		{r.ConfirmDeleteFilter && r.EditingFilter != nil, r.renderFilterDeleteDialog},
 		{r.IsRescheduling, r.renderRescheduleDialog},
+		{r.IsAddingToSection, r.renderSectionAddTaskDialog},
 	}
 
 	for _, o := range overlays {

@@ -256,6 +256,14 @@ type State struct {
 	IsRescheduling    bool
 	RescheduleCursor  int
 	RescheduleOptions []string
+
+	// Specialized section-aware task addition
+	IsAddingToSection bool
+	SectionAddInput   textinput.Model
+	TargetProjectID   string
+	TargetProjectName string
+	TargetSectionID   string
+	TargetSectionName string
 }
 
 // TabInfo holds tab metadata.

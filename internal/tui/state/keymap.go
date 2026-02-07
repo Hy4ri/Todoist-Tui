@@ -294,13 +294,10 @@ func (k KeymapData) HelpItems() [][]string {
 		{"2", "Today's tasks"},
 		{"3", "Upcoming tasks"},
 		{"4", "Labels list"},
-		{"5", "Calendar view"},
-		{"6", "Projects sidebar"},
-		{"P", "Fast switch to Projects"},
-		{"L", "Fast switch to Labels"},
-		{"U", "Upcoming"},
-		{"T", "Today"},
-		{"I", "Inbox"},
+		{"5", "Filters"},
+		{"6", "Calendar view"},
+		{"7", "Projects sidebar"},
+
 		{"", ""},
 
 		{"Navigation", ""},
@@ -352,5 +349,6 @@ func (k KeymapData) HelpItems() [][]string {
 		{k.Back.Key, "Go back / Cancel"},
 		{"f1", "Toggle key hints bar"},
 		{k.Quit.Key, "Quit the application"},
+		{"t", "Smart Reschedule"},
 	}
 }

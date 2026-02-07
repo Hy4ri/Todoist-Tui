@@ -47,11 +47,6 @@ func (h *Handler) sortTasks() {
 
 			if ti.Due.Datetime != nil {
 				timeI, errI = time.Parse(time.RFC3339, *ti.Due.Datetime)
-			} else {
-				// No time? treat as end of day for sorting? or start?
-				// User wants "tasks with time are higher priority" -> "higher priority" usually means TOP.
-				// So if I have time, I should come BEFORE tasks without time if dates are equal.
-				// Let's assume dates are equal first.
 			}
 			if tj.Due.Datetime != nil {
 				timeJ, errJ = time.Parse(time.RFC3339, *tj.Due.Datetime)
@@ -568,6 +563,57 @@ func (h *Handler) handleDelete() tea.Cmd {
 	}
 }
 
+// determineContextFromCursor identifies the project and section based on the current view and cursor position.
+func (h *Handler) determineContextFromCursor() (projectID, projectName, sectionID, sectionName string) {
+	// 1. Determine Project
+	if h.CurrentProject != nil {
+		projectID = h.CurrentProject.ID
+		projectName = h.CurrentProject.Name
+	} else if h.CurrentView == state.ViewInbox {
+		for _, p := range h.Projects {
+			if p.InboxProject {
+				projectID = p.ID
+				projectName = p.Name
+				break
+			}
+		}
+	}
+
+	// 2. Determine Section from cursor
+	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+		taskIndex := h.TaskOrderedIndices[h.TaskCursor]
+
+		// Check if cursor is on an empty section header
+		if taskIndex <= -100 {
+			for i, vIdx := range h.State.ViewportLines {
+				if vIdx == taskIndex && i < len(h.State.ViewportSections) {
+					sectionID = h.State.ViewportSections[i]
+					for _, s := range h.Sections {
+						if s.ID == sectionID {
+							sectionName = s.Name
+							break
+						}
+					}
+					break
+				}
+			}
+		} else if taskIndex >= 0 && taskIndex < len(h.Tasks) {
+			// Cursor is on a task, use its section
+			task := h.Tasks[taskIndex]
+			if task.SectionID != nil && *task.SectionID != "" {
+				sectionID = *task.SectionID
+				for _, s := range h.Sections {
+					if s.ID == sectionID {
+						sectionName = s.Name
+						break
+					}
+				}
+			}
+		}
+	}
+	return
+}
+
 // handleAdd opens the quick add popup.
 func (h *Handler) handleAdd() tea.Cmd {
 	h.PreviousView = h.CurrentView
@@ -576,45 +622,7 @@ func (h *Handler) handleAdd() tea.Cmd {
 	h.QuickAddForm.SetWidth(h.Width)
 
 	// Set context from current view
-	var projectID, projectName, sectionID, sectionName string
-
-	if h.CurrentProject != nil {
-		projectID = h.CurrentProject.ID
-		projectName = h.CurrentProject.Name
-
-		// Try to detect current section based on cursor position
-		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-			taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-
-			// Check if cursor is on an empty section header (taskIndex <= -100)
-			if taskIndex <= -100 {
-				for i, vIdx := range h.State.ViewportLines {
-					if vIdx == taskIndex && i < len(h.State.ViewportSections) {
-						sectionID = h.State.ViewportSections[i]
-						for _, s := range h.Sections {
-							if s.ID == sectionID {
-								sectionName = s.Name
-								break
-							}
-						}
-						break
-					}
-				}
-			} else if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-				// Cursor is on a task, use its section
-				task := h.Tasks[taskIndex]
-				if task.SectionID != nil && *task.SectionID != "" {
-					sectionID = *task.SectionID
-					for _, s := range h.Sections {
-						if s.ID == sectionID {
-							sectionName = s.Name
-							break
-						}
-					}
-				}
-			}
-		}
-	}
+	projectID, projectName, sectionID, sectionName := h.determineContextFromCursor()
 
 	h.QuickAddForm.SetContext(projectID, projectName, sectionID, sectionName)
 
@@ -706,21 +714,32 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 	// Remove blocking loading state
 
 	// Prepare UpdateReq
-	updateReq := api.UpdateTaskRequest{
-		DueDate: &newDateStr,
-	}
+	var updateReq api.UpdateTaskRequest
 
-	// CRITICAL: Preserve recurring status
-	// If task is recurring, we MUST explicitly send the recurrence string.
-	// Otherwise the API might treat this as a one-off date assignment and convert it to non-recurring.
-	if task.Due != nil && task.Due.IsRecurring && task.Due.String != "" {
-		recurrence := task.Due.String
-		updateReq.DueString = &recurrence
-		// If we are setting a specific date for a recurring task, we usually just want to update the NEXT occurrence.
-		// Todoist API is a bit tricky here. If we send 'due_date' AND 'due_string', it might re-evaluate.
-		// Safe bet: if it has a due string, send THAT as the primary update mechanism if possible, OR
-		// just send due_date and hope Todoist keeps the recurrence pattern (it usually does NOT if due_string is missing).
-		// So sending due_string is correct.
+	if preciseDate == "remove" {
+		noDate := "no date"
+		updateReq.DueString = &noDate
+		h.StatusMsg = "Removing due date..."
+
+		// Update optimistic
+		task.Due = nil
+		// Update AllTasks
+		for i := range h.AllTasks {
+			if h.AllTasks[i].ID == task.ID {
+				h.AllTasks[i].Due = nil
+				break
+			}
+		}
+	} else {
+		updateReq.DueDate = &newDateStr
+
+		// CRITICAL: Preserve recurring status
+		// If task is recurring, we MUST explicitly send the recurrence string.
+		// Otherwise the API might treat this as a one-off date assignment and convert it to non-recurring.
+		if task.Due != nil && task.Due.IsRecurring && task.Due.String != "" {
+			recurrence := task.Due.String
+			updateReq.DueString = &recurrence
+		}
 	}
 
 	return func() tea.Msg {
@@ -761,13 +780,14 @@ func (h *Handler) handleReschedule(option string) tea.Cmd {
 	case "Postpone (1 day)":
 		return h.handleMoveTaskDate(1, "")
 	case "No Date":
-		// Handle removing due date
-		// Reuse logic or create new
-		return func() tea.Msg {
-			// Find task... (reuse lookup logic from handleMoveTaskDate or refactor)
-			// Implementation simplified for brevity, ideally refactor task lookup
-			return nil
-		}
+		// Handle removing due date (pass explicit empty date string)
+		// handleMoveTaskDate with empty strings works to remove/update date if we explicitly handle it
+		// But handleMoveTaskDate implementation expects "days" offset or "preciseDate".
+		// If both are 0/empty, it calculates today.
+		// We need a way to say "remove".
+		// Let's assume handleMoveTaskDate can handle "remove" as preciseDate.
+
+		return h.handleMoveTaskDate(0, "remove")
 	}
 	return nil
 }
@@ -991,4 +1011,82 @@ func (h *Handler) filterInboxTasks() tea.Cmd {
 	h.Tasks = tasks
 	h.sortTasks()
 	return nil
+}
+
+// handleSectionAdd opens the specialized section-aware add dialog.
+func (h *Handler) handleSectionAdd() tea.Cmd {
+	// Guard: Only allow in Project/Inbox views
+	if h.CurrentView != state.ViewProject && h.CurrentView != state.ViewInbox {
+		return h.handleAdd() // Fallback to general quick add
+	}
+
+	// Determine target section from cursor position
+	projectID, projectName, sectionID, sectionName := h.determineContextFromCursor()
+
+	// If no section found, fallback to general quick add
+	if sectionID == "" {
+		return h.handleAdd()
+	}
+
+	// Setup specialized addition state
+	h.TargetProjectID = projectID
+	h.TargetProjectName = projectName
+	h.TargetSectionID = sectionID
+	h.TargetSectionName = sectionName
+	h.SectionAddInput = textinput.New()
+	h.SectionAddInput.Placeholder = "Task name (e.g. Buy milk tomorrow #Shopping p1)"
+	h.SectionAddInput.Focus()
+	h.SectionAddInput.Width = 60
+	h.IsAddingToSection = true
+
+	return nil
+}
+
+// handleSectionAddInputKeyMsg handles keyboard input for the specialized section add dialog.
+func (h *Handler) handleSectionAddInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		h.IsAddingToSection = false
+		h.SectionAddInput.Reset()
+		return nil
+
+	case "enter":
+		content := strings.TrimSpace(h.SectionAddInput.Value())
+		if content == "" {
+			h.IsAddingToSection = false
+			return nil
+		}
+
+		projectName := h.TargetProjectName
+		sectionName := h.TargetSectionName
+		h.IsAddingToSection = false
+		h.SectionAddInput.Reset()
+		h.StatusMsg = "Adding task..."
+
+		return func() tea.Msg {
+			// Use QuickAddTask with text appending for context
+			text := content
+			if projectName != "" {
+				if !strings.Contains(content, "#") {
+					text += " #" + projectName
+				}
+			}
+			if sectionName != "" {
+				if !strings.Contains(content, "/") {
+					text += " /" + sectionName
+				}
+			}
+
+			_, err := h.Client.QuickAddTask(text)
+			if err != nil {
+				return errMsg{err}
+			}
+			return quickAddTaskCreatedMsg{} // Reuse msg type to trigger refresh
+		}
+
+	default:
+		var cmd tea.Cmd
+		h.SectionAddInput, cmd = h.SectionAddInput.Update(msg)
+		return cmd
+	}
 }
