@@ -42,6 +42,7 @@ type KeymapData struct {
 	MoveTaskPrevDay Key
 	MoveTaskNextDay Key
 	AddComment      Key
+	RescheduleTask  Key
 
 	// Navigation between panes
 	SwitchPane    Key
@@ -96,6 +97,7 @@ func DefaultKeymap() KeymapData {
 		MoveTaskPrevDay: Key{Key: "<", Help: "move -1 day"},
 		MoveTaskNextDay: Key{Key: ">", Help: "move +1 day"},
 		AddComment:      Key{Key: "C", Help: "add/view comments"},
+		RescheduleTask:  Key{Key: "t", Help: "smart reschedule"},
 
 		// Navigation between panes
 		SwitchPane:    Key{Key: "tab", Help: "switch pane"},
@@ -229,6 +231,8 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "move_section", true
 	case keymap.AddComment.Key:
 		return "add_comment", true
+	case keymap.RescheduleTask.Key:
+		return "reschedule", true
 	case " ": // Space key for selection
 		return "toggle_select", true
 	case keymap.Priority1.Key, "!":
@@ -313,13 +317,14 @@ func (k KeymapData) HelpItems() [][]string {
 		{k.EditTask.Key, "Edit task content"},
 		{k.CompleteTask.Key, "Complete/uncomplete task"},
 		{"dd", "Delete task"},
-		{"yy", "Copy task URL/Title"},
+		{"yy", "Copy task Content (+Desc)"},
 		{"Space", "Toggle selection"},
 		{"1-4", "Set priority (4 is highest)"},
 		{"</>", "Move task date -1/+1 day"},
 		{"s", "Add subtask"},
 		{"m", "Move task to section"},
 		{k.AddComment.Key, "Add/View comments"},
+		{k.RescheduleTask.Key, "Smart Reschedule"},
 		{"", ""},
 
 		{"Label/Project Actions", ""},

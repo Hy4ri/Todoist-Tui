@@ -251,6 +251,11 @@ type State struct {
 	IsFilterSearch    bool
 	FilterSearchQuery string
 	HiddenFilters     map[string]bool // Track hidden built-in filters by ID
+
+	// Reschedule state
+	IsRescheduling    bool
+	RescheduleCursor  int
+	RescheduleOptions []string
 }
 
 // TabInfo holds tab metadata.

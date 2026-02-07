@@ -382,6 +382,32 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleMoveTaskKeyMsg(msg)
 	}
 
+	// Reschedule handling
+	if h.IsRescheduling {
+		switch msg.String() {
+		case "esc":
+			h.IsRescheduling = false
+			return nil
+		case "j", "down":
+			if h.RescheduleCursor < len(h.RescheduleOptions)-1 {
+				h.RescheduleCursor++
+			}
+			return nil
+		case "k", "up":
+			if h.RescheduleCursor > 0 {
+				h.RescheduleCursor--
+			}
+			return nil
+		case "enter":
+			if h.RescheduleCursor >= 0 && h.RescheduleCursor < len(h.RescheduleOptions) {
+				return h.handleReschedule(h.RescheduleOptions[h.RescheduleCursor])
+			}
+			return nil
+		}
+		// Block other input while rescheduling
+		return nil
+	}
+
 	// state.Tab switching with number keys (1-5) - only when not in form/input modes
 	// state.Tab switching with number keys (1-5) and letters - only when not in form/input modes
 	switch msg.String() {
@@ -540,9 +566,9 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	case "due_tomorrow":
 		return h.handleDueTomorrow()
 	case "move_task_prev_day":
-		return h.handleMoveTaskDate(-1)
+		return h.handleMoveTaskDate(-1, "")
 	case "move_task_next_day":
-		return h.handleMoveTaskDate(1)
+		return h.handleMoveTaskDate(1, "")
 	case "new_project":
 		// 'n' key creates project or label depending on current tab
 		if h.CurrentTab == state.TabProjects {
@@ -621,6 +647,20 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleToggleSelect()
 	case "copy":
 		return h.handleCopy()
+	case "reschedule":
+		if h.FocusedPane == state.PaneMain && len(h.Tasks) > 0 {
+			h.IsRescheduling = true
+			h.RescheduleCursor = 0
+			h.RescheduleOptions = []string{
+				"Today",
+				"Tomorrow",
+				"Next Week (Mon)",
+				"Weekend (Sat)",
+				"Postpone (1 day)",
+				"No Date",
+			}
+			return nil
+		}
 	}
 
 	return nil
@@ -839,7 +879,7 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		h.QuickAddForm = nil
 		return nil
 
-	case "ctrl+enter":
+	case "enter":
 		// Submit task if there's content
 		if !h.QuickAddForm.IsValid() {
 			h.StatusMsg = "Enter task content"
@@ -1126,9 +1166,9 @@ func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		case "due_tomorrow":
 			return h.handleDueTomorrow()
 		case "move_task_prev_day":
-			return h.handleMoveTaskDate(-1)
+			return h.handleMoveTaskDate(-1, "")
 		case "move_task_next_day":
-			return h.handleMoveTaskDate(1)
+			return h.handleMoveTaskDate(1, "")
 		}
 	}
 

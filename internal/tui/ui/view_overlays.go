@@ -661,3 +661,26 @@ func (r *Renderer) renderCommentDeleteDialog() string {
 
 	return r.renderCenteredDialog(content, 50)
 }
+
+// renderRescheduleDialog renders the smart rescheduling dialog.
+func (r *Renderer) renderRescheduleDialog() string {
+	var b strings.Builder
+	b.WriteString(styles.Title.Render("📅 Smart Reschedule") + "\n\n")
+
+	// Render options
+	for i, option := range r.RescheduleOptions {
+		cursor := "  "
+		style := lipgloss.NewStyle()
+
+		if i == r.RescheduleCursor {
+			cursor = "> "
+			style = style.Foreground(styles.Highlight).Bold(true)
+		}
+
+		b.WriteString(style.Render(cursor+option) + "\n")
+	}
+
+	b.WriteString("\n" + styles.HelpDesc.Render("j/k: select • Enter: confirm • Esc: cancel"))
+
+	return r.renderCenteredDialog(b.String(), 40)
+}
