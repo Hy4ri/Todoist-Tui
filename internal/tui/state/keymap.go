@@ -30,6 +30,7 @@ type KeymapData struct {
 
 	// Task actions
 	AddTask         Key
+	AddTaskFull     Key
 	EditTask        Key
 	DeleteTask      Key
 	CompleteTask    Key
@@ -85,6 +86,7 @@ func DefaultKeymap() KeymapData {
 
 		// Task actions
 		AddTask:         Key{Key: "a", Help: "add task"},
+		AddTaskFull:     Key{Key: "A", Help: "add task (full)"},
 		EditTask:        Key{Key: "e", Help: "edit task"},
 		DeleteTask:      Key{Key: "d", Help: "delete (dd)"},
 		CompleteTask:    Key{Key: "x", Help: "complete/uncomplete"},
@@ -213,6 +215,8 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "refresh", true
 	case keymap.AddTask.Key:
 		return "add", true
+	case keymap.AddTaskFull.Key:
+		return "add_full", true
 	case keymap.EditTask.Key:
 		return "edit", true
 	case "s":
@@ -311,6 +315,7 @@ func (k KeymapData) HelpItems() [][]string {
 		{"Task Actions", ""},
 		{k.Select.Key, "Open task details"},
 		{k.AddTask.Key, "Add new task"},
+		{k.AddTaskFull.Key, "Add new task (full)"},
 		{k.EditTask.Key, "Edit task content"},
 		{k.CompleteTask.Key, "Complete/uncomplete task"},
 		{"dd", "Delete task"},

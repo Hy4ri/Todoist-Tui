@@ -566,6 +566,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			return h.handleSectionAdd()
 		}
 		return h.handleAdd()
+	case "add_full":
+		return h.handleAddTaskFull()
 	case "edit":
 		return h.handleEdit()
 	case "search":
@@ -1159,6 +1161,10 @@ func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		switch action {
 		case "quit":
 			return tea.Quit
+		case "add":
+			return h.handleAdd()
+		case "add_full":
+			return h.handleAddTaskFull()
 		case "add_comment":
 			if h.SelectedTask != nil {
 				h.IsAddingComment = true

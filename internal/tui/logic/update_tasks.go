@@ -635,6 +635,34 @@ func (h *Handler) handleAdd() tea.Cmd {
 	return nil
 }
 
+// handleAddTaskFull opens the full task creation form.
+func (h *Handler) handleAddTaskFull() tea.Cmd {
+	h.PreviousView = h.CurrentView
+	h.CurrentView = state.ViewTaskForm
+
+	// Create new form
+	h.TaskForm = state.NewTaskForm(h.Projects, h.Labels)
+	h.TaskForm.SetWidth(h.Width)
+	h.TaskForm.Mode = "create"
+
+	// Set context from current view
+	projectID, projectName, sectionID, sectionName := h.determineContextFromCursor()
+
+	if projectID != "" {
+		h.TaskForm.ProjectID = projectID
+		h.TaskForm.ProjectName = projectName
+		h.TaskForm.SectionID = sectionID
+		h.TaskForm.SectionName = sectionName
+	}
+
+	// Pre-fill date if in Today/Upcoming
+	if h.CurrentTab == state.TabToday {
+		h.TaskForm.SetDue("today")
+	}
+
+	return nil
+}
+
 // handleMoveTaskDate moves the task due date by the specified number of days.
 // preciseDate is optional: if provided, it sets the date exactly to this YYYY-MM-DD string.
 func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
