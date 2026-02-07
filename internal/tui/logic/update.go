@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -134,11 +134,14 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case components.EditCommentMsg:
 		h.IsEditingComment = true
 		h.EditingComment = msg.Comment
-		h.CommentInput = textinput.New()
+		h.CommentInput = textarea.New()
 		h.CommentInput.SetValue(msg.Comment.Content)
 		h.CommentInput.Focus()
-		h.CommentInput.Width = 50
-		return textinput.Blink
+		h.CommentInput.SetWidth(50)
+		h.CommentInput.SetHeight(3)
+		h.CommentInput.ShowLineNumbers = false
+		h.CommentInput.Prompt = ""
+		return textarea.Blink
 
 	case components.DeleteCommentMsg:
 		// Find comment object for context

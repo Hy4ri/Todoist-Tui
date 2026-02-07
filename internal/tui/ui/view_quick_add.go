@@ -59,7 +59,7 @@ func (r *Renderer) renderQuickAdd() string {
 
 	// Footer
 	footerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).MarginTop(1)
-	footer := footerStyle.Render("Enter: Add  •  Esc: Close  •  Shift+drag: Select text")
+	footer := footerStyle.Render("Ctrl+Enter: Add  •  Esc: Close  •  Shift+drag: Select text")
 	content.WriteString("\n" + footer)
 
 	// Create dialog box

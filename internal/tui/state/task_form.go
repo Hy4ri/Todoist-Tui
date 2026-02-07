@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
@@ -25,8 +26,8 @@ const formFieldCount = 8
 
 // TaskForm represents the state of the task creation/editing form.
 type TaskForm struct {
-	Content     textinput.Model
-	Description textinput.Model
+	Content     textarea.Model
+	Description textarea.Model
 	Priority    int
 	DueString   textinput.Model
 	DueTime     textinput.Model // New field
@@ -63,13 +64,26 @@ func (f *TaskForm) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Navigation Logic
 		switch msg.String() {
-		case "tab", "down":
+		case "tab":
 			f.NextField()
 			return nil
-		case "shift+tab", "up":
+		case "shift+tab":
 			f.PrevField()
 			return nil
+		case "up":
+			// Only allow Up navigation if NOT in a textarea
+			if f.FocusIndex != FormFieldContent && f.FocusIndex != FormFieldDescription {
+				f.PrevField()
+				return nil
+			}
+		case "down":
+			// Only allow Down navigation if NOT in a textarea
+			if f.FocusIndex != FormFieldContent && f.FocusIndex != FormFieldDescription {
+				f.NextField()
+				return nil
+			}
 		}
 
 		// Handle specific field input
@@ -212,16 +226,22 @@ func (f *TaskForm) PrevField() {
 
 // NewTaskForm creates a new task form.
 func NewTaskForm(projects []api.Project, labels []api.Label) *TaskForm {
-	content := textinput.New()
+	content := textarea.New()
 	content.Placeholder = "Task content"
 	content.Focus()
 	content.CharLimit = 500
-	content.Width = 50
+	content.SetWidth(50)
+	content.SetHeight(2)
+	content.ShowLineNumbers = false
+	content.Prompt = ""
 
-	desc := textinput.New()
+	desc := textarea.New()
 	desc.Placeholder = "Description"
 	desc.CharLimit = 1000
-	desc.Width = 50
+	desc.SetWidth(50)
+	desc.SetHeight(3)
+	desc.ShowLineNumbers = false
+	desc.Prompt = ""
 
 	due := textinput.New()
 	due.Placeholder = "Due date (e.g. today)"
@@ -415,8 +435,8 @@ func (f *TaskForm) SetWidth(width int) {
 		inputWidth = 10
 	}
 
-	f.Content.Width = inputWidth
-	f.Description.Width = inputWidth
+	f.Content.SetWidth(inputWidth)
+	f.Description.SetWidth(inputWidth)
 	f.DueString.Width = 25
 	f.DueTime.Width = 15
 }

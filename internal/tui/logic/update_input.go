@@ -8,6 +8,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -607,10 +608,13 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	case "add_comment":
 		if h.SelectedTask != nil {
 			h.IsAddingComment = true
-			h.CommentInput = textinput.New()
+			h.CommentInput = textarea.New()
 			h.CommentInput.Placeholder = "Write a comment..."
 			h.CommentInput.Focus()
-			h.CommentInput.Width = 50
+			h.CommentInput.SetWidth(50)
+			h.CommentInput.SetHeight(3)
+			h.CommentInput.ShowLineNumbers = false
+			h.CommentInput.Prompt = ""
 			return nil
 		}
 	case "toggle_select":
@@ -810,10 +814,6 @@ func (h *Handler) handleFormKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		if h.Loading {
 			return nil
 		}
-		// If on task content or description input, submit immediately with defaults
-		if h.TaskForm.FocusIndex == state.FormFieldContent || h.TaskForm.FocusIndex == state.FormFieldDescription {
-			return h.submitForm()
-		}
 
 		// If on submit button, submit form
 		if h.TaskForm.FocusIndex == state.FormFieldSubmit {
@@ -839,7 +839,7 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		h.QuickAddForm = nil
 		return nil
 
-	case "enter":
+	case "ctrl+enter":
 		// Submit task if there's content
 		if !h.QuickAddForm.IsValid() {
 			h.StatusMsg = "Enter task content"
@@ -1106,10 +1106,13 @@ func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		case "add_comment":
 			if h.SelectedTask != nil {
 				h.IsAddingComment = true
-				h.CommentInput = textinput.New()
+				h.CommentInput = textarea.New()
 				h.CommentInput.Placeholder = "Write a comment..."
 				h.CommentInput.Focus()
-				h.CommentInput.Width = 50
+				h.CommentInput.SetWidth(50)
+				h.CommentInput.SetHeight(3)
+				h.CommentInput.ShowLineNumbers = false
+				h.CommentInput.Prompt = ""
 				return nil
 			}
 		case "edit":
@@ -1142,7 +1145,7 @@ func (h *Handler) handleCommentEditKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		h.EditingComment = nil
 		h.CommentInput.Reset()
 		return nil
-	case "enter":
+	case "ctrl+enter":
 		content := h.CommentInput.Value()
 		if content == "" {
 			return nil
@@ -1200,7 +1203,7 @@ func (h *Handler) handleCommentInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		h.CommentInput.Reset()
 		return nil
 
-	case "enter":
+	case "ctrl+enter":
 		content := strings.TrimSpace(h.CommentInput.Value())
 		if content == "" {
 			return nil

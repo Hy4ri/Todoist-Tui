@@ -53,11 +53,11 @@ func (r *Renderer) renderTaskForm() string {
 	b.WriteString(f.Content.View() + "\n\n")
 
 	// Description
-	b.WriteString(styles.InputLabel.Render("description") + "\n")
+	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("DESCRIPTION") + "\n")
 	b.WriteString(f.Description.View() + "\n\n")
 
 	// 1. Due Date
-	b.WriteString(styles.InputLabel.Render("due date / time") + "\n")
+	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("DUE DATE / TIME") + "\n")
 	dueStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Subtle).
@@ -126,7 +126,7 @@ func (r *Renderer) renderTaskForm() string {
 
 	// Project Selector Dropdown
 	if f.ShowProjectList {
-		b.WriteString(styles.Subtitle.Render("Select Project:") + "\n")
+		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SELECT PROJECT") + "\n")
 		var lines []string
 
 		if len(f.AvailableProjects) == 0 {
@@ -186,7 +186,7 @@ func (r *Renderer) renderTaskForm() string {
 
 	// Label Selector Dropdown
 	if f.ShowLabelList {
-		b.WriteString(styles.Subtitle.Render("Select Labels:") + "\n")
+		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SELECT LABELS") + "\n")
 		var lines []string
 
 		if len(f.AvailableLabels) == 0 {
@@ -597,7 +597,7 @@ func (r *Renderer) renderMoveTaskDialog() string {
 func (r *Renderer) renderCommentDialog() string {
 	content := styles.Title.Render("💬 Add Comment") + "\n\n" +
 		r.CommentInput.View() + "\n\n" +
-		styles.HelpDesc.Render("Enter: submit • Esc: cancel")
+		styles.HelpDesc.Render("Ctrl+Enter: submit • Esc: cancel")
 
 	return r.renderCenteredDialog(content, 60)
 }
@@ -645,7 +645,7 @@ func (r *Renderer) renderColorSelectionList(height int) string {
 func (r *Renderer) renderCommentEditDialog() string {
 	content := styles.Title.Render("✏️ Edit Comment") + "\n\n" +
 		r.CommentInput.View() + "\n\n" +
-		styles.HelpDesc.Render("Enter: save • Esc: cancel")
+		styles.HelpDesc.Render("Ctrl+Enter: save • Esc: cancel")
 
 	return r.renderCenteredDialog(content, 60)
 }

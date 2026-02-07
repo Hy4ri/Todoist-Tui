@@ -228,10 +228,9 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 	weeksNeeded := (daysInMonth + startWeekday + 6) / 7
 
 	// Calculate how many task lines to show per cell based on available height
-	// Header(1) + help(1) + blank(1) + weekday(1) + topBorder(1) + statusBar(1) = 6 lines overhead
-	// Each week uses: 1 (day number) + maxTasksPerCell (tasks) + 1 (separator) = 2 + maxTasksPerCell
-	// Last week doesn't have separator, so: weeksNeeded * (2 + maxTasksPerCell) - 1 + 6 = maxHeight
-	availableForWeeks := maxHeight - 6
+	// Header(1) + help(1) + blank(1) + weekday(1) + topBorder(1) + statusBar(1?) + bottomBorder(1) + margin(1) = 8 lines overhead
+	// We bump safety to 8 lines to ensure we don't overflow, especially with the bottom border.
+	availableForWeeks := maxHeight - 8
 	if availableForWeeks < weeksNeeded*3 {
 		availableForWeeks = weeksNeeded * 3 // Minimum 1 task line per cell
 	}

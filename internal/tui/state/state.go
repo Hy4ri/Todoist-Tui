@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/hy4ri/todoist-tui/internal/api"
@@ -213,7 +214,7 @@ type State struct {
 	MoveSectionCursor int
 
 	// Comment state
-	CommentInput         textinput.Model
+	CommentInput         textarea.Model
 	IsAddingComment      bool
 	IsEditingComment     bool
 	EditingComment       *api.Comment

@@ -3,14 +3,14 @@ package state
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // QuickAddForm represents a lightweight form for quick task creation.
 // Uses natural language parsing via the Todoist API's due_string parameter.
 type QuickAddForm struct {
-	Input textinput.Model
+	Input textarea.Model
 
 	// Context from current view (inherited when opening)
 	ProjectID   string
@@ -25,11 +25,14 @@ type QuickAddForm struct {
 
 // NewQuickAddForm creates a new quick add form.
 func NewQuickAddForm() *QuickAddForm {
-	input := textinput.New()
+	input := textarea.New()
 	input.Placeholder = "e.g. Buy milk tomorrow 3pm @errands #Shopping p1"
 	input.Focus()
 	input.CharLimit = 500
-	input.Width = 60
+	input.SetWidth(60)
+	input.SetHeight(3)
+	input.ShowLineNumbers = false
+	input.Prompt = ""
 
 	return &QuickAddForm{
 		Input: input,
@@ -68,7 +71,7 @@ func (f *QuickAddForm) SetWidth(width int) {
 	if inputWidth > 80 {
 		inputWidth = 80
 	}
-	f.Input.Width = inputWidth
+	f.Input.SetWidth(inputWidth)
 }
 
 // SetContext sets the project/section context from the current view.
