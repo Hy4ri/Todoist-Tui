@@ -89,17 +89,12 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 			// Check if this is the selected day
 			isSelected := day == r.CalendarDay && r.FocusedPane == state.PaneMain
 
-			// Check if this is a weekend (Friday=5, Saturday=6 in Jordan)
-			isWeekend := weekday == 5 || weekday == 6
-
 			if isSelected {
 				style = styles.CalendarDaySelected
 			} else if isToday {
 				style = styles.CalendarDayToday
 			} else if hasTasks {
 				style = styles.CalendarDayWithTasks
-			} else if isWeekend {
-				style = styles.CalendarDayWeekend
 			}
 
 			// Add task indicator
@@ -247,33 +242,30 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 	}
 
 	// Render calendar grid
-	day := 1
+	currentWeekDay := 1
 	for week := 0; week < 6; week++ {
-		if day > daysInMonth {
+		if currentWeekDay > daysInMonth {
 			break
 		}
 
 		// Row 1: Day numbers
 		var dayNumBuilder strings.Builder
 		dayNumBuilder.WriteString("│")
+		tempDay := currentWeekDay
 		for weekday := 0; weekday < 7; weekday++ {
-			if week == 0 && weekday < startWeekday || day > daysInMonth {
+			if week == 0 && weekday < startWeekday || tempDay > daysInMonth {
 				dayNumBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
-				if week == 0 && weekday < startWeekday {
-					continue
-				}
 				continue
 			}
 
-			dayStr := fmt.Sprintf(" %2d", day)
+			dayStr := fmt.Sprintf(" %2d", tempDay)
 			style := styles.CalendarDay
 
 			isToday := today.Year() == r.CalendarDate.Year() &&
 				today.Month() == r.CalendarDate.Month() &&
-				today.Day() == day
-			isSelected := day == r.CalendarDay && r.FocusedPane == state.PaneMain
-			isWeekend := weekday == 5 || weekday == 6
-			hasTasks := len(tasksByDay[day]) > 0
+				today.Day() == tempDay
+			isSelected := tempDay == r.CalendarDay && r.FocusedPane == state.PaneMain
+			hasTasks := len(tasksByDay[tempDay]) > 0
 
 			if isSelected {
 				style = styles.CalendarDaySelected
@@ -281,38 +273,24 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 				style = styles.CalendarDayToday
 			} else if hasTasks {
 				style = styles.CalendarDayWithTasks
-			} else if isWeekend {
-				style = styles.CalendarDayWeekend
 			}
 
 			// Pad to cell width
 			paddedDay := fmt.Sprintf("%-*s", cellWidth, dayStr)
 			dayNumBuilder.WriteString(style.Render(paddedDay) + "│")
-			day++
+			tempDay++
 		}
 		b.WriteString(dayNumBuilder.String())
 		b.WriteString("\n")
 
-		// Reset day counter for task rows
-		day -= 7
-		if day < 1 {
-			day = 1
-		}
-
-		// Rows 2-3: Task previews
+		// Rows 2-N: Task previews
 		for taskLine := 0; taskLine < maxTasksPerCell; taskLine++ {
 			var taskRowBuilder strings.Builder
 			taskRowBuilder.WriteString("│")
-			tempDay := day
+			tempDay = currentWeekDay
 			for weekday := 0; weekday < 7; weekday++ {
-				if week == 0 && weekday < startWeekday {
+				if (week == 0 && weekday < startWeekday) || tempDay > daysInMonth {
 					taskRowBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
-					continue
-				}
-
-				if tempDay > daysInMonth {
-					taskRowBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
-					tempDay++
 					continue
 				}
 
@@ -360,14 +338,11 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 			b.WriteString("\n")
 		}
 
-		// Move day forward after processing the week
-		day += 7
-		if week == 0 {
-			day = 8 - startWeekday
-		}
+		// Update currentWeekDay for next week based on how many days we progressed
+		currentWeekDay = tempDay
 
 		// Row separator (except for last week)
-		if day <= daysInMonth {
+		if currentWeekDay <= daysInMonth {
 			separator := "├" + strings.Repeat(strings.Repeat("─", cellWidth)+"┼", 6) + strings.Repeat("─", cellWidth) + "┤\n"
 			b.WriteString(separator)
 		}
