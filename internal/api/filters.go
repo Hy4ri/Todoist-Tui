@@ -24,7 +24,7 @@ type Filter struct {
 
 // GetFilters fetches all filters via the Sync API.
 func (c *Client) GetFilters() ([]Filter, error) {
-	syncURL := "https://api.todoist.com/sync/v9/sync"
+	syncURL := c.baseURL + "/sync"
 
 	formData := url.Values{}
 	formData.Set("sync_token", "*")
@@ -69,7 +69,7 @@ func (c *Client) GetFilters() ([]Filter, error) {
 
 // CreateFilter creates a new filter via Sync API.
 func (c *Client) CreateFilter(name, query, color string) (*Filter, error) {
-	syncURL := "https://api.todoist.com/sync/v9/sync"
+	syncURL := c.baseURL + "/sync"
 
 	tempID := uuid.New().String()
 	cmdUUID := uuid.New().String()
@@ -139,7 +139,7 @@ func (c *Client) CreateFilter(name, query, color string) (*Filter, error) {
 
 // DeleteFilter deletes a filter via Sync API.
 func (c *Client) DeleteFilter(id string) error {
-	syncURL := "https://api.todoist.com/sync/v9/sync"
+	syncURL := c.baseURL + "/sync"
 
 	cmdUUID := uuid.New().String()
 
@@ -181,7 +181,7 @@ func (c *Client) DeleteFilter(id string) error {
 
 // UpdateFilter updates a filter via Sync API.
 func (c *Client) UpdateFilter(id, name, query string) (*Filter, error) {
-	syncURL := "https://api.todoist.com/sync/v9/sync"
+	syncURL := c.baseURL + "/sync"
 
 	cmdUUID := uuid.New().String()
 

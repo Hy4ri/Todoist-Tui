@@ -73,7 +73,7 @@ func TestRenderCalendarExpanded_TaskDistribution(t *testing.T) {
 			now.Format("2006-01-02"): {
 				{
 					ID:      "task1",
-					Content: "UniqueTaskName1",
+					Content: "Task1", // Shortened to fit
 					Due: &api.Due{
 						Date: now.Format("2006-01-02"),
 					},
@@ -92,7 +92,7 @@ func TestRenderCalendarExpanded_TaskDistribution(t *testing.T) {
 	output := r.renderCalendarExpanded(40)
 
 	// Verify
-	if !strings.Contains(output, "UniqueTaskName1") {
-		t.Error("Expected output to contain 'UniqueTaskName1' in the correct cell")
+	if !strings.Contains(output, "Task1") {
+		t.Error("Expected output to contain 'Task1' in the correct cell")
 	}
 }

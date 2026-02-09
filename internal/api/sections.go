@@ -113,7 +113,7 @@ func (c *Client) ReorderSections(sections []Section) error {
 	}
 
 	// Sync API URL
-	syncURL := "https://api.todoist.com/sync/v9/sync"
+	syncURL := c.baseURL + "/sync"
 
 	// We need to use valid Authorization header, which c.do handles if we pass relative path?
 	// But BaseURL is v1. We need absolute URL support or override.

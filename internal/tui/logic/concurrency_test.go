@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
 
@@ -59,6 +60,7 @@ func TestHandleCompleteConcurrency(t *testing.T) {
 		CurrentTab:  state.TabInbox, // or any tab that allows completion
 		FocusedPane: state.PaneMain,
 		CurrentView: state.ViewInbox, // default
+		SidebarComp: components.NewSidebar(),
 	}
 
 	for i := 0; i < 100; i++ {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -403,6 +404,175 @@ func TestDeleteTask(t *testing.T) {
 	client.baseURL = server.URL
 
 	err := client.DeleteTask(taskID)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestQuickAddTask(t *testing.T) {
+	tests := []struct {
+		name       string
+		text       string
+		response   Task
+		statusCode int
+		wantErr    bool
+	}{
+		{
+			name: "successful quick add",
+			text: "Buy milk tomorrow",
+			response: Task{
+				ID:      "123",
+				Content: "Buy milk",
+				Due: &Due{
+					String: "tomorrow",
+				},
+			},
+			statusCode: http.StatusOK,
+			wantErr:    false,
+		},
+		{
+			name:       "api error",
+			text:       "Invalid",
+			statusCode: http.StatusBadRequest,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := mockServer(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost {
+					t.Errorf("expected POST request, got %s", r.Method)
+				}
+				if r.URL.Path != "/tasks/quick" {
+					t.Errorf("expected /tasks/quick, got %s", r.URL.Path)
+				}
+
+				var req map[string]string
+				json.NewDecoder(r.Body).Decode(&req)
+				if req["text"] != tt.text {
+					t.Errorf("expected text %q, got %q", tt.text, req["text"])
+				}
+
+				w.WriteHeader(tt.statusCode)
+				if tt.statusCode == http.StatusOK {
+					json.NewEncoder(w).Encode(tt.response)
+				}
+			})
+			defer server.Close()
+
+			client := NewClient("test-token")
+			client.baseURL = server.URL
+
+			task, err := client.QuickAddTask(tt.text)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("QuickAddTask() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && task.Content != tt.response.Content {
+				t.Errorf("expected content %q, got %q", tt.response.Content, task.Content)
+			}
+		})
+	}
+}
+
+func TestGetProductivityStats(t *testing.T) {
+	expectedStats := ProductivityStats{
+		Karma: 1000,
+		Goals: ProductivityGoals{
+			DailyGoal:  5,
+			WeeklyGoal: 25,
+		},
+	}
+
+	server := mockServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET request, got %s", r.Method)
+		}
+		if r.URL.Path != "/tasks/completed/stats" {
+			t.Errorf("expected /tasks/completed/stats, got %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(expectedStats)
+	})
+	defer server.Close()
+
+	client := NewClient("test-token")
+	client.baseURL = server.URL
+
+	stats, err := client.GetProductivityStats()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if stats.Karma != expectedStats.Karma {
+		t.Errorf("expected karma %f, got %f", expectedStats.Karma, stats.Karma)
+	}
+}
+
+func TestGetProductivityStats_NotFound(t *testing.T) {
+	server := mockServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error":      "Not found",
+			"error_code": 478,
+			"http_code":  404,
+		})
+	})
+	defer server.Close()
+
+	client := NewClient("test-token")
+	client.baseURL = "http://127.0.0.1:0" // Prevent full URL override hack from hitting real API
+	// But wait, the implementation uses client.baseURL + path override logic.
+	// If I set client.baseURL to something not "https://api.todoist.com/api/v1", it appends "/sync...".
+	// The mockServer URL is "http://127.0.0.1:xxxxx".
+	// So set client.baseURL = server.URL.
+	client.baseURL = server.URL
+
+	_, err := client.GetProductivityStats()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	// Verify it's an APIError with 404
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		// It might be wrapped
+		if internalErr := err.Error(); !strings.Contains(internalErr, "status 404") {
+			t.Errorf("expected 404 error, got %v", err)
+		}
+	} else {
+		if apiErr.StatusCode != 404 {
+			t.Errorf("expected status 404, got %d", apiErr.StatusCode)
+		}
+	}
+}
+
+func TestMoveTask(t *testing.T) {
+	taskID := "123"
+	projectID := "456"
+
+	server := mockServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST request, got %s", r.Method)
+		}
+		if r.URL.Path != "/tasks/"+taskID+"/move" {
+			t.Errorf("expected /tasks/%s/move, got %s", taskID, r.URL.Path)
+		}
+
+		var req map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&req)
+		if req["project_id"] != projectID {
+			t.Errorf("expected project_id %s, got %v", projectID, req["project_id"])
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+	defer server.Close()
+
+	client := NewClient("test-token")
+	client.baseURL = server.URL
+
+	err := client.MoveTask(taskID, nil, &projectID, nil)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
