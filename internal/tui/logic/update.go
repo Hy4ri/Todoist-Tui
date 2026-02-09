@@ -59,6 +59,14 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case dataLoadedMsg:
 		return h.handleDataLoaded(msg)
 
+	case completedTasksLoadedMsg:
+		h.Loading = false
+		h.CompletedTasks = msg
+		h.Tasks = msg // Reuse Tasks slice for list rendering
+		h.CompletedMore = len(msg) >= h.CompletedLimit && h.CompletedLimit > 0
+		h.StatusMsg = "Completed tasks loaded"
+		return nil
+
 	case filtersLoadedMsg:
 		h.Filters = msg.filters
 		return nil
@@ -564,3 +572,5 @@ func (h *Handler) updateStatsOnCompletion() {
 		h.StatusMsg = msg
 	}
 }
+
+type completedTasksLoadedMsg []api.Task

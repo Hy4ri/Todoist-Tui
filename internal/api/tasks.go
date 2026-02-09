@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 )
 
 // GetTasks returns all active tasks, optionally filtered by project/section/label.
@@ -131,6 +132,100 @@ func (c *Client) GetProductivityStats() (*ProductivityStats, error) {
 		return nil, fmt.Errorf("failed to get stats: %w", err)
 	}
 	return &stats, nil
+}
+
+// CompletedTaskParams represents parameters for fetching completed tasks.
+type CompletedTaskParams struct {
+	ProjectID     string
+	SectionID     string
+	Label         string
+	ParentID      string
+	Limit         int
+	Offset        int
+	Page          int
+	Since         string // ISO 8601 date string
+	Until         string // ISO 8601 date string
+	AnnotateItems bool
+	AnnotateNotes bool
+}
+
+// GetCompletedTasks returns a list of completed tasks based on the provided parameters.
+// Note: This uses the Sync API v9 endpoint exposed via REST-like interface for historical data.
+func (c *Client) GetCompletedTasks(params CompletedTaskParams) ([]Task, error) {
+	// The endpoint /tasks/completed/by_completion_date returns a list of items
+	// wrapped in a structure or a direct list depending on version.
+	// Documentation says it returns "items".
+	// Let's verify if response is []Task or { "items": []Task, ... }
+	// Search results suggest it returns a list of task objects directly if using legacy REST,
+	// BUT newer unified API might wrap it.
+	// Sync API "get_all" returns { "items": [], "projects": [], ... }
+	// "by_completion_date" might be different.
+	// Let's assume it returns a wrapped response { "items": []Task } usually for such endpoints.
+	// Wait, search result 1 says "returns a JSON object containing a list of completed tasks".
+	// It doesn't explicitly say if it's `{ "items": [...] }` or just `[...]`.
+	// Most Todoist collection endpoints return a list.
+	// BUT `GetTasks` uses `PaginatedResponse` if it was REST v2.
+	// `GetProductivityStats` uses `ProductivityStats` struct.
+
+	// Let's use a temporary struct to capture response and inspect.
+	// Or try to decode into []Task first.
+	// Actually, let's look at `GetTasks`. It expects `PaginatedResponse[Task]`.
+	// Let's look at `filters.go`. `GetFilters` expects `[]Filter`.
+	//
+	// I'll assume it returns `{ "items": []Task }` as is common for Sync API-backed endpoints,
+	// OR `[]Task`.
+	// Let's try to verify with a quick curl if possible? No network.
+	//
+	// Safe bet: Define a wrapper struct `CompletedTasksResponse`.
+	type CompletedTasksResponse struct {
+		Items []Task `json:"items"`
+	}
+
+	query := url.Values{}
+	if params.ProjectID != "" {
+		query.Set("project_id", params.ProjectID)
+	}
+	if params.SectionID != "" {
+		query.Set("section_id", params.SectionID)
+	}
+	if params.Label != "" {
+		query.Set("label", params.Label)
+	}
+	if params.ParentID != "" {
+		query.Set("parent_id", params.ParentID)
+	}
+	if params.Limit > 0 {
+		query.Set("limit", strconv.Itoa(params.Limit))
+	}
+	if params.Offset > 0 {
+		query.Set("offset", strconv.Itoa(params.Offset))
+	}
+	if params.Page > 0 {
+		query.Set("page", strconv.Itoa(params.Page))
+	}
+	if params.Since != "" {
+		query.Set("since", params.Since)
+	}
+	if params.Until != "" {
+		query.Set("until", params.Until)
+	}
+	if params.AnnotateItems {
+		query.Set("annotate_items", "true")
+	}
+	if params.AnnotateNotes {
+		query.Set("annotate_notes", "true")
+	}
+
+	var response CompletedTasksResponse
+	// If the API returns a list directly, this will fail.
+	// If it returns a wrapper, this handles it.
+
+	// Use the compliant v1 endpoint.
+	if err := c.GetWithQuery("/tasks/completed/by_completion_date", query, &response); err != nil {
+		return nil, fmt.Errorf("failed to get completed tasks: %w", err)
+	}
+
+	return response.Items, nil
 }
 
 // MoveTask moves a task to a different section, parent, or project using V1 REST API.

@@ -272,8 +272,17 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 		h.FilterInput = textinput.New()
 		h.FilterInput.Placeholder = "Search filters..."
 		h.IsFilterSearch = false
+		h.IsFilterSearch = false
 		h.FilterSearchQuery = ""
 		return h.loadFilters()
+	case state.TabCompleted:
+		h.CurrentView = state.ViewCompleted
+		h.CurrentProject = nil
+		h.FocusedPane = state.PaneMain
+		h.CompletedPage = 0
+		h.Tasks = nil // Clear tasks
+		h.TaskCursor = 0
+		return h.loadCompletedTasks()
 	}
 
 	return nil
@@ -430,6 +439,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.switchToTab(state.TabCalendar)
 	case "7":
 		return h.switchToTab(state.TabProjects)
+	case "8":
+		return h.switchToTab(state.TabCompleted)
 	case "D": // Shift+d
 		return h.setDefaultView()
 	}

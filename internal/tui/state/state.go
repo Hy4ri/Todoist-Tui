@@ -30,6 +30,7 @@ const (
 	ViewHelp
 	ViewSections
 	ViewFilters
+	ViewCompleted
 )
 
 // Tab represents a top-level tab.
@@ -42,6 +43,7 @@ const (
 	TabLabels
 	TabCalendar
 	TabProjects
+	TabCompleted
 	TabFilters
 )
 
@@ -109,6 +111,10 @@ type State struct {
 	AllSections       []api.Section
 	Labels            []api.Label
 	Comments          []api.Comment
+	CompletedTasks    []api.Task
+	CompletedPage     int
+	CompletedLimit    int
+	CompletedMore     bool // If there are more tasks to fetch
 	TasksByDate       map[string][]api.Task
 	SelectedTask      *api.Task
 	CurrentProject    *api.Project
@@ -284,5 +290,6 @@ func GetTabDefinitions() []TabInfo {
 		{TabFilters, "🔍", "Filters", "Flt"},
 		{TabCalendar, "🗓️", "Calendar", "Cal"},
 		{TabProjects, "📂", "Projects", "Prj"},
+		{TabCompleted, "✅", "Completed", "Cmp"},
 	}
 }

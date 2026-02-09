@@ -1118,3 +1118,38 @@ func (h *Handler) handleSectionAddInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return cmd
 	}
 }
+
+// loadCompletedTasks fetches completed tasks from the API.
+func (h *Handler) loadCompletedTasks() tea.Cmd {
+	h.Loading = true
+	h.StatusMsg = "Loading completed tasks..."
+
+	return func() tea.Msg {
+		params := api.CompletedTaskParams{
+			Limit:  h.CompletedLimit,
+			Offset: h.CompletedPage * h.CompletedLimit,
+		}
+		// If limit is 0 (not set), set a default
+		if params.Limit == 0 {
+			params.Limit = 30
+			h.CompletedLimit = 30
+		}
+		params.AnnotateItems = true // Need content/date
+
+		// "until" defaults to now
+		if params.Until == "" {
+			params.Until = time.Now().Format(time.RFC3339)
+		}
+		// "since" defaults to 1 month ago
+		if params.Since == "" {
+			params.Since = time.Now().AddDate(0, -1, 0).Format(time.RFC3339)
+		}
+
+		tasks, err := h.Client.GetCompletedTasks(params)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		return completedTasksLoadedMsg(tasks)
+	}
+}

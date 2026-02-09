@@ -35,6 +35,8 @@ func (r *Renderer) renderTaskList(width, height int) string {
 		content = r.renderLabelsView(innerWidth, innerHeight)
 	case state.ViewCalendar:
 		content = r.renderCalendar(innerHeight) // Calendar handles own sizing
+	case state.ViewCompleted:
+		content = r.renderCompletedTaskList(innerWidth, innerHeight)
 	default:
 		content = r.renderDefaultTaskList(innerWidth, innerHeight)
 	}
@@ -73,6 +75,8 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 		if r.CurrentProject != nil {
 			title = r.CurrentProject.Name
 		}
+	case state.ViewCompleted:
+		title = "Completed Tasks"
 	default:
 		title = "Tasks"
 	}
