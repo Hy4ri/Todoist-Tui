@@ -85,6 +85,7 @@ func (r *Renderer) View() string {
 		{r.ConfirmDeleteFilter && r.EditingFilter != nil, r.renderFilterDeleteDialog},
 		{r.IsRescheduling, r.renderRescheduleDialog},
 		{r.IsAddingToSection, r.renderSectionAddTaskDialog},
+		{r.IsIndentingTask, r.renderIndentDialog},
 		{r.IsMovingToProject, func() string { return r.renderMoveToProject(r.Width, r.Height) }},
 	}
 

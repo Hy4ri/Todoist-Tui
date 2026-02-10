@@ -203,7 +203,11 @@ func (c *Client) MoveTask(id string, sectionID *string, projectID *string, paren
 		req["project_id"] = *projectID
 	}
 	if parentID != nil {
-		req["parent_id"] = *parentID
+		if *parentID == "" {
+			req["parent_id"] = nil
+		} else {
+			req["parent_id"] = *parentID
+		}
 	}
 
 	if err := c.Post("/tasks/"+id+"/move", req, nil); err != nil {

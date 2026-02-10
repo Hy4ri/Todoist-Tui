@@ -276,6 +276,13 @@ type State struct {
 	MoveProjectInput  textinput.Model
 	MoveTargetList    []MoveTarget
 	MoveTargetCursor  int
+
+	// Indent Task Picker state
+	IsIndentingTask          bool
+	IndentCandidates         []api.Task
+	IndentFilteredCandidates []api.Task
+	IndentCursor             int
+	IndentInput              textinput.Model
 }
 
 // MoveTarget represents a destination for moving tasks (Project or Section)

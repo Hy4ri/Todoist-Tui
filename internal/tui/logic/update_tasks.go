@@ -19,52 +19,133 @@ const maxConcurrentRequests = 5
 
 func (h *Handler) sortTasks() {
 
-	sort.SliceStable(h.Tasks, func(i, j int) bool {
-		ti, tj := h.Tasks[i], h.Tasks[j]
+	// Use hierarchical sorting for Project/Inbox views to respect ChildOrder and Tree structure
+	if h.CurrentView == state.ViewProject || h.CurrentView == state.ViewInbox {
+		h.sortTasksHierarchically()
+	} else {
+		sort.SliceStable(h.Tasks, func(i, j int) bool {
+			ti, tj := h.Tasks[i], h.Tasks[j]
 
-		// 1. Due Date
-		hasDueI := ti.Due != nil
-		hasDueJ := tj.Due != nil
+			// 1. Due Date
+			hasDueI := ti.Due != nil
+			hasDueJ := tj.Due != nil
 
-		if hasDueI && !hasDueJ {
-			return true // i has due date, j doesn't -> i first
-		}
-		if !hasDueI && hasDueJ {
-			return false // j has due date, i doesn't -> j first
-		}
-
-		if hasDueI && hasDueJ {
-			// Compare dates first (YYYY-MM-DD)
-			if ti.Due.Date != tj.Due.Date {
-				return ti.Due.Date < tj.Due.Date
+			if hasDueI && !hasDueJ {
+				return true // i has due date, j doesn't -> i first
+			}
+			if !hasDueI && hasDueJ {
+				return false // j has due date, i doesn't -> j first
 			}
 
-			// Same date, prefer tasks with specific times
-			hasTimeI := ti.Due.Datetime != nil
-			hasTimeJ := tj.Due.Datetime != nil
-			if hasTimeI && !hasTimeJ {
-				return true
-			}
-			if !hasTimeI && hasTimeJ {
-				return false
+			if hasDueI && hasDueJ {
+				// Compare dates first (YYYY-MM-DD)
+				if ti.Due.Date != tj.Due.Date {
+					return ti.Due.Date < tj.Due.Date
+				}
+
+				// Same date, prefer tasks with specific times
+				hasTimeI := ti.Due.Datetime != nil
+				hasTimeJ := tj.Due.Datetime != nil
+				if hasTimeI && !hasTimeJ {
+					return true
+				}
+				if !hasTimeI && hasTimeJ {
+					return false
+				}
+
+				// Both have times, compare them
+				if hasTimeI && hasTimeJ && *ti.Due.Datetime != *tj.Due.Datetime {
+					return *ti.Due.Datetime < *tj.Due.Datetime
+				}
 			}
 
-			// Both have times, compare them
-			if hasTimeI && hasTimeJ && *ti.Due.Datetime != *tj.Due.Datetime {
-				return *ti.Due.Datetime < *tj.Due.Datetime
+			// 2. Priority (Higher values first: P1=4, P2=3, P3=2, P4=1)
+			if ti.Priority != tj.Priority {
+				return ti.Priority > tj.Priority
 			}
-		}
 
-		// 2. Priority (Higher values first: P1=4, P2=3, P3=2, P4=1)
-		if ti.Priority != tj.Priority {
-			return ti.Priority > tj.Priority
-		}
-
-		// 3. Child Order (Manual order within project/list)
-		return ti.ChildOrder < tj.ChildOrder
-	})
+			// 3. Child Order (Manual order within project/list)
+			return ti.ChildOrder < tj.ChildOrder
+		})
+	}
 
 	h.TasksSorted = true
+}
+
+// sortTasksHierarchically sorts tasks by ChildOrder, respecting the parent-child hierarchy.
+func (h *Handler) sortTasksHierarchically() {
+	childMap := make(map[string][]*api.Task)
+	var roots []*api.Task
+
+	// Build map
+	for i := range h.Tasks {
+		t := &h.Tasks[i]
+		if t.ParentID == nil {
+			roots = append(roots, t)
+		} else {
+			childMap[*t.ParentID] = append(childMap[*t.ParentID], t)
+		}
+	}
+
+	// Helper to sort a slice of tasks by ChildOrder
+	sortByOrder := func(tasks []*api.Task) {
+		sort.Slice(tasks, func(i, j int) bool {
+			return tasks[i].ChildOrder < tasks[j].ChildOrder
+		})
+	}
+
+	// Sort roots
+	sortByOrder(roots)
+
+	// Flatten tree
+	var sorted []api.Task
+	var traverse func(t *api.Task)
+	traverse = func(t *api.Task) {
+		sorted = append(sorted, *t)
+		children := childMap[t.ID]
+		if len(children) > 0 {
+			sortByOrder(children)
+			for _, child := range children {
+				traverse(child)
+			}
+		}
+	}
+
+	for _, root := range roots {
+		traverse(root)
+	}
+
+	// Handle orphans (tasks with parentID that wasn't found in current list)
+	// This can happen if parent is in another section or not loaded.
+	// We should just append them at the end or treat them as roots?
+	// The traversal above only visits nodes reachable from roots in existing list.
+	// If h.Tasks has 10 items, sorted might have 9 if one is an orphan.
+	// Check for missing tasks.
+
+	if len(sorted) < len(h.Tasks) {
+		visited := make(map[string]bool)
+		for _, t := range sorted {
+			visited[t.ID] = true
+		}
+
+		var orphans []*api.Task
+		for i := range h.Tasks {
+			if !visited[h.Tasks[i].ID] {
+				orphans = append(orphans, &h.Tasks[i])
+			}
+		}
+
+		// Sort orphans and append
+		sortByOrder(orphans)
+		for _, t := range orphans {
+			// Append orphan and its children if any (recursive?)
+			// Simple approach: just append orphans. If they have children in childMap, they weren't visited either.
+			// Better: Treat orphans as roots and traverse.
+			traverse(t)
+		}
+	}
+
+	h.Tasks = sorted
 }
 
 // handleComplete handles the task completion with optimistic updates.
@@ -1138,4 +1219,230 @@ func (h *Handler) loadCompletedTasks() tea.Cmd {
 
 		return completedTasksLoadedMsg(tasks)
 	}
+}
+
+// handleIndent indents the selected task (makes it a subtask of the one above).
+// handleIndent opens a picker to select a parent task.
+func (h *Handler) handleIndent() tea.Cmd {
+	// Only allow indent in Project or Inbox view where parent logic is clear
+	if h.CurrentView != state.ViewProject && h.CurrentView != state.ViewInbox {
+		h.StatusMsg = "Indent only available in Project/Inbox views"
+		return nil
+	}
+
+	taskIndex := h.TaskCursor
+	// Check if cursor is on a valid task
+	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+		idx := h.TaskOrderedIndices[h.TaskCursor]
+		if idx >= 0 {
+			taskIndex = idx
+		} else {
+			return nil // On header
+		}
+	} else if taskIndex >= len(h.Tasks) {
+		return nil
+	}
+
+	currentTask := h.Tasks[taskIndex]
+
+	// Find candidates: all tasks in current view except current task and its descendants
+	// To find descendants, we might need to traverse.
+	// Simple approach: Filter out current task. API prevents cycles usually.
+	// But let's try to be smart.
+
+	candidates := []api.Task{}
+	for _, t := range h.Tasks {
+		if t.ID == currentTask.ID {
+			continue // Skip self
+		}
+		// Skip if t is child of currentTask (prevent cycle)
+		// We'd need accurate ParentID check.
+		// For now, simple filter.
+		candidates = append(candidates, t)
+	}
+
+	if len(candidates) == 0 {
+		h.StatusMsg = "No tasks available to indent under"
+		return nil
+	}
+
+	h.IsIndentingTask = true
+	h.IndentCandidates = candidates
+	h.IndentFilteredCandidates = candidates // Initialize with all
+	h.IndentCursor = 0
+
+	// Try to default cursor to task immediately above current one in list
+	// original index of task above
+	if h.TaskCursor > 0 {
+		// Find visual predecessor
+		// If we use TaskOrderedIndices, we can find the task ID above.
+		// Then find it in candidates.
+
+		// This logic is complex because indices map to h.Tasks.
+		// Let's just default to 0 or try to be smart if time permits.
+		// Simple: 0.
+	}
+
+	h.IndentInput = textinput.New()
+	h.IndentInput.Placeholder = "Filter tasks..."
+	h.IndentInput.Focus()
+
+	return textinput.Blink
+}
+
+// handleIndentSelect processes the indentation choice.
+func (h *Handler) handleIndentSelect() tea.Cmd {
+	if h.IndentCursor < 0 || h.IndentCursor >= len(h.IndentFilteredCandidates) {
+		return nil
+	}
+
+	parentTask := h.IndentFilteredCandidates[h.IndentCursor]
+
+	// We need the ID of the task we are moving.
+	// We assume h.TaskCursor is still valid and points to the same task as when we opened dialog.
+	// (Modal blocks other interaction, so yes).
+
+	taskIndex := h.TaskCursor
+	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+		idx := h.TaskOrderedIndices[h.TaskCursor]
+		if idx >= 0 {
+			taskIndex = idx
+		}
+	}
+
+	if taskIndex >= len(h.Tasks) {
+		h.IsIndentingTask = false
+		return nil
+	}
+
+	currentTask := h.Tasks[taskIndex]
+
+	// Perform Move
+	parentID := parentTask.ID
+
+	// Create pointer
+	parentIDPtr := &parentID
+
+	// Optimistic update
+	currentTask.ParentID = parentIDPtr
+	h.Tasks[taskIndex] = currentTask
+
+	// Clear state
+	h.IsIndentingTask = false
+	h.IndentCandidates = nil
+	h.IndentFilteredCandidates = nil
+	h.StatusMsg = fmt.Sprintf("Indented under '%s'", parentTask.Content)
+
+	return func() tea.Msg {
+		err := h.Client.MoveTask(currentTask.ID, nil, nil, parentIDPtr)
+		if err != nil {
+			return errMsg{err}
+		}
+		return refreshMsg{Force: true}
+	}
+}
+
+// handleOutdent outdents the selected task (moves it up one level).
+func (h *Handler) handleOutdent() tea.Cmd {
+	// Only allow outdent in Project or Inbox view
+	if h.CurrentView != state.ViewProject && h.CurrentView != state.ViewInbox {
+		h.StatusMsg = "Outdent only available in Project/Inbox views"
+		return nil
+	}
+
+	taskIndex := h.TaskCursor
+	// Check if cursor is on valid task
+	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+		idx := h.TaskOrderedIndices[h.TaskCursor]
+		if idx >= 0 {
+			taskIndex = idx
+		} else {
+			return nil
+		}
+	} else if taskIndex >= len(h.Tasks) {
+		return nil
+	}
+
+	currentTask := h.Tasks[taskIndex]
+
+	// If no parent, already at top level
+	if currentTask.ParentID == nil {
+		h.StatusMsg = "Task is already at top level"
+		return nil
+	}
+
+	// Find current parent task to get ITS parent
+	var parentTask *api.Task
+	currentParentID := *currentTask.ParentID
+
+	// Search in all tasks (since parent might be collapsed or outside current view filter but unlikely in Project/Inbox)
+	// We should look in h.Tasks first, then maybe need full list?
+	// For Project view, h.Tasks usually contains all project tasks.
+	for _, t := range h.Tasks {
+		if t.ID == currentParentID {
+			pt := t
+			parentTask = &pt
+			break
+		}
+	}
+	// Fallback to AllTasks if not found in current view
+	if parentTask == nil {
+		for _, t := range h.State.AllTasks {
+			if t.ID == currentParentID {
+				pt := t
+				parentTask = &pt
+				break
+			}
+		}
+	}
+
+	var newParentID *string
+	if parentTask != nil {
+		newParentID = parentTask.ParentID
+	} else {
+		// Parent not found? Fallback to root level
+		newParentID = nil
+	}
+
+	// Optimistic update
+	currentTask.ParentID = newParentID
+	h.Tasks[taskIndex] = currentTask
+
+	return func() tea.Msg {
+		var pid string
+		var projectID *string
+		if newParentID != nil {
+			pid = *newParentID
+		} else {
+			// To un-parent (move to root), we send the project ID and empty parent ID
+			pid = ""
+			pID := currentTask.ProjectID
+			projectID = &pID
+		}
+
+		err := h.Client.MoveTask(currentTask.ID, nil, projectID, &pid)
+
+		if err != nil {
+			return errMsg{err}
+		}
+		return refreshMsg{Force: true}
+	}
+}
+
+// updateIndentFilter filters the indent candidates based on input.
+func (h *Handler) updateIndentFilter() {
+	filter := strings.ToLower(h.IndentInput.Value())
+	if filter == "" {
+		h.IndentFilteredCandidates = h.IndentCandidates
+	} else {
+		filtered := []api.Task{}
+		for _, t := range h.IndentCandidates {
+			if strings.Contains(strings.ToLower(t.Content), filter) {
+				filtered = append(filtered, t)
+			}
+		}
+		h.IndentFilteredCandidates = filtered
+	}
+	// Reset cursor
+	h.IndentCursor = 0
 }

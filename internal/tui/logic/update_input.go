@@ -401,6 +401,11 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleMoveToProjectInput(msg)
 	}
 
+	// Indent task picker handling
+	if h.IsIndentingTask {
+		return h.handleIndentInputKeyMsg(msg)
+	}
+
 	// Reschedule handling
 	if h.IsRescheduling {
 		switch msg.String() {
@@ -596,6 +601,10 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleMoveTaskDate(-1, "")
 	case "move_task_next_day":
 		return h.handleMoveTaskDate(1, "")
+	case "indent":
+		return h.handleIndent()
+	case "outdent":
+		return h.handleOutdent()
 	case "move_to_project":
 		return h.handleMoveToProject()
 	case "new_project":
@@ -1184,6 +1193,8 @@ func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			return h.handleAdd()
 		case "add_full":
 			return h.handleAddTaskFull()
+		case "add_subtask":
+			return h.handleAddSubtask()
 		case "add_comment":
 			if h.SelectedTask != nil {
 				h.IsAddingComment = true
@@ -1352,4 +1363,36 @@ func (h *Handler) handleCommandLineKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
 	h.CommandLine.Input, cmd = h.CommandLine.Input.Update(msg)
 	return tea.Batch(cmd, h.updateSuggestions())
+}
+
+// handleIndentInputKeyMsg processes input for the indent picker.
+func (h *Handler) handleIndentInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		h.IsIndentingTask = false
+		h.IndentCandidates = nil
+		h.IndentInput.Blur()
+		return nil
+	case "enter":
+		return h.handleIndentSelect()
+	case "up", "k":
+		if h.IndentCursor > 0 {
+			h.IndentCursor--
+		}
+		return nil
+	case "down", "j":
+		if h.IndentCursor < len(h.IndentCandidates)-1 {
+			h.IndentCursor++
+		}
+		return nil
+	}
+
+	// Handle input
+	var cmd tea.Cmd
+	h.IndentInput, cmd = h.IndentInput.Update(msg)
+
+	// Update filter
+	h.updateIndentFilter()
+
+	return cmd
 }

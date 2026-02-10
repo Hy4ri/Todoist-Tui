@@ -398,10 +398,12 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width
 	}
 
 	// Indent for subtasks
-	indent := ""
-	if t.ParentID != nil {
-		indent = "  "
+	// Calculate depth dynamically
+	depth := r.taskDepth(&t, r.State.AllTasks)
+	if depth > 4 {
+		depth = 4 // Cap indentation
 	}
+	indent := strings.Repeat("  ", depth)
 
 	// Calculate metadata widths
 	dueStr := ""
@@ -484,6 +486,43 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width
 
 	// Force exactly one line and width, no wrapping
 	return style.MaxWidth(width - 2).Render(line)
+}
+
+// taskDepth calculates the nesting depth of a task.
+func (r *Renderer) taskDepth(task *api.Task, allTasks []api.Task) int {
+	if task.ParentID == nil {
+		return 0
+	}
+
+	depth := 0
+	current := task
+	// Safety limit
+	for i := 0; i < 10; i++ {
+		if current.ParentID == nil {
+			break
+		}
+		depth++
+		parentID := *current.ParentID
+
+		// Find parent in AllTasks
+		found := false
+		for _, t := range allTasks {
+			if t.ID == parentID {
+				// Use a copy to avoid pointer issues if needed, but iteration var is copy
+				// However, we need to re-assign current which is *api.Task
+				// So we take address of t
+				temp := t
+				current = &temp
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Parent missing (maybe not synced or deleted), stop here
+			break
+		}
+	}
+	return depth
 }
 
 // renderTaskDescription renders a task description for the list view.

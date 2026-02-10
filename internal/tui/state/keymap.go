@@ -44,6 +44,8 @@ type KeymapData struct {
 	MoveTaskNextDay Key
 	AddComment      Key
 	RescheduleTask  Key
+	IndentTask      Key
+	OutdentTask     Key
 
 	// Navigation between panes
 	SwitchPane    Key
@@ -101,6 +103,8 @@ func DefaultKeymap() KeymapData {
 		MoveTaskNextDay: Key{Key: ">", Help: "move +1 day"},
 		AddComment:      Key{Key: "C", Help: "add/view comments"},
 		RescheduleTask:  Key{Key: "t", Help: "smart reschedule"},
+		IndentTask:      Key{Key: "L", Help: "indent task (subtask)"},
+		OutdentTask:     Key{Key: "H", Help: "outdent task"},
 
 		// Navigation between panes
 		SwitchPane:    Key{Key: "tab", Help: "switch pane"},
@@ -250,6 +254,10 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "priority3", true
 	case keymap.Priority4.Key, "$":
 		return "priority4", true
+	case keymap.IndentTask.Key:
+		return "indent", true
+	case keymap.OutdentTask.Key:
+		return "outdent", true
 	case keymap.DueToday.Key:
 		return "move_task_prev_day", true
 	case keymap.DueTomorrow.Key:
@@ -329,7 +337,7 @@ func (k KeymapData) HelpItems() [][]string {
 		{"1-4", "Set priority (4 is highest)"},
 		{"</>", "Move task date -1/+1 day"},
 		{"s", "Add subtask"},
-		{"s", "Add subtask"},
+		{k.IndentTask.Key + "/" + k.OutdentTask.Key, "Indent/Outdent task"},
 		{"m", "Move task to section"},
 		{k.MoveToProject.Key, "Move task to project"},
 		{k.AddComment.Key, "Add/View comments"},

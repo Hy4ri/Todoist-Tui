@@ -699,3 +699,69 @@ func (r *Renderer) renderSectionAddTaskDialog() string {
 
 	return r.renderCenteredDialog(b.String(), 70)
 }
+
+// renderIndentDialog renders the dialog for selecting a parent task.
+func (r *Renderer) renderIndentDialog() string {
+	var b strings.Builder
+	b.WriteString(styles.Title.Render("⤵ Indent Under Task") + "\n\n")
+
+	// Render search/filter input
+	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("FILTER") + "\n")
+	b.WriteString(r.IndentInput.View() + "\n\n")
+
+	// Render candidates list
+	if len(r.IndentFilteredCandidates) == 0 {
+		if len(r.IndentCandidates) == 0 {
+			b.WriteString(styles.HelpDesc.Render("No valid parent tasks found."))
+		} else {
+			b.WriteString(styles.HelpDesc.Render("No matches found."))
+		}
+	} else {
+		// Calculate visible window
+		height := 10 // Max height
+		start := 0
+		if r.IndentCursor > height/2 {
+			start = r.IndentCursor - height/2
+		}
+		end := start + height
+		if end > len(r.IndentFilteredCandidates) {
+			end = len(r.IndentFilteredCandidates)
+			start = end - height
+			if start < 0 {
+				start = 0
+			}
+		}
+
+		if start > 0 {
+			b.WriteString(styles.HelpDesc.Render(fmt.Sprintf("▲ %d more", start)) + "\n")
+		}
+
+		for i := start; i < end; i++ {
+			task := r.IndentFilteredCandidates[i]
+			cursor := "  "
+			style := styles.TaskItem
+			if i == r.IndentCursor {
+				cursor = "> "
+				style = styles.TaskSelected
+			}
+
+			content := task.Content
+			// Truncate if too long (rough check)
+			if len(content) > 50 {
+				content = content[:47] + "..."
+			}
+
+			b.WriteString(style.Render(cursor+content) + "\n")
+		}
+
+		if end < len(r.IndentFilteredCandidates) {
+			end := end // Shadow for clarity
+			remaining := len(r.IndentFilteredCandidates) - end
+			b.WriteString(styles.HelpDesc.Render(fmt.Sprintf("▼ %d more", remaining)) + "\n")
+		}
+	}
+
+	b.WriteString("\n" + styles.HelpDesc.Render("j/k: select • Enter: confirm • Esc: cancel"))
+
+	return r.renderCenteredDialog(b.String(), 60)
+}
