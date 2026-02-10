@@ -18,15 +18,11 @@ import (
 const maxConcurrentRequests = 5
 
 func (h *Handler) sortTasks() {
-	// Skip if already sorted to avoid redundant work
-	if h.TasksSorted {
-		return
-	}
 
-	sort.Slice(h.Tasks, func(i, j int) bool {
+	sort.SliceStable(h.Tasks, func(i, j int) bool {
 		ti, tj := h.Tasks[i], h.Tasks[j]
 
-		// Get due dates (tasks without due dates sort to end)
+		// 1. Due Date
 		hasDueI := ti.Due != nil
 		hasDueJ := tj.Due != nil
 
@@ -37,47 +33,35 @@ func (h *Handler) sortTasks() {
 			return false // j has due date, i doesn't -> j first
 		}
 
-		// Both have due dates - compare by datetime/date
 		if hasDueI && hasDueJ {
-			// Use datetime if available, else use date
-			dateI := ti.Due.Date
-			dateJ := tj.Due.Date
-			var timeI, timeJ time.Time
-			var errI, errJ error
-
-			if ti.Due.Datetime != nil {
-				timeI, errI = time.Parse(time.RFC3339, *ti.Due.Datetime)
-			}
-			if tj.Due.Datetime != nil {
-				timeJ, errJ = time.Parse(time.RFC3339, *tj.Due.Datetime)
+			// Compare dates first (YYYY-MM-DD)
+			if ti.Due.Date != tj.Due.Date {
+				return ti.Due.Date < tj.Due.Date
 			}
 
-			// First compare Date string (YYYY-MM-DD)
-			if dateI != dateJ {
-				return dateI < dateJ // Earlier dates first
-			}
-
-			// Dates are same.
-			// Compare presence of time.
+			// Same date, prefer tasks with specific times
 			hasTimeI := ti.Due.Datetime != nil
 			hasTimeJ := tj.Due.Datetime != nil
-
 			if hasTimeI && !hasTimeJ {
-				return true // I has time, J does not -> I first
+				return true
 			}
 			if !hasTimeI && hasTimeJ {
-				return false // J has time, I does not -> J first
+				return false
 			}
 
-			// Both have time, compare times
-			if hasTimeI && hasTimeJ && errI == nil && errJ == nil {
-				return timeI.Before(timeJ)
+			// Both have times, compare them
+			if hasTimeI && hasTimeJ && *ti.Due.Datetime != *tj.Due.Datetime {
+				return *ti.Due.Datetime < *tj.Due.Datetime
 			}
 		}
 
-		// Same due date or both no due date - sort by priority (higher = P1 = 4)
-		// Same due date or both no due date - sort by priority (higher = P1 = 4)
-		return ti.Priority > tj.Priority
+		// 2. Priority (Higher values first: P1=4, P2=3, P3=2, P4=1)
+		if ti.Priority != tj.Priority {
+			return ti.Priority > tj.Priority
+		}
+
+		// 3. Child Order (Manual order within project/list)
+		return ti.ChildOrder < tj.ChildOrder
 	})
 
 	h.TasksSorted = true

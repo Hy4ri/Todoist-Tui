@@ -30,28 +30,32 @@ func TestGetTasks(t *testing.T) {
 	tests := []struct {
 		name       string
 		filter     TaskFilter
-		response   []Task
+		response   PaginatedResponse[Task]
 		statusCode int
 		wantErr    bool
 	}{
 		{
 			name:   "successful request",
 			filter: TaskFilter{},
-			response: []Task{
-				{
-					ID:        "123",
-					Content:   "Test task",
-					ProjectID: "456",
-					Priority:  1,
+			response: PaginatedResponse[Task]{
+				Results: []Task{
+					{
+						ID:        "123",
+						Content:   "Test task",
+						ProjectID: "456",
+						Priority:  1,
+					},
 				},
 			},
 			statusCode: http.StatusOK,
 			wantErr:    false,
 		},
 		{
-			name:       "unauthorized",
-			filter:     TaskFilter{},
-			response:   nil,
+			name:   "unauthorized",
+			filter: TaskFilter{},
+			response: PaginatedResponse[Task]{
+				Results: nil,
+			},
 			statusCode: http.StatusUnauthorized,
 			wantErr:    true,
 		},
@@ -60,11 +64,13 @@ func TestGetTasks(t *testing.T) {
 			filter: TaskFilter{
 				ProjectID: "789",
 			},
-			response: []Task{
-				{
-					ID:        "124",
-					Content:   "Project task",
-					ProjectID: "789",
+			response: PaginatedResponse[Task]{
+				Results: []Task{
+					{
+						ID:        "124",
+						Content:   "Project task",
+						ProjectID: "789",
+					},
 				},
 			},
 			statusCode: http.StatusOK,
@@ -95,14 +101,7 @@ func TestGetTasks(t *testing.T) {
 
 				// Send response
 				w.WriteHeader(tt.statusCode)
-				if tt.response != nil {
-					// Return paginated response format
-					paginatedResp := map[string]interface{}{
-						"results":     tt.response,
-						"next_cursor": nil,
-					}
-					json.NewEncoder(w).Encode(paginatedResp)
-				}
+				json.NewEncoder(w).Encode(tt.response)
 			})
 			defer server.Close()
 
@@ -123,12 +122,88 @@ func TestGetTasks(t *testing.T) {
 				return
 			}
 
-			if len(tasks) != len(tt.response) {
-				t.Errorf("expected %d tasks, got %d", len(tt.response), len(tasks))
+			if len(tasks) != len(tt.response.Results) {
+				t.Errorf("expected %d tasks, got %d", len(tt.response.Results), len(tasks))
 			}
 
-			if len(tasks) > 0 && tasks[0].Content != tt.response[0].Content {
-				t.Errorf("expected content %q, got %q", tt.response[0].Content, tasks[0].Content)
+			if len(tasks) > 0 && tasks[0].Content != tt.response.Results[0].Content {
+				t.Errorf("expected content %q, got %q", tt.response.Results[0].Content, tasks[0].Content)
+			}
+		})
+	}
+}
+
+func TestGetTasksByFilter(t *testing.T) {
+	tests := []struct {
+		name        string
+		filterQuery string
+		response    PaginatedResponse[Task]
+		statusCode  int
+		wantErr     bool
+	}{
+		{
+			name:        "successful filter request",
+			filterQuery: "today",
+			response: PaginatedResponse[Task]{
+				Results: []Task{
+					{
+						ID:      "123",
+						Content: "Today task",
+					},
+				},
+			},
+			statusCode: http.StatusOK,
+			wantErr:    false,
+		},
+		{
+			name:        "empty filter query",
+			filterQuery: "",
+			wantErr:     true,
+		},
+		{
+			name:        "api error",
+			filterQuery: "tomorrow",
+			statusCode:  http.StatusInternalServerError,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := mockServer(func(w http.ResponseWriter, r *http.Request) {
+				if tt.filterQuery != "" {
+					if r.URL.Path != "/tasks/filter" {
+						t.Errorf("expected path /tasks/filter, got %s", r.URL.Path)
+					}
+					if r.URL.Query().Get("query") != tt.filterQuery {
+						t.Errorf("expected query %q, got %q", tt.filterQuery, r.URL.Query().Get("query"))
+					}
+				}
+
+				w.WriteHeader(tt.statusCode)
+				json.NewEncoder(w).Encode(tt.response)
+			})
+			defer server.Close()
+
+			client := NewClient("test-token")
+			client.baseURL = server.URL
+
+			tasks, err := client.GetTasksByFilter(tt.filterQuery)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(tasks) != len(tt.response.Results) {
+				t.Errorf("expected %d tasks, got %d", len(tt.response.Results), len(tasks))
 			}
 		})
 	}
@@ -573,6 +648,53 @@ func TestMoveTask(t *testing.T) {
 	client.baseURL = server.URL
 
 	err := client.MoveTask(taskID, nil, &projectID, nil)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestMoveTasksBatch(t *testing.T) {
+	server := mockServer(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST request, got %s", r.Method)
+		}
+		if r.URL.Path != "/sync" {
+			t.Errorf("expected path /sync, got %s", r.URL.Path)
+		}
+
+		// Verify form data
+		err := r.ParseForm()
+		if err != nil {
+			t.Errorf("failed to parse form: %v", err)
+		}
+
+		cmdsStr := r.Form.Get("commands")
+		if cmdsStr == "" {
+			t.Error("expected commands in form data")
+		}
+
+		var commands []map[string]interface{}
+		if err := json.Unmarshal([]byte(cmdsStr), &commands); err != nil {
+			t.Errorf("failed to unmarshal commands: %v", err)
+		}
+
+		if len(commands) != 2 {
+			t.Errorf("expected 2 commands, got %d", len(commands))
+		}
+
+		if commands[0]["type"] != "item_move" {
+			t.Errorf("expected command type item_move, got %s", commands[0]["type"])
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"sync_status": {"uuid1": "ok", "uuid2": "ok"}}`))
+	})
+	defer server.Close()
+
+	client := NewClient("test-token")
+	client.baseURL = server.URL
+
+	err := client.MoveTasksBatch([]string{"task1", "task2"}, "proj1", "sec1")
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}

@@ -1,17 +1,22 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strconv"
+
+	"github.com/google/uuid"
 )
 
 // GetTasks returns all active tasks, optionally filtered by project/section/label.
 // Note: The Filter field is NOT supported in v1 API on /tasks endpoint.
 // Use GetTasksByFilter for filter-based queries (e.g., "today | overdue").
-// Handles v1 API pagination automatically, fetching all pages.
 func (c *Client) GetTasks(filter TaskFilter) ([]Task, error) {
-	allTasks := make([]Task, 0)
+	var allTasks []Task
 	query := buildFilterQuery(filter)
 
 	for {
@@ -34,31 +39,20 @@ func (c *Client) GetTasks(filter TaskFilter) ([]Task, error) {
 // GetTasksByFilter returns tasks matching a Todoist filter query.
 // This uses the v1 API /tasks/filter endpoint.
 // Examples: "today", "today | overdue", "@labelname", "2024-01-22"
-// Handles pagination automatically, fetching all pages.
 func (c *Client) GetTasksByFilter(filterQuery string) ([]Task, error) {
 	if filterQuery == "" {
 		return nil, fmt.Errorf("filter query cannot be empty")
 	}
 
-	allTasks := make([]Task, 0)
 	query := url.Values{}
 	query.Set("query", filterQuery)
 
-	for {
-		var response PaginatedResponse[Task]
-		if err := c.GetWithQuery("/tasks/filter", query, &response); err != nil {
-			return nil, fmt.Errorf("failed to get filtered tasks: %w", err)
-		}
-
-		allTasks = append(allTasks, response.Results...)
-
-		if response.NextCursor == nil || *response.NextCursor == "" {
-			break
-		}
-		query.Set("cursor", *response.NextCursor)
+	var response PaginatedResponse[Task]
+	if err := c.GetWithQuery("/tasks/filter", query, &response); err != nil {
+		return nil, fmt.Errorf("failed to get filtered tasks: %w", err)
 	}
 
-	return allTasks, nil
+	return response.Results, nil
 }
 
 // GetTask returns a single task by ID.
@@ -114,7 +108,7 @@ func (c *Client) DeleteTask(id string) error {
 
 // QuickAddTask creates a task using natural language parsing.
 // Supports: dates ("tomorrow", "every monday"), priorities (p1-p4),
-// labels (@label), projects (#project), assignees (+name).
+// labels @label, projects #project, assignees +name.
 // Example: "Buy milk tomorrow at 3pm @errands #Shopping p1"
 func (c *Client) QuickAddTask(text string) (*Task, error) {
 	var task Task
@@ -150,33 +144,8 @@ type CompletedTaskParams struct {
 }
 
 // GetCompletedTasks returns a list of completed tasks based on the provided parameters.
-// Note: This uses the Sync API v9 endpoint exposed via REST-like interface for historical data.
+// This uses the /tasks/completed/by_completion_date Unified v1 endpoint.
 func (c *Client) GetCompletedTasks(params CompletedTaskParams) ([]Task, error) {
-	// The endpoint /tasks/completed/by_completion_date returns a list of items
-	// wrapped in a structure or a direct list depending on version.
-	// Documentation says it returns "items".
-	// Let's verify if response is []Task or { "items": []Task, ... }
-	// Search results suggest it returns a list of task objects directly if using legacy REST,
-	// BUT newer unified API might wrap it.
-	// Sync API "get_all" returns { "items": [], "projects": [], ... }
-	// "by_completion_date" might be different.
-	// Let's assume it returns a wrapped response { "items": []Task } usually for such endpoints.
-	// Wait, search result 1 says "returns a JSON object containing a list of completed tasks".
-	// It doesn't explicitly say if it's `{ "items": [...] }` or just `[...]`.
-	// Most Todoist collection endpoints return a list.
-	// BUT `GetTasks` uses `PaginatedResponse` if it was REST v2.
-	// `GetProductivityStats` uses `ProductivityStats` struct.
-
-	// Let's use a temporary struct to capture response and inspect.
-	// Or try to decode into []Task first.
-	// Actually, let's look at `GetTasks`. It expects `PaginatedResponse[Task]`.
-	// Let's look at `filters.go`. `GetFilters` expects `[]Filter`.
-	//
-	// I'll assume it returns `{ "items": []Task }` as is common for Sync API-backed endpoints,
-	// OR `[]Task`.
-	// Let's try to verify with a quick curl if possible? No network.
-	//
-	// Safe bet: Define a wrapper struct `CompletedTasksResponse`.
 	type CompletedTasksResponse struct {
 		Items []Task `json:"items"`
 	}
@@ -217,10 +186,6 @@ func (c *Client) GetCompletedTasks(params CompletedTaskParams) ([]Task, error) {
 	}
 
 	var response CompletedTasksResponse
-	// If the API returns a list directly, this will fail.
-	// If it returns a wrapper, this handles it.
-
-	// Use the compliant v1 endpoint.
 	if err := c.GetWithQuery("/tasks/completed/by_completion_date", query, &response); err != nil {
 		return nil, fmt.Errorf("failed to get completed tasks: %w", err)
 	}
@@ -244,5 +209,57 @@ func (c *Client) MoveTask(id string, sectionID *string, projectID *string, paren
 	if err := c.Post("/tasks/"+id+"/move", req, nil); err != nil {
 		return fmt.Errorf("failed to move task %s: %w", id, err)
 	}
+	return nil
+}
+
+// MoveTasksBatch moves multiple tasks to a different project or section using Sync API batching.
+func (c *Client) MoveTasksBatch(ids []string, targetProjectID string, targetSectionID string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	commands := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args := map[string]interface{}{
+			"id": id,
+		}
+		if targetSectionID != "" {
+			args["section_id"] = targetSectionID
+		}
+		if targetProjectID != "" {
+			args["project_id"] = targetProjectID
+		}
+
+		commands[i] = map[string]interface{}{
+			"type": "item_move",
+			"uuid": uuid.New().String(),
+			"args": args,
+		}
+	}
+
+	cmdsJSON, _ := json.Marshal(commands)
+	formData := url.Values{}
+	formData.Set("commands", string(cmdsJSON))
+
+	syncURL := c.baseURL + "/sync"
+	req, err := http.NewRequest("POST", syncURL, bytes.NewBufferString(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create sync request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("sync request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+	}
+
 	return nil
 }

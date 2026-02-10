@@ -270,6 +270,21 @@ type State struct {
 	TargetProjectName string
 	TargetSectionID   string
 	TargetSectionName string
+
+	// Move to Project state
+	IsMovingToProject bool
+	MoveProjectInput  textinput.Model
+	MoveTargetList    []MoveTarget
+	MoveTargetCursor  int
+}
+
+// MoveTarget represents a destination for moving tasks (Project or Section)
+type MoveTarget struct {
+	ID        string
+	Name      string
+	ProjectID string // If section, this is parent project ID
+	IsSection bool
+	Indent    int
 }
 
 // TabInfo holds tab metadata.

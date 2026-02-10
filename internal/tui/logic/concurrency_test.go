@@ -13,12 +13,14 @@ import (
 )
 
 type ConcurrentTransport struct {
-	active    int32
-	maxActive int32
-	delay     time.Duration
+	active        int32
+	maxActive     int32
+	totalRequests int32
+	delay         time.Duration
 }
 
 func (t *ConcurrentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	atomic.AddInt32(&t.totalRequests, 1)
 	current := atomic.AddInt32(&t.active, 1)
 
 	// Update max observed concurrency

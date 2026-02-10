@@ -396,6 +396,11 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleMoveTaskKeyMsg(msg)
 	}
 
+	// Move to project handling
+	if h.IsMovingToProject {
+		return h.handleMoveToProjectInput(msg)
+	}
+
 	// Reschedule handling
 	if h.IsRescheduling {
 		switch msg.String() {
@@ -534,7 +539,7 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		h.CurrentView = state.ViewHelp
 		return nil
 	case "refresh":
-		return func() tea.Msg { return refreshMsg{} }
+		return func() tea.Msg { return refreshMsg{Force: true} }
 	case "up":
 		h.moveCursor(-1)
 	case "down":
@@ -591,6 +596,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleMoveTaskDate(-1, "")
 	case "move_task_next_day":
 		return h.handleMoveTaskDate(1, "")
+	case "move_to_project":
+		return h.handleMoveToProject()
 	case "new_project":
 		// 'n' key creates project or label depending on current tab
 		if h.CurrentTab == state.TabProjects {

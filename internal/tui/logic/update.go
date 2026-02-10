@@ -86,16 +86,7 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		}
 		return h.loadFilters() // Refresh list
 
-	case taskCompletedMsg:
-		h.Loading = false
-		h.updateStatsOnCompletion()
-		return nil
-
-	case taskDeletedMsg:
-		h.Loading = false
-		return nil
-
-	case taskUpdatedMsg, taskCreatedMsg:
+	case taskDeletedMsg, taskUpdatedMsg, taskCreatedMsg, taskCompletedMsg:
 		return h.handleTaskMsgs(msg)
 
 	case quickAddTaskCreatedMsg:
@@ -180,7 +171,7 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		return h.refreshSearchResults()
 
 	case refreshMsg:
-		return h.handleRefresh()
+		return h.handleRefresh(msg.Force)
 
 	case commentsLoadedMsg:
 		h.Comments = msg.comments
@@ -402,6 +393,9 @@ func (h *Handler) handleTaskMsgs(msg tea.Msg) tea.Cmd {
 		h.StatusMsg = "Task saved"
 		h.CurrentView = h.PreviousView
 		h.TaskForm = nil
+	case taskCompletedMsg:
+		h.StatusMsg = "Task completed"
+		h.updateStatsOnCompletion()
 	}
 	return h.refreshTasks()
 }
@@ -451,7 +445,7 @@ func (h *Handler) handleSectionMsgs(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-func (h *Handler) handleRefresh() tea.Cmd {
+func (h *Handler) handleRefresh(force bool) tea.Cmd {
 	// Store current task ID to restore cursor position after reload
 	if len(h.Tasks) > 0 && h.TaskCursor >= 0 && h.TaskCursor < len(h.Tasks) {
 		h.RestoreCursorToTaskID = h.Tasks[h.TaskCursor].ID
@@ -464,11 +458,15 @@ func (h *Handler) handleRefresh() tea.Cmd {
 
 	// Check if data is fresh (fetched within last 30 seconds)
 	// If fresh, use local filtering for instant response
-	dataIsFresh := len(h.AllTasks) > 0 && time.Since(h.LastDataFetch) < 30*time.Second
+	// Manual refresh (force=true) always bypasses cache
+	dataIsFresh := !force && len(h.AllTasks) > 0 && time.Since(h.LastDataFetch) < 30*time.Second
 
 	switch h.CurrentTab {
 	case state.TabInbox:
-		// Inbox filtering is already instant (uses AllTasks cache)
+		if force || !dataIsFresh {
+			h.Loading = true
+			return h.refreshTasks()
+		}
 		return h.loadInboxTasks()
 	case state.TabProjects:
 		if h.CurrentProject != nil {

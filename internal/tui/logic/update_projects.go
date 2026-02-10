@@ -1172,23 +1172,47 @@ func (h *Handler) refreshTasks() tea.Cmd {
 		}
 
 		var filteredTasks []api.Task
-		if h.CurrentView == state.ViewProject && h.CurrentProject != nil {
-			for _, t := range allTasks {
-				if t.ProjectID == h.CurrentProject.ID {
-					filteredTasks = append(filteredTasks, t)
-				}
-			}
-		} else if h.CurrentView == state.ViewLabels && h.CurrentLabel != nil {
-			for _, t := range allTasks {
-				for _, l := range t.Labels {
-					if l == h.CurrentLabel.Name {
+		switch h.CurrentView {
+		case state.ViewProject:
+			if h.CurrentProject != nil {
+				for _, t := range allTasks {
+					if t.ProjectID == h.CurrentProject.ID {
 						filteredTasks = append(filteredTasks, t)
-						break
 					}
 				}
 			}
-		} else {
-			// Default to today | overdue
+		case state.ViewLabels:
+			if h.CurrentLabel != nil {
+				for _, t := range allTasks {
+					for _, l := range t.Labels {
+						if l == h.CurrentLabel.Name {
+							filteredTasks = append(filteredTasks, t)
+							break
+						}
+					}
+				}
+			}
+		case state.ViewInbox:
+			var inboxID string
+			for _, p := range h.Projects {
+				if p.InboxProject {
+					inboxID = p.ID
+					break
+				}
+			}
+			for _, t := range allTasks {
+				if t.ProjectID == inboxID && !t.Checked && !t.IsDeleted {
+					filteredTasks = append(filteredTasks, t)
+				}
+			}
+		case state.ViewToday:
+			for _, t := range allTasks {
+				if t.IsDueToday() || t.IsOverdue() {
+					filteredTasks = append(filteredTasks, t)
+				}
+			}
+		default:
+			// Default to today | overdue for other views if appropriate
 			for _, t := range allTasks {
 				if t.IsDueToday() || t.IsOverdue() {
 					filteredTasks = append(filteredTasks, t)

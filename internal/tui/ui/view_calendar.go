@@ -597,6 +597,12 @@ func (r *Renderer) getContextualHints() []string {
 			key("Esc") + desc(":cancel"),
 		}
 	}
+	if r.IsMovingToProject {
+		return []string{
+			key("Enter") + desc(":move"),
+			key("Esc") + desc(":cancel"),
+		}
+	}
 	if r.ConfirmDeleteProject || r.ConfirmDeleteLabel || r.ConfirmDeleteSection || r.ConfirmDeleteComment {
 		return []string{
 			key("y") + desc(":confirm"),
@@ -618,6 +624,7 @@ func (r *Renderer) getContextualHints() []string {
 			key("j/k") + desc(":nav"),
 			key("a") + desc(":add"),
 			key("x") + desc(":done"),
+			key("v") + desc(":move-proj"),
 			key("e") + desc(":edit"),
 			key("s") + desc(":subtask"),
 			key("?") + desc(":help"),

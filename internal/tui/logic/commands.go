@@ -235,7 +235,7 @@ func handleLabelCommand(h *Handler, args []string) tea.Cmd {
 
 func handleRefreshCommand(h *Handler, args []string) tea.Cmd {
 	h.LastDataFetch = time.Time{} // Reset cache timer
-	return h.handleRefresh()
+	return h.handleRefresh(true)
 }
 
 func handleQuitCommand(h *Handler, args []string) tea.Cmd {

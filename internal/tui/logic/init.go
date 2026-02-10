@@ -107,7 +107,7 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 		allSections := sRes.data
 
 		// Filter tasks for the initial view
-		var initialTasks []api.Task
+		initialTasks := []api.Task{}
 		switch h.CurrentTab {
 		case state.TabUpcoming:
 			for _, t := range allTasks {
@@ -187,7 +187,7 @@ type commentDeletedMsg struct{ id string }
 type subtaskCreatedMsg struct{}
 type undoCompletedMsg struct{}
 type searchRefreshMsg struct{}
-type refreshMsg struct{}
+type refreshMsg struct{ Force bool }
 type commentsLoadedMsg struct{ comments []api.Comment }
 
 type reorderCompleteMsg struct{}

@@ -60,8 +60,9 @@ type KeymapData struct {
 	NewProject Key
 
 	// Section actions
-	NewSection  Key
-	MoveSection Key
+	NewSection    Key
+	MoveSection   Key
+	MoveToProject Key
 }
 
 // DefaultKeymap returns the default Vim-style key bindings.
@@ -114,6 +115,8 @@ func DefaultKeymap() KeymapData {
 
 		// Project actions
 		NewProject: Key{Key: "n", Help: "new project"},
+
+		MoveToProject: Key{Key: "v", Help: "move to project"},
 
 		// Map 'f' generic action logic will handle context
 	}
@@ -255,6 +258,8 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "switch_pane", true
 	case keymap.Search.Key:
 		return "search", true
+	case keymap.MoveToProject.Key:
+		return "move_to_project", true
 	case keymap.CalendarView.Key:
 		return "calendar_view", true
 	case keymap.NewProject.Key:
@@ -324,7 +329,9 @@ func (k KeymapData) HelpItems() [][]string {
 		{"1-4", "Set priority (4 is highest)"},
 		{"</>", "Move task date -1/+1 day"},
 		{"s", "Add subtask"},
+		{"s", "Add subtask"},
 		{"m", "Move task to section"},
+		{k.MoveToProject.Key, "Move task to project"},
 		{k.AddComment.Key, "Add/View comments"},
 		{k.RescheduleTask.Key, "Smart Reschedule"},
 		{"", ""},
