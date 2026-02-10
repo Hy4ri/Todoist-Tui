@@ -1069,31 +1069,33 @@ func (h *Handler) handleSectionAddInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 
-		projectName := h.TargetProjectName
-		sectionName := h.TargetSectionName
 		h.IsAddingToSection = false
 		h.SectionAddInput.Reset()
 		h.StatusMsg = "Adding task..."
 
 		return func() tea.Msg {
-			// Use QuickAddTask with text appending for context
-			text := content
-			if projectName != "" {
-				if !strings.Contains(content, "#") {
-					text += " #" + projectName
-				}
-			}
-			if sectionName != "" {
-				if !strings.Contains(content, "/") {
-					text += " /" + sectionName
-				}
-			}
-
-			_, err := h.Client.QuickAddTask(text)
+			// Send clean text to QuickAddTask for NLP (dates, priorities, labels)
+			// Do NOT append #ProjectName (fails with spaces in project names)
+			task, err := h.Client.QuickAddTask(content)
 			if err != nil {
 				return errMsg{err}
 			}
-			return quickAddTaskCreatedMsg{} // Reuse msg type to trigger refresh
+
+			// Move task to correct project/section using the dedicated move endpoint
+			targetPID := h.TargetProjectID
+			targetSID := h.TargetSectionID
+
+			if targetPID != "" && task.ProjectID != targetPID {
+				var secPtr *string
+				if targetSID != "" {
+					secPtr = &targetSID
+				}
+				h.Client.MoveTask(task.ID, secPtr, &targetPID, nil)
+			} else if targetSID != "" && (task.SectionID == nil || *task.SectionID != targetSID) {
+				h.Client.MoveTask(task.ID, &targetSID, nil, nil)
+			}
+
+			return quickAddTaskCreatedMsg{}
 		}
 
 	default:

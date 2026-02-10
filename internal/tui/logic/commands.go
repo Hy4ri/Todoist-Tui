@@ -155,10 +155,42 @@ func handleAddCommand(h *Handler, args []string) tea.Cmd {
 	content := strings.Join(args, " ")
 	h.StatusMsg = "Adding task..."
 	return func() tea.Msg {
-		_, err := h.Client.QuickAddTask(content)
+		// Detect project tag by matching against known projects (longest match wins)
+		var detectedProjectID string
+		var detectedTag string // The full "#ProjectName" substring to strip
+		bestLen := 0
+
+		for _, p := range h.Projects {
+			tag := "#" + p.Name
+			// Case-insensitive search
+			contentLower := strings.ToLower(content)
+			tagLower := strings.ToLower(tag)
+			if strings.Contains(contentLower, tagLower) && len(p.Name) > bestLen {
+				bestLen = len(p.Name)
+				detectedProjectID = p.ID
+				// Find the actual tag in the original content (preserving case for stripping)
+				idx := strings.Index(contentLower, tagLower)
+				detectedTag = content[idx : idx+len(tag)]
+			}
+		}
+
+		// Strip the project tag from the text before sending to QuickAddTask
+		cleanText := content
+		if detectedTag != "" {
+			cleanText = strings.Replace(content, detectedTag, "", 1)
+			cleanText = strings.Join(strings.Fields(cleanText), " ") // Normalize whitespace
+		}
+
+		task, err := h.Client.QuickAddTask(cleanText)
 		if err != nil {
 			return errMsg{err}
 		}
+
+		// Move task to detected project if QuickAddTask put it elsewhere
+		if detectedProjectID != "" && task.ProjectID != detectedProjectID {
+			h.Client.MoveTask(task.ID, nil, &detectedProjectID, nil)
+		}
+
 		return quickAddTaskCreatedMsg{}
 	}
 }

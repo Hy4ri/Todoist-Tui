@@ -917,8 +917,8 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 		// Capture form values
 		content := h.QuickAddForm.Value()
-		projectName := h.QuickAddForm.ProjectName
-		sectionName := h.QuickAddForm.SectionName
+		projectID := h.QuickAddForm.ProjectID
+		sectionID := h.QuickAddForm.SectionID
 
 		// Clear input and increment count (stays open)
 		h.QuickAddForm.Clear()
@@ -927,25 +927,26 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 
 		// Create task in background using Quick Add API
 		return func() tea.Msg {
-			// Build the quick add text - append project/section if context exists
-			text := content
-			if projectName != "" {
-				// Only append #project if user didn't already specify one
-				if !strings.Contains(content, "#") {
-					text += " #" + projectName
-				}
-			}
-			if sectionName != "" {
-				// Only append /section if user didn't already specify one
-				if !strings.Contains(content, "/") {
-					text += " /" + sectionName
-				}
-			}
-
-			_, err := h.Client.QuickAddTask(text)
+			// Send clean text to QuickAddTask — let it handle dates, priorities, labels
+			// Do NOT append #ProjectName (fails with spaces in project names)
+			task, err := h.Client.QuickAddTask(content)
 			if err != nil {
 				return errMsg{err}
 			}
+
+			// If we have a known project context and the task ended up elsewhere
+			// (typically Inbox), move it using the dedicated move endpoint
+			if projectID != "" && task.ProjectID != projectID {
+				var secPtr *string
+				if sectionID != "" {
+					secPtr = &sectionID
+				}
+				h.Client.MoveTask(task.ID, secPtr, &projectID, nil)
+			} else if sectionID != "" && (task.SectionID == nil || *task.SectionID != sectionID) {
+				// Same project but wrong section
+				h.Client.MoveTask(task.ID, &sectionID, nil, nil)
+			}
+
 			return quickAddTaskCreatedMsg{}
 		}
 	}
