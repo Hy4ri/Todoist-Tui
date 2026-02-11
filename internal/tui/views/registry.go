@@ -75,6 +75,7 @@ func DefaultRegistry(s *state.State) *Registry {
 	r.RegisterView(NewLabelsView(s))
 	r.RegisterView(NewCalendarView(s))
 	r.RegisterView(NewProjectsView(s))
+	r.RegisterView(NewPomodoroView(s))
 
 	// Register tabs (maps tab constants to view names)
 	r.RegisterTab(state.TabInbox, "📥", "Inbox", "Inb", "inbox")
@@ -83,6 +84,7 @@ func DefaultRegistry(s *state.State) *Registry {
 	r.RegisterTab(state.TabLabels, "🏷️", "Labels", "Lbl", "labels")
 	r.RegisterTab(state.TabCalendar, "🗓️", "Calendar", "Cal", "calendar")
 	r.RegisterTab(state.TabProjects, "📂", "Projects", "Prj", "projects")
+	r.RegisterTab(state.TabPomodoro, "🍅", "Pomodoro", "Pom", "pomodoro")
 
 	return r
 }

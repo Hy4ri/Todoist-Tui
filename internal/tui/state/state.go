@@ -31,6 +31,7 @@ const (
 	ViewSections
 	ViewFilters
 	ViewCompleted
+	ViewPomodoro
 )
 
 // Tab represents a top-level tab.
@@ -45,6 +46,7 @@ const (
 	TabProjects
 	TabCompleted
 	TabFilters
+	TabPomodoro
 )
 
 // Pane represents which pane is currently focused (only used in Projects tab).
@@ -61,6 +63,23 @@ type CalendarViewMode int
 const (
 	CalendarViewCompact  CalendarViewMode = iota // Small grid view
 	CalendarViewExpanded                         // Grid with task names in cells
+)
+
+// PomodoroTimerMode controls countdown vs stopwatch.
+type PomodoroTimerMode int
+
+const (
+	PomodoroCountdown PomodoroTimerMode = iota
+	PomodoroStopwatch
+)
+
+// PomodoroPhase represents the current phase of the Pomodoro cycle.
+type PomodoroPhase int
+
+const (
+	PomodoroWork PomodoroPhase = iota
+	PomodoroShortBreak
+	PomodoroLongBreak
 )
 
 // LastAction represents an undoable action.
@@ -236,7 +255,21 @@ type State struct {
 	SelectedTaskIDs map[string]bool
 
 	// Notification state
-	NotifiedTasks map[string]bool
+	NotifiedTasks     map[string]bool
+	NotifiedReminders map[string]bool
+
+	// Reminder state
+	Reminders             []api.Reminder
+	ReminderCache         map[string][]api.Reminder // task_id -> reminders
+	IsAddingReminder      bool
+	IsEditingReminder     bool
+	EditingReminder       *api.Reminder
+	ConfirmDeleteReminder bool
+	ReminderCursor        int
+	ReminderTypeCursor    int // 0=relative, 1=absolute
+	ReminderMinuteInput   textinput.Model
+	ReminderDateInput     textinput.Model
+	ReminderTimeInput     textinput.Model
 
 	// Cursor restoration
 	RestoreCursorToTaskID string
@@ -283,6 +316,16 @@ type State struct {
 	IndentFilteredCandidates []api.Task
 	IndentCursor             int
 	IndentInput              textinput.Model
+
+	// Pomodoro state
+	PomodoroMode     PomodoroTimerMode
+	PomodoroPhase    PomodoroPhase
+	PomodoroTarget   time.Duration
+	PomodoroElapsed  time.Duration
+	PomodoroRunning  bool
+	PomodoroSessions int
+	PomodoroTask     *api.Task
+	PomodoroProject  string
 }
 
 // MoveTarget represents a destination for moving tasks (Project or Section)
@@ -313,5 +356,6 @@ func GetTabDefinitions() []TabInfo {
 		{TabCalendar, "🗓️", "Calendar", "Cal"},
 		{TabProjects, "📂", "Projects", "Prj"},
 		{TabCompleted, "✅", "Completed", "Cmp"},
+		{TabPomodoro, "🍅", "Pomodoro", "Pom"},
 	}
 }

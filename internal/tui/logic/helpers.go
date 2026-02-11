@@ -24,3 +24,26 @@ func (h *Handler) reorderSectionsCmd(sections []api.Section) tea.Cmd {
 		return reorderCompleteMsg{}
 	}
 }
+
+// getSelectedTask returns the currently selected task in the main list.
+func (h *Handler) getSelectedTask() *api.Task {
+	if len(h.Tasks) == 0 {
+		return nil
+	}
+
+	taskIndex := h.TaskCursor
+	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor >= 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
+	}
+
+	// Skip headers
+	if taskIndex <= -100 {
+		return nil
+	}
+
+	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+		return nil
+	}
+
+	return &h.Tasks[taskIndex]
+}

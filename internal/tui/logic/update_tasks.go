@@ -1446,3 +1446,161 @@ func (h *Handler) updateIndentFilter() {
 	// Reset cursor
 	h.IndentCursor = 0
 }
+
+// Reminders Implementation
+
+// loadTaskDetails loads all details for the selected task (comments + reminders).
+func (h *Handler) loadTaskDetails() tea.Cmd {
+	if h.SelectedTask == nil {
+		return nil
+	}
+	
+	h.initReminderInput()
+	h.IsAddingReminder = false
+	h.IsEditingReminder = false
+	h.EditingReminder = nil
+	
+	return tea.Batch(
+h.loadTaskComments(),
+		h.fetchReminders(h.SelectedTask.ID),
+	)
+}
+
+// fetchReminders fetches reminders for a task.
+func (h *Handler) fetchReminders(taskID string) tea.Cmd {
+	return func() tea.Msg {
+		reminders, err := h.Client.GetRemindersForTask(taskID)
+		if err != nil {
+			return errMsg{err}
+		}
+		return remindersFetchedMsg{taskID: taskID, reminders: reminders}
+	}
+}
+
+// handleAddReminder initiates the add reminder flow.
+func (h *Handler) handleAddReminder() tea.Cmd {
+	h.IsAddingReminder = true
+	h.IsEditingReminder = false
+	h.EditingReminder = nil
+	h.ConfirmDeleteReminder = false // Ensure delete confirmation is off
+	
+	// Default to relative, 30 min
+	h.ReminderTypeCursor = 0 // Relative
+	if h.ReminderMinuteInput.Value() == "" {
+		h.ReminderMinuteInput.SetValue("30")
+	}
+	h.ReminderMinuteInput.Focus()
+	h.ReminderDateInput.SetValue("")
+	h.ReminderTimeInput.SetValue("")
+	
+	return textinput.Blink
+}
+
+// initReminderInput initializes the reminder inputs.
+func (h *Handler) initReminderInput() {
+	h.ReminderMinuteInput = textinput.New()
+	h.ReminderMinuteInput.Placeholder = "Minutes before (e.g. 30)"
+	h.ReminderMinuteInput.CharLimit = 5
+	h.ReminderMinuteInput.Width = 10
+	
+	h.ReminderDateInput = textinput.New()
+	h.ReminderDateInput.Placeholder = "YYYY-MM-DD"
+	h.ReminderDateInput.CharLimit = 10
+	h.ReminderDateInput.Width = 12
+	
+	h.ReminderTimeInput = textinput.New()
+	h.ReminderTimeInput.Placeholder = "HH:MM"
+	h.ReminderTimeInput.CharLimit = 5
+	h.ReminderTimeInput.Width = 8
+}
+
+// handleReminderTypeToggle toggles between relative and absolute reminder types.
+func (h *Handler) handleReminderTypeToggle() tea.Cmd {
+	h.ReminderTypeCursor = 1 - h.ReminderTypeCursor // Toggle 0/1
+	
+	if h.ReminderTypeCursor == 0 { // Relative
+		h.ReminderMinuteInput.Focus()
+		h.ReminderDateInput.Blur()
+		h.ReminderTimeInput.Blur()
+	} else { // Absolute
+		h.ReminderMinuteInput.Blur()
+		h.ReminderDateInput.Focus()
+		// h.ReminderTimeInput.Blur() // Start with date focused
+	}
+	return nil
+}
+
+// handleDeleteReminder handles reminder deletion.
+func (h *Handler) handleDeleteReminder() tea.Cmd {
+	if h.EditingReminder == nil {
+		return nil
+	}
+	
+	id := h.EditingReminder.ID
+	h.ConfirmDeleteReminder = false
+	h.EditingReminder = nil
+	
+	h.StatusMsg = "Deleting reminder..."
+	
+	return func() tea.Msg {
+		err := h.Client.DeleteReminder(id)
+		if err != nil {
+			 return errMsg{err}
+		}
+		return reminderDeletedMsg{id: id}
+	}
+}
+
+// submitReminderForm handles the submission of the reminder form (create/update).
+func (h *Handler) submitReminderForm() tea.Cmd {
+    if h.SelectedTask == nil {
+        return nil
+    }
+
+    var req api.CreateReminderRequest
+    req.ItemID = h.SelectedTask.ID
+    req.Type = "relative" 
+    
+    if h.ReminderTypeCursor == 1 {
+        req.Type = "absolute"
+        dateStr := h.ReminderDateInput.Value()
+        timeStr := h.ReminderTimeInput.Value()
+        
+        if dateStr == "" {
+            h.StatusMsg = "Date is required"
+            return nil
+        }
+        
+        // Basic validation/formatting would be good here
+        finalDate := dateStr
+        if timeStr != "" {
+            finalDate = dateStr + "T" + timeStr + ":00" // Simple append
+        }
+        
+        req.Due = &api.ReminderDue{
+            Date: finalDate,
+        }
+    } else {
+        // Relative
+        minStr := h.ReminderMinuteInput.Value()
+        if minStr == "" {
+             h.StatusMsg = "Minutes required"
+             return nil
+        }
+        // Parse int
+        var mins int
+        fmt.Sscanf(minStr, "%d", &mins)
+        req.MinuteOffset = mins
+    }
+    
+    h.StatusMsg = "Saving reminder..."
+    h.Loading = true
+    
+    return func() tea.Msg {
+        rem, err := h.Client.CreateReminder(req)
+        if err != nil {
+            return errMsg{err}
+        }
+        return reminderCreatedMsg{reminder: rem}
+    }
+}

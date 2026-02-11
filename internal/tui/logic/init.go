@@ -39,12 +39,17 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			data *api.ProductivityStats
 			err  error
 		}
+		type reminderResult struct {
+			data []api.Reminder
+			err  error
+		}
 
 		projChan := make(chan projectResult, 1)
 		labelChan := make(chan labelResult, 1)
 		taskChan := make(chan taskResult, 1)
 		secChan := make(chan sectionResult, 1)
 		statsChan := make(chan statsResult, 1)
+		remChan := make(chan reminderResult, 1)
 
 		// Launch concurrent requests
 		go func() {
@@ -72,12 +77,18 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			statsChan <- statsResult{data: s, err: e}
 		}()
 
+		go func() {
+			r, e := h.Client.GetReminders()
+			remChan <- reminderResult{data: r, err: e}
+		}()
+
 		// Collect ALL results before processing errors to ensure all goroutines exit
 		pRes := <-projChan
 		lRes := <-labelChan
 		tRes := <-taskChan
 		sRes := <-secChan
 		statsRes := <-statsChan
+		rRes := <-remChan
 
 		// Now check for errors
 		if pRes.err != nil {
@@ -99,6 +110,11 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			prodStats = statsRes.data
 		} else {
 			statsErr = statsRes.err
+		}
+
+		var reminders []api.Reminder
+		if rRes.err == nil {
+			reminders = rRes.data
 		}
 
 		projects := pRes.data
@@ -150,6 +166,7 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			allSections: allSections,
 			stats:       prodStats,
 			statsErr:    statsErr,
+			reminders:   reminders,
 		}
 	}
 }
@@ -166,6 +183,7 @@ type dataLoadedMsg struct {
 	labels      []api.Label
 	stats       *api.ProductivityStats
 	statsErr    error
+	reminders   []api.Reminder
 }
 type taskUpdatedMsg struct{ task *api.Task }
 type taskDeletedMsg struct{ id string }

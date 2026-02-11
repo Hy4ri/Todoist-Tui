@@ -227,6 +227,7 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 	h.CurrentLabel = nil
 
 	// Update state via coordinator (sets CurrentTab, CurrentView, FocusedPane)
+	h.coordinator.SwitchToTab(tab)
 	h.CurrentTab = tab
 	switch tab {
 	case state.TabInbox:
@@ -283,6 +284,10 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 		h.Tasks = nil // Clear tasks
 		h.TaskCursor = 0
 		return h.loadCompletedTasks()
+	case state.TabPomodoro:
+		h.CurrentView = state.ViewPomodoro
+		h.FocusedPane = state.PaneMain
+		return nil
 	}
 
 	return nil
@@ -451,8 +456,18 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.switchToTab(state.TabProjects)
 	case "8":
 		return h.switchToTab(state.TabCompleted)
+	case "9":
+		return h.switchToTab(state.TabPomodoro)
 	case "D": // Shift+d
 		return h.setDefaultView()
+	}
+
+	// Pomodoro view — handle keys BEFORE global keymap steals them
+	if h.CurrentView == state.ViewPomodoro {
+		cmd, consumed := h.coordinator.HandleKey(msg)
+		if consumed {
+			return cmd
+		}
 	}
 
 	// Sections view routing
@@ -607,6 +622,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleOutdent()
 	case "move_to_project":
 		return h.handleMoveToProject()
+	case "send_to_pomodoro":
+		return h.handleSendTaskToPomodoro()
 	case "new_project":
 		// 'n' key creates project or label depending on current tab
 		if h.CurrentTab == state.TabProjects {
@@ -1177,6 +1194,11 @@ func (h *Handler) handleTaskDetailKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 
+	// Handle reminder input
+	if h.IsAddingReminder || h.IsEditingReminder {
+		return h.handleReminderInputKeyMsg(msg)
+	}
+
 	// Check for global actions relevant to detail view
 	action, consumed := h.KeyState.HandleKey(msg, h.Keymap)
 
@@ -1395,4 +1417,54 @@ func (h *Handler) handleIndentInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 	h.updateIndentFilter()
 
 	return cmd
+}
+
+// handleReminderInputKeyMsg handles keys for reminder input.
+func (h *Handler) handleReminderInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc":
+		h.IsAddingReminder = false
+		h.IsEditingReminder = false
+		h.StatusMsg = "Cancelled"
+		return nil
+	case "tab":
+		return h.handleReminderTypeToggle()
+	case "enter":
+		return h.submitReminderForm()
+	}
+
+	var cmd tea.Cmd
+	if h.ReminderTypeCursor == 0 {
+		h.ReminderMinuteInput, cmd = h.ReminderMinuteInput.Update(msg)
+	} else {
+		var cmd2 tea.Cmd
+		h.ReminderDateInput, cmd = h.ReminderDateInput.Update(msg)
+		h.ReminderTimeInput, cmd2 = h.ReminderTimeInput.Update(msg)
+		cmd = tea.Batch(cmd, cmd2)
+	}
+	return cmd
+}
+
+// handleSendTaskToPomodoro copies the currently selected task to the Pomodoro state.
+func (h *Handler) handleSendTaskToPomodoro() tea.Cmd {
+	task := h.getSelectedTask()
+	if task == nil {
+		h.StatusMsg = "No task selected to send to Pomodoro"
+		return nil
+	}
+
+	taskCopy := new(api.Task)
+	*taskCopy = *task
+	h.PomodoroTask = taskCopy
+
+	// Find project name for display
+	for _, p := range h.Projects {
+		if p.ID == task.ProjectID {
+			h.PomodoroProject = p.Name
+			break
+		}
+	}
+
+	h.StatusMsg = "Task sent to Pomodoro 🍅"
+	return nil
 }

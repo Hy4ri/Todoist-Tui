@@ -201,6 +201,11 @@ func rebuildStyles() {
 	CalendarCellBorder = lipgloss.NewStyle().Foreground(Subtle)
 	CalendarDayWeekend = lipgloss.NewStyle().Foreground(Subtle)
 	CalendarMoreTasks = lipgloss.NewStyle().Foreground(Subtle).Italic(true)
+
+	// Pomodoro
+	PomodoroTimer = lipgloss.NewStyle().Bold(true).Foreground(Highlight)
+	PomodoroBreakTimer = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00AAAA"))
+	PomodoroProgressBar = lipgloss.NewStyle().Foreground(Highlight)
 }
 
 // Terminal-adaptive colors that work in both light and dark terminals.
@@ -274,6 +279,11 @@ var (
 	Subtitle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(Subtle)
+
+	// Pomodoro styles
+	PomodoroTimer       lipgloss.Style
+	PomodoroBreakTimer  lipgloss.Style
+	PomodoroProgressBar lipgloss.Style
 )
 
 // Task styles

@@ -765,3 +765,57 @@ func (r *Renderer) renderIndentDialog() string {
 
 	return r.renderCenteredDialog(b.String(), 60)
 }
+
+// renderReminderForm renders the add/edit reminder dialog.
+func (r *Renderer) renderReminderForm() string {
+	var b strings.Builder
+	title := "⏰ Add Reminder"
+	if r.EditingReminder != nil {
+		title = "✏️ Edit Reminder"
+	}
+	b.WriteString(styles.Title.Render(title) + "\n\n")
+
+	// Helper for tab
+	renderTab := func(label string, active bool) string {
+		style := styles.Tab
+		if active {
+			style = styles.TabActive
+		}
+		return style.Render(label)
+	}
+
+	// Tabs for Type
+	relativeTab := renderTab("Relative", r.ReminderTypeCursor == 0)
+	absoluteTab := renderTab("Date/Time", r.ReminderTypeCursor == 1)
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, relativeTab, " ", absoluteTab) + "\n\n")
+
+	if r.ReminderTypeCursor == 0 {
+		// Relative
+		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("MINUTES BEFORE") + "\n")
+		b.WriteString(r.ReminderMinuteInput.View() + "\n\n")
+		b.WriteString(styles.HelpDesc.Render("e.g. 30 (for 30 mins before)"))
+	} else {
+		// Absolute
+		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("DATE") + "\n")
+		b.WriteString(r.ReminderDateInput.View() + "\n\n")
+
+		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("TIME") + "\n")
+		b.WriteString(r.ReminderTimeInput.View() + "\n\n")
+	}
+
+	b.WriteString("\n" + styles.HelpDesc.Render("Tab: switch type • Enter: save • Esc: cancel"))
+
+	return r.renderCenteredDialog(b.String(), 50)
+}
+
+// renderDeleteReminderConfirm renders the reminder delete confirmation.
+func (r *Renderer) renderDeleteReminderConfirm() string {
+	if r.EditingReminder == nil {
+		return ""
+	}
+	content := styles.StatusBarError.Render("⚠️ Delete Reminder?") + "\n\n" +
+		styles.HelpDesc.Render("Are you sure you want to delete this reminder?") + "\n\n" +
+		styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
+
+	return r.renderCenteredDialog(content, 50)
+}

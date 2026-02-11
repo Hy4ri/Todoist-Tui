@@ -62,9 +62,11 @@ type KeymapData struct {
 	NewProject Key
 
 	// Section actions
-	NewSection    Key
-	MoveSection   Key
-	MoveToProject Key
+	NewSection     Key
+	MoveSection    Key
+	MoveToProject  Key
+	Reminder       Key
+	SendToPomodoro Key
 }
 
 // DefaultKeymap returns the default Vim-style key bindings.
@@ -120,7 +122,9 @@ func DefaultKeymap() KeymapData {
 		// Project actions
 		NewProject: Key{Key: "n", Help: "new project"},
 
-		MoveToProject: Key{Key: "v", Help: "move to project"},
+		MoveToProject:  Key{Key: "v", Help: "move to project"},
+		Reminder:       Key{Key: "R", Help: "manage reminders"},
+		SendToPomodoro: Key{Key: "p", Help: "send to pomodoro"},
 
 		// Map 'f' generic action logic will handle context
 	}
@@ -268,6 +272,8 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "search", true
 	case keymap.MoveToProject.Key:
 		return "move_to_project", true
+	case keymap.SendToPomodoro.Key:
+		return "send_to_pomodoro", true
 	case keymap.CalendarView.Key:
 		return "calendar_view", true
 	case keymap.NewProject.Key:
@@ -341,6 +347,7 @@ func (k KeymapData) HelpItems() [][]string {
 		{"m", "Move task to section"},
 		{k.MoveToProject.Key, "Move task to project"},
 		{k.AddComment.Key, "Add/View comments"},
+		{k.Reminder.Key, "Manage reminders"},
 		{k.RescheduleTask.Key, "Smart Reschedule"},
 		{"", ""},
 
@@ -370,5 +377,17 @@ func (k KeymapData) HelpItems() [][]string {
 		{"f1", "Toggle key hints bar"},
 		{k.Quit.Key, "Quit the application"},
 		{"t", "Smart Reschedule"},
+
+		{"", ""},
+		{"Pomodoro Timer", ""},
+		{"9", "Switch to Pomodoro View"},
+		{"Space", "Start/Pause timer"},
+		{"r", "Reset timer"},
+		{"m", "Toggle Countdown/Stopwatch"},
+		{"Tab", "Cycle preset (25/5 ↔ 50/10)"},
+		{"+/-", "Adjust work duration"},
+		{"n", "Next Pomodoro phase"},
+		{"x", "Complete associated task"},
+		{"c", "Clear associated task"},
 	}
 }

@@ -1,12 +1,14 @@
 package logic
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gen2brain/beeep"
+	"github.com/hy4ri/todoist-tui/internal/api"
 )
 
 // Debug logger
@@ -122,6 +124,106 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 				if err != nil && debugLog != nil {
 					debugLog.Printf("Failed to send notification: %v", err)
 				}
+				return nil
+			})
+		}
+	}
+
+	// Check for reminders
+	for _, rem := range h.Reminders {
+		// Skip if already notified
+		if h.NotifiedTasks[rem.ID] {
+			continue
+		}
+
+		// Calculate trigger time
+		var triggerTime time.Time
+		var content string
+
+		if rem.Type == "relative" {
+			// Find associated task
+			var task *api.Task
+			for i := range h.AllTasks {
+				if h.AllTasks[i].ID == rem.ItemID {
+					task = &h.AllTasks[i]
+					break
+				}
+			}
+			if task == nil || task.Checked || task.IsDeleted || task.Due == nil {
+				continue
+			}
+
+			// Calculate based on task due time
+			var taskDue time.Time
+			var err error
+			if task.Due.Datetime != nil && *task.Due.Datetime != "" {
+				taskDue, err = time.Parse(time.RFC3339, *task.Due.Datetime)
+			} else if task.Due.Date != "" {
+				taskDue, err = time.ParseInLocation("2006-01-02", task.Due.Date[:10], time.Local)
+				if err == nil {
+					taskDue = taskDue.Add(9 * time.Hour) // Same default as tasks
+				}
+			} else {
+				continue
+			}
+
+			if err != nil {
+				continue
+			}
+
+			// Apply offset (minutes before)
+			triggerTime = taskDue.Add(-time.Duration(rem.MinuteOffset) * time.Minute)
+			content = fmt.Sprintf("Reminder: %s (%d min before)", task.Content, rem.MinuteOffset)
+
+		} else if rem.Type == "absolute" && rem.Due != nil {
+			// Absolute reminder
+			// Todoist returns YYYY-MM-DDTHH:MM:SS (ISO8601) usually for absolute reminders
+			// Let's try parsing
+			var err error
+			triggerTime, err = time.Parse("2006-01-02T15:04:05", rem.Due.Date)
+			if err != nil {
+				// Try RFC3339
+				triggerTime, err = time.Parse(time.RFC3339, rem.Due.Date)
+			}
+			if err != nil {
+				if debugLog != nil {
+					debugLog.Printf("Failed to parse reminder date %s: %v", rem.Due.Date, err)
+				}
+				continue
+			}
+
+			// Find task for context (optional, but good for message)
+			for i := range h.AllTasks {
+				if h.AllTasks[i].ID == rem.ItemID {
+					content = fmt.Sprintf("Reminder: %s", h.AllTasks[i].Content)
+					break
+				}
+			}
+			if content == "" {
+				content = "Reminder for task"
+			}
+		} else {
+			continue
+		}
+
+		triggerTime = triggerTime.Local()
+
+		// Check if time passed
+		if t.After(triggerTime) || t.Equal(triggerTime) {
+			// Max delay threshold (e.g. 5 mins) to avoid spamming old reminders
+			if t.Sub(triggerTime) > 5*time.Minute {
+				h.NotifiedTasks[rem.ID] = true
+				continue
+			}
+
+			if debugLog != nil {
+				debugLog.Printf("Triggering reminder: %s", content)
+			}
+
+			h.NotifiedTasks[rem.ID] = true
+
+			cmds = append(cmds, func() tea.Msg {
+				_ = beeep.Notify("Todoist", content, "")
 				return nil
 			})
 		}

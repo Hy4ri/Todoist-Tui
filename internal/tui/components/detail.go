@@ -13,6 +13,7 @@ import (
 type DetailModel struct {
 	task          *api.Task
 	comments      []api.Comment
+	reminders     []api.Reminder
 	projects      []api.Project
 	width, height int
 	showPanel     bool
@@ -25,6 +26,7 @@ func NewDetail() *DetailModel {
 	return &DetailModel{
 		task:      nil,
 		comments:  []api.Comment{},
+		reminders: []api.Reminder{},
 		projects:  []api.Project{},
 		showPanel: false,
 	}
@@ -131,6 +133,18 @@ func (d *DetailModel) ViewPanel() string {
 		content.WriteString(styles.DetailDescription.Copy().Width(descWidth).Render(t.Description) + "\n")
 	}
 
+	// Reminders
+	if len(d.reminders) > 0 {
+		content.WriteString("\n" + styles.StatusBarKey.Render(fmt.Sprintf("Reminders (%d):", len(d.reminders))) + "\n")
+		for _, r := range d.reminders {
+			desc := fmt.Sprintf("%d min before", r.MinuteOffset)
+			if r.Type == "absolute" && r.Due != nil {
+				desc = r.Due.Date
+			}
+			content.WriteString(styles.DetailValue.Render("• "+desc) + "\n")
+		}
+	}
+
 	// Comments
 	if len(d.comments) > 0 {
 		content.WriteString("\n" + styles.StatusBarKey.Render(fmt.Sprintf("Comments (%d):", len(d.comments))) + "\n")
@@ -212,6 +226,23 @@ func (d *DetailModel) renderPanel() string {
 		if t.Due.IsRecurring {
 			b.WriteString(styles.HelpDesc.Render(" (recurring)"))
 		}
+		b.WriteString("\n")
+	}
+
+	// Reminders
+	if len(d.reminders) > 0 {
+		b.WriteString(styles.DetailIcon.Render("  ⏰"))
+		b.WriteString(styles.DetailLabel.Render("Reminders"))
+
+		var rems []string
+		for _, r := range d.reminders {
+			if r.Type == "relative" {
+				rems = append(rems, fmt.Sprintf("%d min before", r.MinuteOffset))
+			} else if r.Due != nil {
+				rems = append(rems, r.Due.Date)
+			}
+		}
+		b.WriteString(styles.DetailValue.Render(strings.Join(rems, ", ")))
 		b.WriteString("\n")
 	}
 
@@ -324,7 +355,9 @@ func (d *DetailModel) renderPanel() string {
 	b.WriteString(styles.HelpKey.Render("s"))
 	b.WriteString(styles.HelpDesc.Render(" add subtask  "))
 	b.WriteString(styles.HelpKey.Render("C"))
-	b.WriteString(styles.HelpDesc.Render(" comment"))
+	b.WriteString(styles.HelpDesc.Render(" comment "))
+	b.WriteString(styles.HelpKey.Render("R"))
+	b.WriteString(styles.HelpDesc.Render(" reminders"))
 
 	return styles.Dialog.Width(d.width - 4).Render(b.String())
 }
@@ -352,6 +385,11 @@ func (d *DetailModel) SetComments(comments []api.Comment) {
 	}
 }
 
+// SetReminders sets the reminders for the task.
+func (d *DetailModel) SetReminders(reminders []api.Reminder) {
+	d.reminders = reminders
+}
+
 // SetProjects sets the projects for lookup.
 func (d *DetailModel) SetProjects(projects []api.Project) {
 	d.projects = projects
@@ -372,6 +410,7 @@ func (d *DetailModel) Hide() {
 	d.showPanel = false
 	d.task = nil
 	d.comments = nil
+	d.reminders = nil
 }
 
 // Focus sets focus.

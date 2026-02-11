@@ -50,6 +50,8 @@ func (r *Renderer) View() string {
 		content = r.renderSearch()
 	case state.ViewCalendarDay:
 		content = r.renderCalendarDay()
+	case state.ViewPomodoro:
+		content = r.renderPomodoro()
 	case state.ViewSections:
 		content = r.renderSections()
 	default:
@@ -78,9 +80,9 @@ func (r *Renderer) View() string {
 		{r.IsMovingTask, r.renderMoveTaskDialog},
 		{r.IsAddingComment, r.renderCommentDialog},
 		{r.IsEditingComment, r.renderCommentEditDialog},
-		{r.IsAddingComment, r.renderCommentDialog},
-		{r.IsEditingComment, r.renderCommentEditDialog},
 		{r.ConfirmDeleteComment, r.renderCommentDeleteDialog},
+		{r.IsAddingReminder || r.IsEditingReminder, r.renderReminderForm},
+		{r.ConfirmDeleteReminder && r.EditingReminder != nil, r.renderDeleteReminderConfirm},
 		{r.IsCreatingFilter || r.IsEditingFilter, r.renderFilterFormDialog},
 		{r.ConfirmDeleteFilter && r.EditingFilter != nil, r.renderFilterDeleteDialog},
 		{r.IsRescheduling, r.renderRescheduleDialog},

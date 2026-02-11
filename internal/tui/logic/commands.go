@@ -108,6 +108,12 @@ func registerCommands() {
 			Description: "List all available commands",
 			Handler:     handleCommandsCommand,
 		},
+		{
+			Name:        "reminders",
+			Aliases:     []string{"rem"},
+			Description: "Manage reminders for selected task",
+			Handler:     handleRemindersCommand,
+		},
 	}
 
 	for _, cmd := range commands {
@@ -323,6 +329,26 @@ func handleSortCommand(h *Handler, args []string) tea.Cmd {
 	h.TasksSorted = false
 	h.sortTasks()
 	h.StatusMsg = "Tasks sorted"
+	return nil
+}
+
+func handleRemindersCommand(h *Handler, args []string) tea.Cmd {
+	if h.SelectedTask == nil {
+		h.StatusMsg = "No task selected"
+		return nil
+	}
+
+	// Open detail view if not already
+	if h.CurrentView != state.ViewTaskDetail && !h.ShowDetailPanel {
+		h.ShowDetailPanel = true
+		h.loadTaskDetails()
+	}
+
+	// Trigger add reminder flow if "add" arg is present
+	if len(args) > 0 && args[0] == "add" {
+		return h.handleAddReminder()
+	}
+
 	return nil
 }
 
