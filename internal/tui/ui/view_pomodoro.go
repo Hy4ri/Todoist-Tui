@@ -11,15 +11,15 @@ import (
 )
 
 // renderPomodoro renders the Pomodoro view.
-func (r *Renderer) renderPomodoro() string {
-	width := r.Width - 4
-	height := r.Height - 10 // Reserve space for tabs and status bar
+func (r *Renderer) renderPomodoro(width, height int) string {
+	innerWidth := width - styles.MainContent.GetHorizontalFrameSize()
+	innerHeight := height - 2 // Standard inner height calculation
 
 	var content strings.Builder
 
 	// 1. Header
 	title := "🍅 POMODORO FOCUS"
-	header := styles.Title.Width(width).Align(lipgloss.Center).Render(title)
+	header := styles.Title.Width(innerWidth).Align(lipgloss.Center).Render(title)
 	content.WriteString(header + "\n\n")
 
 	// 2. Timer
@@ -34,7 +34,9 @@ func (r *Renderer) renderPomodoro() string {
 		timeStyle = styles.PomodoroBreakTimer
 	}
 
-	content.WriteString(timeStyle.Width(width).Align(lipgloss.Center).Render(largeTime) + "\n")
+	// Wrap timer in a card-like style
+	timerCard := styles.PomodoroCard.Width(innerWidth - 4).Render(timeStyle.Render(largeTime))
+	content.WriteString(lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(timerCard) + "\n")
 
 	// 3. Progress Bar
 	if r.PomodoroMode == state.PomodoroCountdown && r.PomodoroTarget > 0 {
@@ -42,11 +44,11 @@ func (r *Renderer) renderPomodoro() string {
 		if progress > 1 {
 			progress = 1
 		}
-		barWidth := width / 2
+		barWidth := innerWidth / 2
 		filled := int(float64(barWidth) * progress)
 		empty := barWidth - filled
 		bar := styles.PomodoroProgressBar.Render(strings.Repeat("█", filled) + strings.Repeat("░", empty))
-		content.WriteString(lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(bar) + "\n")
+		content.WriteString(lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(bar) + "\n")
 	}
 
 	// 4. Phase & Session Info
@@ -57,28 +59,18 @@ func (r *Renderer) renderPomodoro() string {
 		phaseLabel = "Long Break"
 	}
 	info := fmt.Sprintf("%s #%d", phaseLabel, r.PomodoroSessions+1)
-	content.WriteString(styles.Subtitle.Width(width).Align(lipgloss.Center).Render(info) + "\n\n")
+	content.WriteString(styles.PomodoroPhaseLabel.Width(innerWidth).Render(info) + "\n\n")
 
 	// 5. Associated Task
-	content.WriteString(r.renderPomodoroTask(width) + "\n\n")
+	content.WriteString(r.renderPomodoroTask(innerWidth) + "\n")
 
-	// 6. Help / Key Hints (local to view)
-	hints := []string{
-		"[Space] Start/Pause",
-		"[r] Reset",
-		"[m] Mode: " + r.modeName(),
-		"[n] Next Phase",
-		"[+/-] Duration",
-		"[x] Complete Task",
-		"[c] Clear Task",
+	// Apply focus-aware container style
+	containerStyle := styles.MainContent
+	if r.FocusedPane == state.PaneMain {
+		containerStyle = styles.MainContentFocused
 	}
-	hintsView := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(width/2).Align(lipgloss.Left).Render(strings.Join(hints[:4], "  ")),
-		lipgloss.NewStyle().Width(width/2).Align(lipgloss.Right).Render(strings.Join(hints[4:], "  ")),
-	)
-	content.WriteString(hintsView)
 
-	return lipgloss.NewStyle().MaxHeight(height).Render(content.String())
+	return containerStyle.Width(width).Height(innerHeight).Render(content.String())
 }
 
 func (r *Renderer) renderPomodoroTask(width int) string {

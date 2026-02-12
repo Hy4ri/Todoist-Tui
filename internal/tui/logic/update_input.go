@@ -210,6 +210,13 @@ func (h *Handler) handleTaskClick(y int) tea.Cmd {
 
 // switchToTab switches to a specific tab using the view coordinator.
 func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
+	// Capture the current task before switching
+	if h.SelectedTask != nil {
+		h.LastSelectedTask = h.SelectedTask
+	} else if task := h.getSelectedTask(); task != nil {
+		h.LastSelectedTask = task
+	}
+
 	// Reset detail panel state when switching tabs
 	if h.ShowDetailPanel {
 		h.ShowDetailPanel = false
@@ -1448,6 +1455,12 @@ func (h *Handler) handleReminderInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 // handleSendTaskToPomodoro copies the currently selected task to the Pomodoro state.
 func (h *Handler) handleSendTaskToPomodoro() tea.Cmd {
 	task := h.getSelectedTask()
+
+	// If in Pomodoro view, always try to use the last selected task from another view
+	if h.CurrentView == state.ViewPomodoro && h.LastSelectedTask != nil {
+		task = h.LastSelectedTask
+	}
+
 	if task == nil {
 		h.StatusMsg = "No task selected to send to Pomodoro"
 		return nil

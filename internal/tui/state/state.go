@@ -138,6 +138,7 @@ type State struct {
 	SelectedTask      *api.Task
 	CurrentProject    *api.Project
 	CurrentLabel      *api.Label
+	LastSelectedTask  *api.Task // Last task highlighted by the cursor before view switch
 	ProductivityStats *api.ProductivityStats
 	StatsError        string
 

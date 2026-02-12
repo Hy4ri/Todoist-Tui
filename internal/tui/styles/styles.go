@@ -206,6 +206,15 @@ func rebuildStyles() {
 	PomodoroTimer = lipgloss.NewStyle().Bold(true).Foreground(Highlight)
 	PomodoroBreakTimer = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00AAAA"))
 	PomodoroProgressBar = lipgloss.NewStyle().Foreground(Highlight)
+	PomodoroCard = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(Subtle).
+		Padding(1, 2).
+		Align(lipgloss.Center)
+	PomodoroPhaseLabel = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(Subtle).
+		Align(lipgloss.Center)
 }
 
 // Terminal-adaptive colors that work in both light and dark terminals.
@@ -284,6 +293,8 @@ var (
 	PomodoroTimer       lipgloss.Style
 	PomodoroBreakTimer  lipgloss.Style
 	PomodoroProgressBar lipgloss.Style
+	PomodoroCard        lipgloss.Style
+	PomodoroPhaseLabel  lipgloss.Style
 )
 
 // Task styles

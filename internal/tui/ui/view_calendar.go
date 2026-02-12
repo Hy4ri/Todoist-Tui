@@ -687,6 +687,17 @@ func (r *Renderer) getContextualHints() []string {
 			key("a") + desc(":add"),
 			key("x") + desc(":done"),
 		}
+	case state.TabPomodoro:
+		return []string{
+			key("Space") + desc(":start/pause"),
+			key("r") + desc(":reset"),
+			key("m") + desc(":mode"),
+			key("n") + desc(":next"),
+			key("+/-") + desc(":duration"),
+			key("p") + desc(":pick task"),
+			key("x") + desc(":done"),
+			key("c") + desc(":clear"),
+		}
 	}
 
 	// Default generic fallback
