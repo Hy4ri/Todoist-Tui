@@ -49,15 +49,15 @@ func (r *Renderer) renderTaskForm() string {
 	}
 
 	// Content
-	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("TASK CONTENT") + "\n")
+	b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("TASK CONTENT") + "\n")
 	b.WriteString(f.Content.View() + "\n\n")
 
 	// Description
-	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("DESCRIPTION") + "\n")
+	b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("DESCRIPTION") + "\n")
 	b.WriteString(f.Description.View() + "\n\n")
 
 	// 1. Due Date
-	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("DUE DATE / TIME") + "\n")
+	b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("DUE DATE / TIME") + "\n")
 	dueStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(styles.Subtle).
@@ -126,7 +126,7 @@ func (r *Renderer) renderTaskForm() string {
 
 	// Project Selector Dropdown
 	if f.ShowProjectList {
-		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SELECT PROJECT") + "\n")
+		b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("SELECT PROJECT") + "\n")
 		var lines []string
 
 		if len(f.AvailableProjects) == 0 {
@@ -186,7 +186,7 @@ func (r *Renderer) renderTaskForm() string {
 
 	// Label Selector Dropdown
 	if f.ShowLabelList {
-		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SELECT LABELS") + "\n")
+		b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("SELECT LABELS") + "\n")
 		var lines []string
 
 		if len(f.AvailableLabels) == 0 {
@@ -399,17 +399,17 @@ func (r *Renderer) renderProjectDialog() string {
 	b.WriteString(styles.Title.Render("📁 New Project") + "\n\n")
 
 	// Name Input
-	inputLabel := styles.InputLabel.Copy().Render("PROJECT NAME")
+	inputLabel := styles.InputLabel.Render("PROJECT NAME")
 	if !r.IsSelectingColor {
-		inputLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME")
+		inputLabel = styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME")
 	}
 	b.WriteString(inputLabel + "\n")
 	b.WriteString(r.ProjectInput.View() + "\n\n")
 
 	// Color Selection
-	colorLabel := styles.InputLabel.Copy().Render("COLOR")
+	colorLabel := styles.InputLabel.Render("COLOR")
 	if r.IsSelectingColor {
-		colorLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("COLOR")
+		colorLabel = styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("COLOR")
 	}
 	b.WriteString(colorLabel + "\n")
 
@@ -440,7 +440,7 @@ func (r *Renderer) renderProjectDialog() string {
 // renderProjectEditDialog renders the edit project dialog.
 func (r *Renderer) renderProjectEditDialog() string {
 	content := styles.Title.Render("✏️ Edit Project") + "\n\n" +
-		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME") + "\n" +
+		styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("PROJECT NAME") + "\n" +
 		r.ProjectInput.View() + "\n\n" +
 		styles.HelpDesc.Render("Enter: save • Esc: cancel")
 
@@ -466,17 +466,17 @@ func (r *Renderer) renderLabelDialog() string {
 	b.WriteString(styles.Title.Render("🏷️ New Label") + "\n\n")
 
 	// Name Input
-	inputLabel := styles.InputLabel.Copy().Render("LABEL NAME")
+	inputLabel := styles.InputLabel.Render("LABEL NAME")
 	if !r.IsSelectingColor {
-		inputLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("LABEL NAME")
+		inputLabel = styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("LABEL NAME")
 	}
 	b.WriteString(inputLabel + "\n")
 	b.WriteString(r.LabelInput.View() + "\n\n")
 
 	// Color Selection
-	colorLabel := styles.InputLabel.Copy().Render("COLOR")
+	colorLabel := styles.InputLabel.Render("COLOR")
 	if r.IsSelectingColor {
-		colorLabel = styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("COLOR")
+		colorLabel = styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("COLOR")
 	}
 	b.WriteString(colorLabel + "\n")
 
@@ -537,7 +537,7 @@ func (r *Renderer) renderSubtaskDialog() string {
 // renderSectionDialog renders the new section dialog.
 func (r *Renderer) renderSectionDialog() string {
 	content := styles.Title.Render("📂 New Section") + "\n\n" +
-		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SECTION NAME") + "\n" +
+		styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("SECTION NAME") + "\n" +
 		r.SectionInput.View() + "\n\n" +
 		styles.HelpDesc.Render("Enter: create • Esc: cancel")
 
@@ -547,7 +547,7 @@ func (r *Renderer) renderSectionDialog() string {
 // renderSectionEditDialog renders the edit section dialog.
 func (r *Renderer) renderSectionEditDialog() string {
 	content := styles.Title.Render("✏️ Edit Section") + "\n\n" +
-		styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SECTION NAME") + "\n" +
+		styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("SECTION NAME") + "\n" +
 		r.SectionInput.View() + "\n\n" +
 		styles.HelpDesc.Render("Enter: save • Esc: cancel")
 
@@ -572,7 +572,7 @@ func (r *Renderer) renderMoveTaskDialog() string {
 	var b strings.Builder
 	b.WriteString(styles.Title.Render("➡️ Move Task to Section") + "\n\n")
 
-	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("SELECT DESTINATION") + "\n\n")
+	b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("SELECT DESTINATION") + "\n\n")
 
 	if len(r.Sections) == 0 {
 		b.WriteString(styles.HelpDesc.Render("No sections in this project."))
@@ -691,7 +691,7 @@ func (r *Renderer) renderSectionAddTaskDialog() string {
 	title := fmt.Sprintf("➕ Add Task to [%s]", r.TargetSectionName)
 	b.WriteString(styles.Title.Render(title) + "\n\n")
 
-	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("TASK NAME") + "\n")
+	b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("TASK NAME") + "\n")
 	b.WriteString(r.SectionAddInput.View() + "\n\n")
 
 	b.WriteString(styles.HelpDesc.Render("Quick Add syntax supported (dates, priorities, etc.)") + "\n")
@@ -706,7 +706,7 @@ func (r *Renderer) renderIndentDialog() string {
 	b.WriteString(styles.Title.Render("⤵ Indent Under Task") + "\n\n")
 
 	// Render search/filter input
-	b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("FILTER") + "\n")
+	b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("FILTER") + "\n")
 	b.WriteString(r.IndentInput.View() + "\n\n")
 
 	// Render candidates list
@@ -791,15 +791,15 @@ func (r *Renderer) renderReminderForm() string {
 
 	if r.ReminderTypeCursor == 0 {
 		// Relative
-		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("MINUTES BEFORE") + "\n")
+		b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("MINUTES BEFORE") + "\n")
 		b.WriteString(r.ReminderMinuteInput.View() + "\n\n")
 		b.WriteString(styles.HelpDesc.Render("e.g. 30 (for 30 mins before)"))
 	} else {
 		// Absolute
-		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("DATE") + "\n")
+		b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("DATE") + "\n")
 		b.WriteString(r.ReminderDateInput.View() + "\n\n")
 
-		b.WriteString(styles.InputLabel.Copy().Foreground(styles.Highlight).Underline(true).Render("TIME") + "\n")
+		b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("TIME") + "\n")
 		b.WriteString(r.ReminderTimeInput.View() + "\n\n")
 	}
 

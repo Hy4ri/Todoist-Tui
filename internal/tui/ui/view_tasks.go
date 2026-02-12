@@ -90,7 +90,7 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 		title = truncateString(title, safeTitleWidth)
 	}
 
-	b.WriteString(styles.Title.Copy().Underline(true).Render(strings.ToUpper(title)) + "\n\n")
+	b.WriteString(styles.Title.Underline(true).Render(strings.ToUpper(title)) + "\n\n")
 
 	if r.Loading {
 		b.WriteString(r.Spinner.View())
@@ -497,7 +497,7 @@ func (r *Renderer) taskDepth(task *api.Task, allTasks []api.Task) int {
 	depth := 0
 	current := task
 	// Safety limit
-	for i := 0; i < 10; i++ {
+	for _ = range 10 {
 		if current.ParentID == nil {
 			break
 		}
@@ -564,7 +564,7 @@ func (r *Renderer) renderTaskDescription(desc string, width int) string {
 	// Render with explicit MaxWidth to be safe, though usage of truncated string should suffice.
 	// We calculate explicit width for style to avoid Lipgloss padding adding to overflow.
 	// Style has PaddingLeft(10).
-	return styles.TaskListDescription.Copy().Width(availableWidth).MaxWidth(availableWidth).Render(truncated)
+	return styles.TaskListDescription.Width(availableWidth).MaxWidth(availableWidth).Render(truncated)
 }
 
 // renderScrollableLines renders lines with scrolling support using viewport and windowing.
@@ -698,7 +698,7 @@ func (r *Renderer) renderScrollableLines(lines []lineInfo, orderedIndices []int,
 func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 	var b strings.Builder
 
-	b.WriteString(styles.Title.Copy().Underline(true).Render("UPCOMING TASKS") + "\n\n")
+	b.WriteString(styles.Title.Underline(true).Render("UPCOMING TASKS") + "\n\n")
 
 	if r.Loading {
 		b.WriteString(r.Spinner.View())
@@ -816,7 +816,7 @@ func (r *Renderer) renderUpcoming(width, maxHeight int) string {
 func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 	var b strings.Builder
 
-	b.WriteString(styles.Title.Copy().Underline(true).Render("LABELS") + "\n\n")
+	b.WriteString(styles.Title.Underline(true).Render("LABELS") + "\n\n")
 
 	// Account for title + blank line (2 lines used)
 	contentHeight := maxHeight - 2

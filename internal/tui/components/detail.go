@@ -130,7 +130,7 @@ func (d *DetailModel) ViewPanel() string {
 		if descWidth < 10 {
 			descWidth = 10
 		}
-		content.WriteString(styles.DetailDescription.Copy().Width(descWidth).Render(t.Description) + "\n")
+		content.WriteString(styles.DetailDescription.Width(descWidth).Render(t.Description) + "\n")
 	}
 
 	// Reminders
@@ -154,7 +154,7 @@ func (d *DetailModel) ViewPanel() string {
 			commentWidth = 10
 		}
 		for _, c := range d.comments {
-			content.WriteString("• " + styles.CommentContent.Copy().Width(commentWidth).Render(c.Content) + "\n")
+			content.WriteString("• " + styles.CommentContent.Width(commentWidth).Render(c.Content) + "\n")
 		}
 	}
 
@@ -205,7 +205,7 @@ func (d *DetailModel) renderPanel() string {
 		b.WriteString("\n")
 		// Apply wrapping to description
 		// DetailDescription has PaddingLeft(2), so subtract that from contentWidth
-		b.WriteString(styles.DetailDescription.Copy().Width(contentWidth - 2).Render(t.Description))
+		b.WriteString(styles.DetailDescription.Width(contentWidth - 2).Render(t.Description))
 		b.WriteString("\n\n")
 	}
 
@@ -320,7 +320,7 @@ func (d *DetailModel) renderPanel() string {
 			b.WriteString("\n")
 
 			// Apply wrapping to comment content
-			b.WriteString(styles.CommentContent.Copy().Width(contentWidth - 2).Render(c.Content))
+			b.WriteString(styles.CommentContent.Width(contentWidth - 2).Render(c.Content))
 
 			// Render attachment if present
 			if c.FileAttachment != nil {

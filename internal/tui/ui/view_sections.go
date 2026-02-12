@@ -14,7 +14,7 @@ func (r *Renderer) renderSections() string {
 	b.WriteString(styles.Title.Render("Manage Sections"))
 	b.WriteString("\n\n")
 
-	b.WriteString(styles.Title.Copy().Underline(true).Render("SECTIONS LIST") + "\n\n")
+	b.WriteString(styles.Title.Underline(true).Render("SECTIONS LIST") + "\n\n")
 
 	if len(r.Sections) == 0 {
 		b.WriteString(styles.HelpDesc.Render("No sections found. Press 'a' to add one."))

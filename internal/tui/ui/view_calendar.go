@@ -26,7 +26,7 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 
 	// Header with month/year and navigation hints
 	monthYear := r.CalendarDate.Format("January 2006")
-	b.WriteString(styles.Title.Copy().Underline(true).Render(strings.ToUpper(monthYear)) + "\n")
+	b.WriteString(styles.Title.Underline(true).Render(strings.ToUpper(monthYear)) + "\n")
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
 	b.WriteString("\n\n")
@@ -58,13 +58,13 @@ func (r *Renderer) renderCalendarCompact(maxHeight int) string {
 	// Render calendar grid and count weeks rendered
 	day := 1
 	weeksRendered := 0
-	for week := 0; week < 6; week++ {
+	for week := range 6 {
 		if day > daysInMonth {
 			break
 		}
 		weeksRendered++
 
-		for weekday := 0; weekday < 7; weekday++ {
+		for weekday := range 7 {
 			if week == 0 && weekday < startWeekday {
 				b.WriteString("     ")
 				continue
@@ -166,7 +166,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 
 	// Header with month/year and navigation hints
 	monthYear := r.CalendarDate.Format("January 2006")
-	b.WriteString(styles.Title.Copy().Underline(true).Render(strings.ToUpper(monthYear)) + "\n")
+	b.WriteString(styles.Title.Underline(true).Render(strings.ToUpper(monthYear)) + "\n")
 	b.WriteString("\n")
 	b.WriteString(styles.HelpDesc.Render("← → prev/next month | h l prev/next day | v toggle view"))
 	b.WriteString("\n\n")
@@ -243,7 +243,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 
 	// Render calendar grid
 	currentWeekDay := 1
-	for week := 0; week < 6; week++ {
+	for week := range 6 {
 		if currentWeekDay > daysInMonth {
 			break
 		}
@@ -252,7 +252,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 		var dayNumBuilder strings.Builder
 		dayNumBuilder.WriteString("│")
 		tempDay := currentWeekDay
-		for weekday := 0; weekday < 7; weekday++ {
+		for weekday := range 7 {
 			if week == 0 && weekday < startWeekday || tempDay > daysInMonth {
 				dayNumBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
 				continue
@@ -288,7 +288,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 			var taskRowBuilder strings.Builder
 			taskRowBuilder.WriteString("│")
 			tempDay = currentWeekDay
-			for weekday := 0; weekday < 7; weekday++ {
+			for weekday := range 7 {
 				if (week == 0 && weekday < startWeekday) || tempDay > daysInMonth {
 					taskRowBuilder.WriteString(strings.Repeat(" ", cellWidth) + "│")
 					continue

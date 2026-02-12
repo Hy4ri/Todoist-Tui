@@ -93,7 +93,7 @@ func (h *HelpModel) View() string {
 
 		// Key-description pair
 		// For better alignment, use a fixed width for the key padding
-		keyStyle := styles.HelpKey.Copy().Width(12).Align(lipgloss.Right).PaddingRight(2)
+		keyStyle := styles.HelpKey.Width(12).Align(lipgloss.Right).PaddingRight(2)
 		keyStr := keyStyle.Render(key)
 		descStr := styles.HelpDesc.Render(desc)
 		currentColumn.WriteString(keyStr + descStr + "\n")

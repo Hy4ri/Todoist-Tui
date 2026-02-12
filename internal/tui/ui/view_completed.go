@@ -14,7 +14,7 @@ import (
 func (r *Renderer) renderCompletedTaskList(width, maxHeight int) string {
 	var b strings.Builder
 
-	b.WriteString(styles.Title.Copy().Underline(true).Render("COMPLETED TASKS") + "\n\n")
+	b.WriteString(styles.Title.Underline(true).Render("COMPLETED TASKS") + "\n\n")
 
 	if r.Loading {
 		b.WriteString(r.Spinner.View())

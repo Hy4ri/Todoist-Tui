@@ -84,13 +84,13 @@ func RenderLargeTime(tStr string) string {
 		if !ok {
 			continue
 		}
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			rows[i] += lines[i] + "  "
 		}
 	}
 
 	var res string
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		res += rows[i] + "\n"
 	}
 	return res
