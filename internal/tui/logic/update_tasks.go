@@ -26,45 +26,47 @@ func (h *Handler) sortTasks() {
 		sort.SliceStable(h.Tasks, func(i, j int) bool {
 			ti, tj := h.Tasks[i], h.Tasks[j]
 
-			// 1. Due Date
-			hasDueI := ti.Due != nil
-			hasDueJ := tj.Due != nil
+			// 1. Time is top priority — tasks with time come first
+			hasTimeI := ti.Due != nil && ti.Due.Datetime != nil && *ti.Due.Datetime != ""
+			hasTimeJ := tj.Due != nil && tj.Due.Datetime != nil && *tj.Due.Datetime != ""
 
-			if hasDueI && !hasDueJ {
-				return true // i has due date, j doesn't -> i first
+			if hasTimeI && !hasTimeJ {
+				return true
 			}
-			if !hasDueI && hasDueJ {
-				return false // j has due date, i doesn't -> j first
+			if !hasTimeI && hasTimeJ {
+				return false
 			}
 
-			if hasDueI && hasDueJ {
-				// Compare dates first (YYYY-MM-DD)
-				if ti.Due.Date != tj.Due.Date {
-					return ti.Due.Date < tj.Due.Date
-				}
-
-				// Same date, prefer tasks with specific times
-				hasTimeI := ti.Due.Datetime != nil
-				hasTimeJ := tj.Due.Datetime != nil
-				if hasTimeI && !hasTimeJ {
-					return true
-				}
-				if !hasTimeI && hasTimeJ {
-					return false
-				}
-
-				// Both have times, compare them
-				if hasTimeI && hasTimeJ && *ti.Due.Datetime != *tj.Due.Datetime {
+			// Both have time → sort chronologically
+			if hasTimeI && hasTimeJ {
+				if *ti.Due.Datetime != *tj.Due.Datetime {
 					return *ti.Due.Datetime < *tj.Due.Datetime
 				}
 			}
 
-			// 2. Priority (Higher values first: P1=4, P2=3, P3=2, P4=1)
+			// 2. Priority (higher value = more urgent)
 			if ti.Priority != tj.Priority {
 				return ti.Priority > tj.Priority
 			}
 
-			// 3. Child Order (Manual order within project/list)
+			// 3. Due date (earlier first) as tiebreaker
+			hasDueI := ti.Due != nil
+			hasDueJ := tj.Due != nil
+
+			if hasDueI && !hasDueJ {
+				return true
+			}
+			if !hasDueI && hasDueJ {
+				return false
+			}
+
+			if hasDueI && hasDueJ {
+				if ti.Due.Date != tj.Due.Date {
+					return ti.Due.Date < tj.Due.Date
+				}
+			}
+
+			// 4. Child Order (Manual order within project/list) as tiebreaker
 			return ti.ChildOrder < tj.ChildOrder
 		})
 	}
@@ -87,10 +89,35 @@ func (h *Handler) sortTasksHierarchically() {
 		}
 	}
 
-	// Helper to sort a slice of tasks by ChildOrder
+	// Helper to sort a slice of tasks by Time, Priority, then ChildOrder
 	sortByOrder := func(tasks []*api.Task) {
 		sort.Slice(tasks, func(i, j int) bool {
-			return tasks[i].ChildOrder < tasks[j].ChildOrder
+			ti, tj := tasks[i], tasks[j]
+
+			// 1. Time
+			hasTimeI := ti.Due != nil && ti.Due.Datetime != nil && *ti.Due.Datetime != ""
+			hasTimeJ := tj.Due != nil && tj.Due.Datetime != nil && *tj.Due.Datetime != ""
+
+			if hasTimeI && !hasTimeJ {
+				return true
+			}
+			if !hasTimeI && hasTimeJ {
+				return false
+			}
+
+			if hasTimeI && hasTimeJ {
+				if *ti.Due.Datetime != *tj.Due.Datetime {
+					return *ti.Due.Datetime < *tj.Due.Datetime
+				}
+			}
+
+			// 2. Priority
+			if ti.Priority != tj.Priority {
+				return ti.Priority > tj.Priority
+			}
+
+			// 3. ChildOrder
+			return ti.ChildOrder < tj.ChildOrder
 		})
 	}
 
@@ -1454,14 +1481,14 @@ func (h *Handler) loadTaskDetails() tea.Cmd {
 	if h.SelectedTask == nil {
 		return nil
 	}
-	
+
 	h.initReminderInput()
 	h.IsAddingReminder = false
 	h.IsEditingReminder = false
 	h.EditingReminder = nil
-	
+
 	return tea.Batch(
-h.loadTaskComments(),
+		h.loadTaskComments(),
 		h.fetchReminders(h.SelectedTask.ID),
 	)
 }
@@ -1483,7 +1510,7 @@ func (h *Handler) handleAddReminder() tea.Cmd {
 	h.IsEditingReminder = false
 	h.EditingReminder = nil
 	h.ConfirmDeleteReminder = false // Ensure delete confirmation is off
-	
+
 	// Default to relative, 30 min
 	h.ReminderTypeCursor = 0 // Relative
 	if h.ReminderMinuteInput.Value() == "" {
@@ -1492,7 +1519,7 @@ func (h *Handler) handleAddReminder() tea.Cmd {
 	h.ReminderMinuteInput.Focus()
 	h.ReminderDateInput.SetValue("")
 	h.ReminderTimeInput.SetValue("")
-	
+
 	return textinput.Blink
 }
 
@@ -1502,12 +1529,12 @@ func (h *Handler) initReminderInput() {
 	h.ReminderMinuteInput.Placeholder = "Minutes before (e.g. 30)"
 	h.ReminderMinuteInput.CharLimit = 5
 	h.ReminderMinuteInput.Width = 10
-	
+
 	h.ReminderDateInput = textinput.New()
 	h.ReminderDateInput.Placeholder = "YYYY-MM-DD"
 	h.ReminderDateInput.CharLimit = 10
 	h.ReminderDateInput.Width = 12
-	
+
 	h.ReminderTimeInput = textinput.New()
 	h.ReminderTimeInput.Placeholder = "HH:MM"
 	h.ReminderTimeInput.CharLimit = 5
@@ -1517,7 +1544,7 @@ func (h *Handler) initReminderInput() {
 // handleReminderTypeToggle toggles between relative and absolute reminder types.
 func (h *Handler) handleReminderTypeToggle() tea.Cmd {
 	h.ReminderTypeCursor = 1 - h.ReminderTypeCursor // Toggle 0/1
-	
+
 	if h.ReminderTypeCursor == 0 { // Relative
 		h.ReminderMinuteInput.Focus()
 		h.ReminderDateInput.Blur()
@@ -1535,17 +1562,17 @@ func (h *Handler) handleDeleteReminder() tea.Cmd {
 	if h.EditingReminder == nil {
 		return nil
 	}
-	
+
 	id := h.EditingReminder.ID
 	h.ConfirmDeleteReminder = false
 	h.EditingReminder = nil
-	
+
 	h.StatusMsg = "Deleting reminder..."
-	
+
 	return func() tea.Msg {
 		err := h.Client.DeleteReminder(id)
 		if err != nil {
-			 return errMsg{err}
+			return errMsg{err}
 		}
 		return reminderDeletedMsg{id: id}
 	}
@@ -1553,54 +1580,54 @@ func (h *Handler) handleDeleteReminder() tea.Cmd {
 
 // submitReminderForm handles the submission of the reminder form (create/update).
 func (h *Handler) submitReminderForm() tea.Cmd {
-    if h.SelectedTask == nil {
-        return nil
-    }
+	if h.SelectedTask == nil {
+		return nil
+	}
 
-    var req api.CreateReminderRequest
-    req.ItemID = h.SelectedTask.ID
-    req.Type = "relative" 
-    
-    if h.ReminderTypeCursor == 1 {
-        req.Type = "absolute"
-        dateStr := h.ReminderDateInput.Value()
-        timeStr := h.ReminderTimeInput.Value()
-        
-        if dateStr == "" {
-            h.StatusMsg = "Date is required"
-            return nil
-        }
-        
-        // Basic validation/formatting would be good here
-        finalDate := dateStr
-        if timeStr != "" {
-            finalDate = dateStr + "T" + timeStr + ":00" // Simple append
-        }
-        
-        req.Due = &api.ReminderDue{
-            Date: finalDate,
-        }
-    } else {
-        // Relative
-        minStr := h.ReminderMinuteInput.Value()
-        if minStr == "" {
-             h.StatusMsg = "Minutes required"
-             return nil
-        }
-        // Parse int
-        var mins int
-        fmt.Sscanf(minStr, "%d", &mins)
-        req.MinuteOffset = mins
-    }
-    
-    h.StatusMsg = "Saving reminder..."
-    h.Loading = true
-    
-    return func() tea.Msg {
-        rem, err := h.Client.CreateReminder(req)
-        if err != nil {
-            return errMsg{err}
-        }
-        return reminderCreatedMsg{reminder: rem}
-    }
+	var req api.CreateReminderRequest
+	req.ItemID = h.SelectedTask.ID
+	req.Type = "relative"
+
+	if h.ReminderTypeCursor == 1 {
+		req.Type = "absolute"
+		dateStr := h.ReminderDateInput.Value()
+		timeStr := h.ReminderTimeInput.Value()
+
+		if dateStr == "" {
+			h.StatusMsg = "Date is required"
+			return nil
+		}
+
+		// Basic validation/formatting would be good here
+		finalDate := dateStr
+		if timeStr != "" {
+			finalDate = dateStr + "T" + timeStr + ":00" // Simple append
+		}
+
+		req.Due = &api.ReminderDue{
+			Date: finalDate,
+		}
+	} else {
+		// Relative
+		minStr := h.ReminderMinuteInput.Value()
+		if minStr == "" {
+			h.StatusMsg = "Minutes required"
+			return nil
+		}
+		// Parse int
+		var mins int
+		fmt.Sscanf(minStr, "%d", &mins)
+		req.MinuteOffset = mins
+	}
+
+	h.StatusMsg = "Saving reminder..."
+	h.Loading = true
+
+	return func() tea.Msg {
+		rem, err := h.Client.CreateReminder(req)
+		if err != nil {
+			return errMsg{err}
+		}
+		return reminderCreatedMsg{reminder: rem}
+	}
 }

@@ -248,6 +248,3 @@ func (h *Handler) switchPane() {
 		h.FocusedPane = state.PaneSidebar
 	}
 }
-
-// sortTasks sorts tasks by due datetime (earliest first), then by priority (highest first).
-// Tasks without due dates come after those with due dates.
