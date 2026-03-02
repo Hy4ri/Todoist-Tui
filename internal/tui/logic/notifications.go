@@ -2,8 +2,6 @@ package logic
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -11,15 +9,6 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 )
 
-// Debug logger
-var debugLog *log.Logger
-
-func init() {
-	f, err := os.OpenFile("debug.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err == nil {
-		debugLog = log.New(f, "NOTIF: ", log.Ltime|log.Lshortfile)
-	}
-}
 
 type checkDueMsg time.Time
 
@@ -35,9 +24,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 	// Always schedule the next check
 	cmds = append(cmds, checkDueCmd())
 
-	if debugLog != nil {
-		debugLog.Printf("Checking notifications at %v. Task count: %d", t, len(h.AllTasks))
-	}
 
 	// Check for due tasks
 	for _, task := range h.AllTasks {
@@ -59,9 +45,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 			// Time-specific task
 			dueTime, err = time.Parse(time.RFC3339, *task.Due.Datetime)
 			if err != nil {
-				if debugLog != nil {
-					debugLog.Printf("Failed to parse datetime %s for task %s: %v", *task.Due.Datetime, task.Content, err)
-				}
 				continue
 			}
 			dueTime = dueTime.Local()
@@ -70,9 +53,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 			// We parse the date (YYYY-MM-DD) and add 9 hours
 			parsedDate, err := time.ParseInLocation("2006-01-02", task.Due.Date[:10], time.Local)
 			if err != nil {
-				if debugLog != nil {
-					debugLog.Printf("Failed to parse date %s for task %s: %v", task.Due.Date, task.Content, err)
-				}
 				continue
 			}
 			dueTime = parsedDate.Add(9 * time.Hour)
@@ -81,9 +61,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 			continue
 		}
 
-		if debugLog != nil {
-			debugLog.Printf("Task '%s' due at %v (Now: %v)", task.Content, dueTime, t)
-		}
 
 		// Check if due time has passed
 		if t.After(dueTime) || t.Equal(dueTime) {
@@ -96,17 +73,11 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 			}
 
 			if t.Sub(dueTime) > threshold {
-				if debugLog != nil {
-					debugLog.Printf("Skipping old task '%s' (diff: %v)", task.Content, t.Sub(dueTime))
-				}
 				// Mark as notified silently so we don't check again
 				h.NotifiedTasks[task.ID] = true
 				continue
 			}
 
-			if debugLog != nil {
-				debugLog.Printf("Notifying for task '%s'", task.Content)
-			}
 
 			// Mark as notified
 			h.NotifiedTasks[task.ID] = true
@@ -120,10 +91,7 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 			// Add notification command
 			cmds = append(cmds, func() tea.Msg {
-				err := beeep.Notify(project, "Task Due: "+content, "")
-				if err != nil && debugLog != nil {
-					debugLog.Printf("Failed to send notification: %v", err)
-				}
+				_ = beeep.Notify(project, "Task Due: "+content, "")
 				return nil
 			})
 		}
@@ -186,9 +154,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 				triggerTime, err = time.Parse(time.RFC3339, rem.Due.Date)
 			}
 			if err != nil {
-				if debugLog != nil {
-					debugLog.Printf("Failed to parse reminder date %s: %v", rem.Due.Date, err)
-				}
 				continue
 			}
 
@@ -216,9 +181,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 				continue
 			}
 
-			if debugLog != nil {
-				debugLog.Printf("Triggering reminder: %s", content)
-			}
 
 			h.NotifiedTasks[rem.ID] = true
 
