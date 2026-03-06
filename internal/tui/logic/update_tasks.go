@@ -831,7 +831,6 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 	}
 
 	h.StatusMsg = fmt.Sprintf("Moving task to %s...", newDateStr)
-	// Remove blocking loading state
 
 	// Prepare UpdateReq
 	var updateReq api.UpdateTaskRequest
@@ -861,6 +860,9 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 			updateReq.DueString = &recurrence
 		}
 	}
+
+	// Re-filter visible tasks so the task disappears from date-filtered views
+	h.refilterCurrentView()
 
 	return func() tea.Msg {
 		_, err := h.Client.UpdateTask(taskID, updateReq)

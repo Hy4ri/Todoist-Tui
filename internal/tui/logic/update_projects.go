@@ -976,6 +976,9 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 		}
 	}
 
+	// Re-filter visible tasks so the sort order updates immediately
+	h.refilterCurrentView()
+
 	// Perform API update in background without blocking UI
 	taskID := task.ID
 	return func() tea.Msg {
@@ -1038,8 +1041,10 @@ func (h *Handler) handleDueToday() tea.Cmd {
 		}
 	}
 
+	// Re-filter visible tasks so the task appears/disappears correctly
+	h.refilterCurrentView()
+
 	h.StatusMsg = "Moving to today..."
-	// Remove blocking loading state
 
 	return func() tea.Msg {
 		_, err := h.Client.UpdateTask(task.ID, api.UpdateTaskRequest{
@@ -1098,6 +1103,9 @@ func (h *Handler) handleDueTomorrow() tea.Cmd {
 			break
 		}
 	}
+
+	// Re-filter visible tasks so the task disappears from date-filtered views
+	h.refilterCurrentView()
 
 	h.StatusMsg = "Moving to tomorrow..."
 
@@ -1270,6 +1278,40 @@ func (h *Handler) loadInboxTasks() tea.Cmd {
 
 	h.sortTasks()
 	return nil
+}
+
+// refilterCurrentView re-filters h.Tasks from h.AllTasks based on the current tab.
+// Call this after any optimistic update that changes which view a task belongs to
+// (e.g. changing due date, removing due date). This provides instant UI feedback
+// without waiting for the API round-trip.
+func (h *Handler) refilterCurrentView() {
+	switch h.CurrentTab {
+	case state.TabToday:
+		h.filterTodayTasks()
+	case state.TabInbox:
+		h.filterInboxTasks()
+	case state.TabUpcoming:
+		h.filterUpcomingTasks()
+	case state.TabProjects:
+		if h.CurrentProject != nil {
+			h.filterProjectTasks(h.CurrentProject.ID)
+		}
+	case state.TabLabels:
+		if h.CurrentLabel != nil {
+			h.filterLabelTasks(h.CurrentLabel.Name)
+		}
+	case state.TabCalendar:
+		h.filterCalendarTasks()
+	case state.TabFilters:
+		// Filter views use server-side queries; local refilter not applicable
+	case state.TabCompleted:
+		// Completed tasks come from a separate endpoint; skip
+	}
+
+	// Clamp cursor to valid range after tasks may have been removed
+	if h.TaskCursor >= len(h.Tasks) {
+		h.TaskCursor = max(0, len(h.Tasks)-1)
+	}
 }
 
 // filterTodayTasks filters cached tasks for today/overdue.
