@@ -868,7 +868,7 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 			return errMsg{err}
 		}
 		// Refresh tasks
-		return taskCreatedMsg{} // Reuse for refresh
+		return taskUpdatedMsg{}
 	}
 }
 
@@ -1085,7 +1085,7 @@ func (h *Handler) submitForm() tea.Cmd {
 			if err != nil {
 				return errMsg{err}
 			}
-			return taskCreatedMsg{} // Reuse message type for refresh
+			return taskUpdatedMsg{}
 		}
 	}
 

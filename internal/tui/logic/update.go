@@ -465,7 +465,7 @@ func (h *Handler) handleTaskMsgs(msg tea.Msg) tea.Cmd {
 		h.StatusMsg = "Task completed"
 		h.updateStatsOnCompletion()
 	}
-	return h.refreshTasks()
+	return h.handleRefresh(false)
 }
 
 func (h *Handler) handleProjectMsgs(msg tea.Msg) tea.Cmd {
