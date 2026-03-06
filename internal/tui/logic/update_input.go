@@ -283,7 +283,6 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 		h.FilterInput = textinput.New()
 		h.FilterInput.Placeholder = "Search filters..."
 		h.IsFilterSearch = false
-		h.IsFilterSearch = false
 		h.FilterSearchQuery = ""
 		return h.loadFilters()
 	case state.TabCompleted:
@@ -988,10 +987,14 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 				if sectionID != "" {
 					secPtr = &sectionID
 				}
-				h.Client.MoveTask(task.ID, secPtr, &projectID, nil)
+				if err := h.Client.MoveTask(task.ID, secPtr, &projectID, nil); err != nil {
+					return errMsg{err}
+				}
 			} else if sectionID != "" && (task.SectionID == nil || *task.SectionID != sectionID) {
 				// Same project but wrong section
-				h.Client.MoveTask(task.ID, &sectionID, nil, nil)
+				if err := h.Client.MoveTask(task.ID, &sectionID, nil, nil); err != nil {
+					return errMsg{err}
+				}
 			}
 
 			return quickAddTaskCreatedMsg{}

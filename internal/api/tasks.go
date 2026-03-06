@@ -241,7 +241,10 @@ func (c *Client) MoveTasksBatch(ids []string, targetProjectID string, targetSect
 		}
 	}
 
-	cmdsJSON, _ := json.Marshal(commands)
+	cmdsJSON, err := json.Marshal(commands)
+	if err != nil {
+		return fmt.Errorf("failed to marshal sync commands: %w", err)
+	}
 	formData := url.Values{}
 	formData.Set("commands", string(cmdsJSON))
 

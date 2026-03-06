@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
-	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
 
 // loadFilters loads filters from API.
@@ -61,31 +60,6 @@ func (h *Handler) runAdHocFilter(query string) tea.Cmd {
 	}
 }
 
-// updateFilters handles filter-related updates.
-// Helper function to be called from main Update().
-// Actually, I'll add specific message handlers in update.go to call these.
-
-func (h *Handler) filterSidebarBySearch() {
-	if h.FilterInput.Value() == "" {
-		h.IsFilterSearch = false
-		// Restore full list?
-		// We need to keep original full list separate from displayed list?
-		// For now, let's assume h.Filters IS the full list and we allow rendering to filter it,
-		// OR we filter it in place.
-		// A better approach: h.Filters is source of truth. Render filters dynamically.
-		// But navigation needs access to filtered list.
-		// So let's add h.FilteredFilters to State? Or just filter in place for simple lists.
-		// Logic:
-		// When search changes, update a "VisibleFilters" slice in state?
-		// State struct allows arbitrary fields, but I'd rather not change it again if I can avoid.
-		// I'll filter in View logic or add VisibleFilters to State?
-		// Trying to keep it simple: Filter logic updates selection index.
-	} else {
-		h.IsFilterSearch = true
-		h.FilterSearchQuery = h.FilterInput.Value()
-	}
-}
-
 // getVisibleFilters returns filters matching the search query.
 func (h *Handler) getVisibleFilters() []api.Filter {
 	if h.FilterSearchQuery == "" {
@@ -100,73 +74,6 @@ func (h *Handler) getVisibleFilters() []api.Filter {
 		}
 	}
 	return visible
-}
-
-// handleFiltersKeyMsg handles keys for the filters tab.
-func (h *Handler) handleFiltersKeyMsg(msg tea.KeyMsg) tea.Cmd {
-	// If searching, handle input
-	if h.IsFilterSearch {
-		switch msg.String() {
-		case "enter":
-			h.IsFilterSearch = false
-			h.FilterInput.Blur()
-			if len(h.getVisibleFilters()) > 0 {
-				return h.handleFilterSelect()
-			}
-			return nil
-		case "esc":
-			h.IsFilterSearch = false
-			h.FilterInput.Blur()
-			h.FilterInput.SetValue("")
-			h.filterSidebarBySearch()
-			return nil
-		}
-
-		var cmd tea.Cmd
-		h.FilterInput, cmd = h.FilterInput.Update(msg)
-		h.filterSidebarBySearch()
-		return cmd
-	}
-
-	switch msg.String() {
-	case "/":
-		h.IsFilterSearch = true
-		h.FilterInput.Focus()
-		return textinput.Blink
-	case "j", "down":
-		if h.FocusedPane == state.PaneMain {
-			return nil // Fallthrough to task list navigation
-		}
-		h.moveFilterCursor(1)
-		return nil
-	case "k", "up":
-		if h.FocusedPane == state.PaneMain {
-			return nil // Fallthrough
-		}
-		h.moveFilterCursor(-1)
-		return nil
-	case "enter":
-		if h.FocusedPane == state.PaneMain {
-			return nil // Fallthrough to task selection
-		}
-		return h.handleFilterSelect()
-	case "tab":
-		// Switch panes
-		if h.FocusedPane == state.PaneSidebar {
-			h.FocusedPane = state.PaneMain
-		} else {
-			h.FocusedPane = state.PaneSidebar
-		}
-		return nil
-	case "n":
-		// New filter dialog
-		return h.handleNewFilter()
-	case "d":
-		// Delete filter
-		return h.handleDeleteFilter()
-	}
-
-	return nil
 }
 
 func (h *Handler) moveFilterCursor(delta int) {

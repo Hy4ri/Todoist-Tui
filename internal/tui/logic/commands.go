@@ -194,7 +194,9 @@ func handleAddCommand(h *Handler, args []string) tea.Cmd {
 
 		// Move task to detected project if QuickAddTask put it elsewhere
 		if detectedProjectID != "" && task.ProjectID != detectedProjectID {
-			h.Client.MoveTask(task.ID, nil, &detectedProjectID, nil)
+			if err := h.Client.MoveTask(task.ID, nil, &detectedProjectID, nil); err != nil {
+				return errMsg{err}
+			}
 		}
 
 		return quickAddTaskCreatedMsg{}

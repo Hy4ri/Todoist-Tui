@@ -133,7 +133,10 @@ func (c *Client) CreateReminder(req CreateReminderRequest) (*Reminder, error) {
 		"args":    args,
 	}
 
-	commands, _ := json.Marshal([]interface{}{command})
+	commands, err := json.Marshal([]interface{}{command})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal sync commands: %w", err)
+	}
 
 	formData := url.Values{}
 	formData.Set("commands", string(commands))
@@ -158,7 +161,7 @@ func (c *Client) CreateReminder(req CreateReminderRequest) (*Reminder, error) {
 		return nil, fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse response to get the real ID representing success
+	// Parse sync response
 	var result struct {
 		TempIDMapping map[string]string      `json:"temp_id_mapping"`
 		SyncStatus    map[string]interface{} `json:"sync_status"`
@@ -211,7 +214,10 @@ func (c *Client) DeleteReminder(id string) error {
 		},
 	}
 
-	commands, _ := json.Marshal([]interface{}{command})
+	commands, err := json.Marshal([]interface{}{command})
+	if err != nil {
+		return fmt.Errorf("failed to marshal sync commands: %w", err)
+	}
 
 	formData := url.Values{}
 	formData.Set("commands", string(commands))
@@ -261,7 +267,10 @@ func (c *Client) UpdateReminder(req UpdateReminderRequest) (*Reminder, error) {
 		"args": args,
 	}
 
-	commands, _ := json.Marshal([]interface{}{command})
+	commands, err := json.Marshal([]interface{}{command})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal sync commands: %w", err)
+	}
 
 	formData := url.Values{}
 	formData.Set("commands", string(commands))

@@ -89,7 +89,10 @@ func (c *Client) CreateFilter(name, query, color string) (*Filter, error) {
 		"args":    args,
 	}
 
-	commands, _ := json.Marshal([]interface{}{command})
+	commands, err := json.Marshal([]interface{}{command})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal sync commands: %w", err)
+	}
 
 	formData := url.Values{}
 	formData.Set("commands", string(commands))
@@ -151,7 +154,10 @@ func (c *Client) DeleteFilter(id string) error {
 		},
 	}
 
-	commands, _ := json.Marshal([]interface{}{command})
+	commands, err := json.Marshal([]interface{}{command})
+	if err != nil {
+		return fmt.Errorf("failed to marshal sync commands: %w", err)
+	}
 
 	formData := url.Values{}
 	formData.Set("commands", string(commands))
@@ -199,7 +205,10 @@ func (c *Client) UpdateFilter(id, name, query string) (*Filter, error) {
 		"args": args,
 	}
 
-	commands, _ := json.Marshal([]interface{}{command})
+	commands, err := json.Marshal([]interface{}{command})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal sync commands: %w", err)
+	}
 
 	formData := url.Values{}
 	formData.Set("commands", string(commands))

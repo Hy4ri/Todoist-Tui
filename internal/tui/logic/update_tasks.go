@@ -1214,8 +1214,10 @@ func (h *Handler) submitForm() tea.Cmd {
 			}
 		}
 
-		// Re-sort just in case priority/date changed
+		// Re-sort just in case priority/date changed, then refilter so a
+		// task whose project changed doesn't linger in the wrong view.
 		h.sortTasks()
+		h.refilterCurrentView()
 
 		h.TaskForm = nil
 		return func() tea.Msg {
@@ -1336,9 +1338,13 @@ func (h *Handler) handleSectionAddInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 				if targetSID != "" {
 					secPtr = &targetSID
 				}
-				h.Client.MoveTask(task.ID, secPtr, &targetPID, nil)
+				if err := h.Client.MoveTask(task.ID, secPtr, &targetPID, nil); err != nil {
+					return errMsg{err}
+				}
 			} else if targetSID != "" && (task.SectionID == nil || *task.SectionID != targetSID) {
-				h.Client.MoveTask(task.ID, &targetSID, nil, nil)
+				if err := h.Client.MoveTask(task.ID, &targetSID, nil, nil); err != nil {
+					return errMsg{err}
+				}
 			}
 
 			return quickAddTaskCreatedMsg{}
@@ -1492,6 +1498,14 @@ func (h *Handler) handleIndentSelect() tea.Cmd {
 	currentTask.ParentID = parentIDPtr
 	h.Tasks[taskIndex] = currentTask
 
+	// Sync to AllTasks (source of truth)
+	for i := range h.AllTasks {
+		if h.AllTasks[i].ID == currentTask.ID {
+			h.AllTasks[i].ParentID = parentIDPtr
+			break
+		}
+	}
+
 	// Clear state
 	h.IsIndentingTask = false
 	h.IndentCandidates = nil
@@ -1572,6 +1586,14 @@ func (h *Handler) handleOutdent() tea.Cmd {
 	// Optimistic update
 	currentTask.ParentID = newParentID
 	h.Tasks[taskIndex] = currentTask
+
+	// Sync to AllTasks (source of truth)
+	for i := range h.AllTasks {
+		if h.AllTasks[i].ID == currentTask.ID {
+			h.AllTasks[i].ParentID = newParentID
+			break
+		}
+	}
 
 	return func() tea.Msg {
 		var pid string

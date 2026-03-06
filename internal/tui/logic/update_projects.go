@@ -1016,6 +1016,8 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 
 	h.refilterCurrentView()
 
+	h.StatusMsg = fmt.Sprintf("Set priority %d", priority)
+
 	taskID := task.ID
 	return func() tea.Msg {
 		_, err := h.Client.UpdateTask(taskID, api.UpdateTaskRequest{
