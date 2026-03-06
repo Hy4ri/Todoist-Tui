@@ -172,6 +172,12 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		h.StatusMsg = "Task updated"
 		return h.refreshSearchResults()
 
+	case searchResultsLoadedMsg:
+		h.Loading = false
+		h.Tasks = msg.tasks
+		h.filterSearchResults()
+		return nil
+
 	case refreshMsg:
 		return h.handleRefresh(msg.Force)
 
@@ -390,18 +396,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 
 	// Always rebuild sidebar items and update counts if we have projects
 	if len(h.Projects) > 0 {
-		h.buildSidebarItems()
-
-		// Calculate task counts
-		counts := make(map[string]int)
-		for _, t := range h.AllTasks {
-			if !t.Checked && !t.IsDeleted {
-				counts[t.ProjectID]++
-			}
-		}
-
-		// Sync sidebar component with counts
-		h.SidebarComp.SetProjects(h.Projects, counts)
+		h.rebuildSidebarCounts()
 	}
 	if msg.tasks != nil {
 		h.Tasks = msg.tasks

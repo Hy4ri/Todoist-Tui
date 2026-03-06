@@ -24,50 +24,7 @@ func (h *Handler) sortTasks() {
 		h.sortTasksHierarchically()
 	} else {
 		sort.SliceStable(h.Tasks, func(i, j int) bool {
-			ti, tj := h.Tasks[i], h.Tasks[j]
-
-			// 1. Time is top priority — tasks with time come first
-			hasTimeI := ti.Due != nil && ti.Due.Datetime != nil && *ti.Due.Datetime != ""
-			hasTimeJ := tj.Due != nil && tj.Due.Datetime != nil && *tj.Due.Datetime != ""
-
-			if hasTimeI && !hasTimeJ {
-				return true
-			}
-			if !hasTimeI && hasTimeJ {
-				return false
-			}
-
-			// Both have time → sort chronologically
-			if hasTimeI && hasTimeJ {
-				if *ti.Due.Datetime != *tj.Due.Datetime {
-					return *ti.Due.Datetime < *tj.Due.Datetime
-				}
-			}
-
-			// 2. Priority (higher value = more urgent)
-			if ti.Priority != tj.Priority {
-				return ti.Priority > tj.Priority
-			}
-
-			// 3. Due date (earlier first) as tiebreaker
-			hasDueI := ti.Due != nil
-			hasDueJ := tj.Due != nil
-
-			if hasDueI && !hasDueJ {
-				return true
-			}
-			if !hasDueI && hasDueJ {
-				return false
-			}
-
-			if hasDueI && hasDueJ {
-				if ti.Due.Date != tj.Due.Date {
-					return ti.Due.Date < tj.Due.Date
-				}
-			}
-
-			// 4. Child Order (Manual order within project/list) as tiebreaker
-			return ti.ChildOrder < tj.ChildOrder
+			return taskLess(h.Tasks[i], h.Tasks[j])
 		})
 	}
 
@@ -89,35 +46,10 @@ func (h *Handler) sortTasksHierarchically() {
 		}
 	}
 
-	// Helper to sort a slice of tasks by Time, Priority, then ChildOrder
+	// Helper to sort a slice of task pointers using the shared taskLess comparator.
 	sortByOrder := func(tasks []*api.Task) {
 		sort.Slice(tasks, func(i, j int) bool {
-			ti, tj := tasks[i], tasks[j]
-
-			// 1. Time
-			hasTimeI := ti.Due != nil && ti.Due.Datetime != nil && *ti.Due.Datetime != ""
-			hasTimeJ := tj.Due != nil && tj.Due.Datetime != nil && *tj.Due.Datetime != ""
-
-			if hasTimeI && !hasTimeJ {
-				return true
-			}
-			if !hasTimeI && hasTimeJ {
-				return false
-			}
-
-			if hasTimeI && hasTimeJ {
-				if *ti.Due.Datetime != *tj.Due.Datetime {
-					return *ti.Due.Datetime < *tj.Due.Datetime
-				}
-			}
-
-			// 2. Priority
-			if ti.Priority != tj.Priority {
-				return ti.Priority > tj.Priority
-			}
-
-			// 3. ChildOrder
-			return ti.ChildOrder < tj.ChildOrder
+			return taskLess(*tasks[i], *tasks[j])
 		})
 	}
 
@@ -201,17 +133,8 @@ func (h *Handler) handleComplete() tea.Cmd {
 			}
 		}
 	} else {
-		// Get the correct task using ordered indices mapping
-		var task *api.Task
-		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-			taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-			if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-				task = &h.Tasks[taskIndex]
-			}
-		} else if h.TaskCursor < len(h.Tasks) {
-			task = &h.Tasks[h.TaskCursor]
-		}
-
+		// Get the task at cursor using ordered indices
+		task := h.getSelectedTask()
 		if task != nil {
 			tasksToComplete = append(tasksToComplete, *task)
 		}
@@ -257,16 +180,7 @@ func (h *Handler) handleComplete() tea.Cmd {
 	}
 
 	// Update Sidebar Counts
-	h.buildSidebarItems()
-	// Calculate task counts
-	counts := make(map[string]int)
-	for _, t := range h.AllTasks {
-		if !t.Checked && !t.IsDeleted {
-			counts[t.ProjectID]++
-		}
-	}
-	// Sync sidebar component with counts
-	h.SidebarComp.SetProjects(h.Projects, counts)
+	h.rebuildSidebarCounts()
 
 	// UI Feedback
 	h.StatusMsg = fmt.Sprintf("Completed %d tasks", len(tasksToComplete))
@@ -361,17 +275,7 @@ func (h *Handler) handleToggleSelect() tea.Cmd {
 	}
 
 	// Get the task at cursor
-	var task *api.Task
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-		// Skip placeholders (negative indices < -100)
-		if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-			task = &h.Tasks[taskIndex]
-		}
-	} else if h.TaskCursor < len(h.Tasks) {
-		task = &h.Tasks[h.TaskCursor]
-	}
-
+	task := h.getSelectedTask()
 	if task == nil {
 		return nil
 	}
@@ -607,14 +511,7 @@ func (h *Handler) handleDelete() tea.Cmd {
 	}
 
 	// Update Sidebar Counts
-	h.buildSidebarItems()
-	counts := make(map[string]int)
-	for _, t := range h.AllTasks {
-		if !t.Checked && !t.IsDeleted {
-			counts[t.ProjectID]++
-		}
-	}
-	h.SidebarComp.SetProjects(h.Projects, counts)
+	h.rebuildSidebarCounts()
 
 	// UI Feedback
 	h.StatusMsg = fmt.Sprintf("Deleted %d tasks", len(tasksToDelete))
@@ -891,18 +788,11 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 	// --- Single-task (cursor / detail-panel) branch ---
 	var task *api.Task
 
-	// Determine task
+	// Determine task: detail panel takes priority, then cursor
 	if h.SelectedTask != nil {
 		task = h.SelectedTask
-	} else if len(h.Tasks) > 0 {
-		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-			idx := h.TaskOrderedIndices[h.TaskCursor]
-			if idx >= 0 && idx < len(h.Tasks) {
-				task = &h.Tasks[idx]
-			}
-		} else if h.TaskCursor < len(h.Tasks) {
-			task = &h.Tasks[h.TaskCursor]
-		}
+	} else {
+		task = h.getSelectedTask()
 	}
 
 	if task == nil {

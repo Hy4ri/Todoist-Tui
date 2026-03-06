@@ -216,7 +216,7 @@ func (h *Handler) executeMoveToProject(target state.MoveTarget) tea.Cmd {
 	h.refilterCurrentView()
 
 	// Update Sidebar Counts
-	h.buildSidebarItems()
+	h.rebuildSidebarCounts()
 
 	// --- Background API Call ---
 	return func() tea.Msg {

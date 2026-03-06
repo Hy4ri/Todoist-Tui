@@ -55,3 +55,56 @@ func (h *Handler) getSelectedTask() *api.Task {
 
 	return &h.Tasks[taskIndex]
 }
+
+// rebuildSidebarCounts rebuilds the sidebar item list and syncs the sidebar
+// component with fresh task counts. Call this after any mutation that changes
+// task counts (complete, delete, move).
+func (h *Handler) rebuildSidebarCounts() {
+	h.buildSidebarItems()
+
+	counts := make(map[string]int)
+	for _, t := range h.AllTasks {
+		if !t.Checked && !t.IsDeleted {
+			counts[t.ProjectID]++
+		}
+	}
+	h.SidebarComp.SetProjects(h.Projects, counts)
+}
+
+// taskLess reports whether task ti should sort before task tj.
+// Ordering: time present → chronological time → priority → due date → ChildOrder.
+func taskLess(ti, tj api.Task) bool {
+	// 1. Tasks with a specific time come before date-only or no-due tasks.
+	hasTimeI := ti.Due != nil && ti.Due.Datetime != nil && *ti.Due.Datetime != ""
+	hasTimeJ := tj.Due != nil && tj.Due.Datetime != nil && *tj.Due.Datetime != ""
+
+	if hasTimeI != hasTimeJ {
+		return hasTimeI
+	}
+	if hasTimeI && hasTimeJ {
+		if *ti.Due.Datetime != *tj.Due.Datetime {
+			return *ti.Due.Datetime < *tj.Due.Datetime
+		}
+	}
+
+	// 2. Priority (higher value = more urgent).
+	if ti.Priority != tj.Priority {
+		return ti.Priority > tj.Priority
+	}
+
+	// 3. Due date (earlier first) as tiebreaker.
+	hasDueI := ti.Due != nil
+	hasDueJ := tj.Due != nil
+
+	if hasDueI != hasDueJ {
+		return hasDueI
+	}
+	if hasDueI && hasDueJ {
+		if ti.Due.Date != tj.Due.Date {
+			return ti.Due.Date < tj.Due.Date
+		}
+	}
+
+	// 4. Manual order within project/list.
+	return ti.ChildOrder < tj.ChildOrder
+}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
 
@@ -25,6 +26,7 @@ func TestExecuteMoveToProjectBatch(t *testing.T) {
 		Tasks:           make([]api.Task, 20),
 		SelectedTaskIDs: make(map[string]bool),
 		AllTasks:        make([]api.Task, 20),
+		SidebarComp:     components.NewSidebar(),
 	}
 
 	for i := 0; i < 20; i++ {

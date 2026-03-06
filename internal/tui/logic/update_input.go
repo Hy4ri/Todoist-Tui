@@ -805,38 +805,15 @@ func (h *Handler) handleSelect() tea.Cmd {
 		return nil
 	default:
 		// Select task for detail view
-		// First check if we have tasks at all
-		if len(h.Tasks) == 0 {
+		task := h.getSelectedTask()
+		if task == nil {
 			return nil
 		}
-
-		// Try taskOrderedIndices first (for views with sections/groups)
-		if len(h.TaskOrderedIndices) > 0 && h.TaskCursor >= 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-			taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-
-			// Skip if cursor is on empty section header (taskIndex <= -100)
-			if taskIndex <= -100 {
-				return nil
-			}
-
-			if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-				taskCopy := new(api.Task)
-				*taskCopy = h.Tasks[taskIndex]
-				h.SelectedTask = taskCopy
-				h.ShowDetailPanel = true
-				return h.loadTaskComments()
-			}
-		}
-
-		// Fallback: use taskCursor directly to index h.Tasks
-		// This works for views that don't pre-populate taskOrderedIndices
-		if h.TaskCursor >= 0 && h.TaskCursor < len(h.Tasks) {
-			taskCopy := new(api.Task)
-			*taskCopy = h.Tasks[h.TaskCursor]
-			h.SelectedTask = taskCopy
-			h.ShowDetailPanel = true
-			return h.loadTaskComments()
-		}
+		taskCopy := new(api.Task)
+		*taskCopy = *task
+		h.SelectedTask = taskCopy
+		h.ShowDetailPanel = true
+		return h.loadTaskComments()
 	}
 	return nil
 }
@@ -1351,8 +1328,8 @@ func (h *Handler) handleCommentInputKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		taskID := ""
 		if h.SelectedTask != nil {
 			taskID = h.SelectedTask.ID
-		} else if len(h.Tasks) > 0 && h.TaskCursor < len(h.Tasks) {
-			taskID = h.Tasks[h.TaskCursor].ID
+		} else if t := h.getSelectedTask(); t != nil {
+			taskID = t.ID
 		} else {
 			h.IsAddingComment = false
 			return nil

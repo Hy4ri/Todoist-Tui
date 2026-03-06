@@ -639,15 +639,7 @@ func (h *Handler) handleMoveTaskKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			}
 		} else {
 			// Single task selection
-			var task *api.Task
-			if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-				taskIndex := h.TaskOrderedIndices[h.TaskCursor]
-				if taskIndex >= 0 && taskIndex < len(h.Tasks) {
-					task = &h.Tasks[taskIndex]
-				}
-			} else if h.TaskCursor < len(h.Tasks) {
-				task = &h.Tasks[h.TaskCursor]
-			}
+			task := h.getSelectedTask()
 			if task != nil {
 				tasksToMove = append(tasksToMove, task)
 			}
@@ -750,16 +742,13 @@ func (h *Handler) handleAddSubtask() tea.Cmd {
 	}
 
 	// Get the selected task using ordered indices
-	taskIndex := h.TaskCursor
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
-	}
-	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+	task := h.getSelectedTask()
+	if task == nil {
 		return nil
 	}
 
 	// Initialize subtask input
-	h.ParentTaskID = h.Tasks[taskIndex].ID
+	h.ParentTaskID = task.ID
 	h.SubtaskInput = textinput.New()
 	h.SubtaskInput.Placeholder = "Enter subtask..."
 	h.SubtaskInput.CharLimit = 200
@@ -919,17 +908,15 @@ func (h *Handler) filterSearchResults() {
 	h.SearchResults = results
 }
 
-// refreshSearchResults refreshes the search results after a task update.
+// refreshSearchResults reloads all tasks and returns a searchResultsLoadedMsg so
+// the main-goroutine message handler can update shared state without a data race.
 func (h *Handler) refreshSearchResults() tea.Cmd {
 	return func() tea.Msg {
-		// Reload all tasks
 		tasks, err := h.Client.GetTasks(api.TaskFilter{})
 		if err != nil {
 			return errMsg{err}
 		}
-		h.Tasks = tasks
-		h.filterSearchResults()
-		return dataLoadedMsg{tasks: tasks}
+		return searchResultsLoadedMsg{tasks: tasks}
 	}
 }
 
@@ -995,16 +982,12 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 	}
 
 	// --- Single-task (cursor) branch ---
-	taskIndex := h.TaskCursor
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
-	}
-	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+	task := h.getSelectedTask()
+	if task == nil {
 		return nil
 	}
 
 	// Optimistic update
-	task := &h.Tasks[taskIndex]
 	task.Priority = priority
 
 	for i := range h.AllTasks {
@@ -1042,15 +1025,11 @@ func (h *Handler) handleDueToday() tea.Cmd {
 	}
 
 	// Use ordered indices if available
-	taskIndex := h.TaskCursor
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
-	}
-	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+	task := h.getSelectedTask()
+	if task == nil {
 		return nil
 	}
 
-	task := &h.Tasks[taskIndex]
 	dueString := "today"
 
 	// Optimistic update
@@ -1110,15 +1089,11 @@ func (h *Handler) handleDueTomorrow() tea.Cmd {
 	}
 
 	// Use ordered indices if available
-	taskIndex := h.TaskCursor
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
-	}
-	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+	task := h.getSelectedTask()
+	if task == nil {
 		return nil
 	}
 
-	task := &h.Tasks[taskIndex]
 	dueString := "tomorrow"
 
 	// Optimistic update
@@ -1537,59 +1512,42 @@ func (h *Handler) buildSidebarItems() {
 		}
 	}
 
-	// Add favorite projects first
+	makeItem := func(p api.Project, icon string) components.SidebarItem {
+		return components.SidebarItem{
+			Type:       "project",
+			ID:         p.ID,
+			Name:       p.Name,
+			Icon:       icon,
+			Count:      counts[p.ID],
+			IsFavorite: p.IsFavorite,
+			ParentID:   p.ParentID,
+			Color:      p.Color,
+		}
+	}
+
+	// Add favorite projects first, tracking whether any exist.
+	hasFavorites := false
 	for _, p := range h.Projects {
-		// Skip inbox project (it has its own tab)
 		if p.InboxProject {
 			continue
 		}
 		if p.IsFavorite {
-			icon := "❤︎"
-
-			h.SidebarItems = append(h.SidebarItems, components.SidebarItem{
-				Type:       "project",
-				ID:         p.ID,
-				Name:       p.Name,
-				Icon:       icon,
-				Count:      counts[p.ID],
-				IsFavorite: true,
-				ParentID:   p.ParentID,
-				Color:      p.Color,
-			})
-		}
-	}
-
-	// Add separator if there were favorites
-	hasFavorites := false
-	for _, p := range h.Projects {
-		if p.IsFavorite {
 			hasFavorites = true
-			break
+			h.SidebarItems = append(h.SidebarItems, makeItem(p, "❤︎"))
 		}
 	}
+
+	// Separator between favorites and the rest.
 	if hasFavorites {
 		h.SidebarItems = append(h.SidebarItems, components.SidebarItem{Type: "separator", ID: "", Name: ""})
 	}
 
-	// Add remaining projects (non-favorites)
+	// Add remaining (non-favorite) projects.
 	for _, p := range h.Projects {
-		// Skip inbox project
-		if p.InboxProject {
+		if p.InboxProject || p.IsFavorite {
 			continue
 		}
-		if !p.IsFavorite {
-			icon := "#"
-
-			h.SidebarItems = append(h.SidebarItems, components.SidebarItem{
-				Type:     "project",
-				ID:       p.ID,
-				Name:     p.Name,
-				Icon:     icon,
-				Count:    counts[p.ID],
-				ParentID: p.ParentID,
-				Color:    p.Color,
-			})
-		}
+		h.SidebarItems = append(h.SidebarItems, makeItem(p, "#"))
 	}
 }
 

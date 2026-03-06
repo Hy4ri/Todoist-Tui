@@ -205,6 +205,7 @@ type commentDeletedMsg struct{ id string }
 type subtaskCreatedMsg struct{}
 type undoCompletedMsg struct{}
 type searchRefreshMsg struct{}
+type searchResultsLoadedMsg struct{ tasks []api.Task }
 type refreshMsg struct{ Force bool }
 type commentsLoadedMsg struct{ comments []api.Comment }
 
