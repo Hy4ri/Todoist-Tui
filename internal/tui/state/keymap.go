@@ -38,8 +38,6 @@ type KeymapData struct {
 	Priority2       Key
 	Priority3       Key
 	Priority4       Key
-	DueToday        Key
-	DueTomorrow     Key
 	MoveTaskPrevDay Key
 	MoveTaskNextDay Key
 	AddComment      Key
@@ -48,15 +46,10 @@ type KeymapData struct {
 	OutdentTask     Key
 
 	// Navigation between panes
-	SwitchPane    Key
-	FocusTasks    Key
-	FocusProjects Key
+	SwitchPane Key
 
 	// Search/Filter
 	Search Key
-
-	// Calendar
-	CalendarView Key
 
 	// Project actions
 	NewProject Key
@@ -99,8 +92,6 @@ func DefaultKeymap() KeymapData {
 		Priority2:       Key{Key: "2", Help: "priority 2"},
 		Priority3:       Key{Key: "3", Help: "priority 3"},
 		Priority4:       Key{Key: "4", Help: "priority 4 (lowest)"},
-		DueToday:        Key{Key: "<", Help: "move -1 day"},
-		DueTomorrow:     Key{Key: ">", Help: "move +1 day"},
 		MoveTaskPrevDay: Key{Key: "<", Help: "move -1 day"},
 		MoveTaskNextDay: Key{Key: ">", Help: "move +1 day"},
 		AddComment:      Key{Key: "C", Help: "add/view comments"},
@@ -109,15 +100,10 @@ func DefaultKeymap() KeymapData {
 		OutdentTask:     Key{Key: "H", Help: "outdent task"},
 
 		// Navigation between panes
-		SwitchPane:    Key{Key: "tab", Help: "switch pane"},
-		FocusTasks:    Key{Key: "t", Help: "focus tasks"},
-		FocusProjects: Key{Key: "p", Help: "focus projects"},
+		SwitchPane: Key{Key: "tab", Help: "switch pane"},
 
 		// Search
 		Search: Key{Key: "/", Help: "search"},
-
-		// Calendar
-		CalendarView: Key{Key: "v", Help: "switch calendar view"},
 
 		// Project actions
 		NewProject: Key{Key: "n", Help: "new project"},
@@ -262,9 +248,9 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "indent", true
 	case keymap.OutdentTask.Key:
 		return "outdent", true
-	case keymap.DueToday.Key:
+	case keymap.MoveTaskPrevDay.Key:
 		return "move_task_prev_day", true
-	case keymap.DueTomorrow.Key:
+	case keymap.MoveTaskNextDay.Key:
 		return "move_task_next_day", true
 	case keymap.SwitchPane.Key:
 		return "switch_pane", true
@@ -274,8 +260,6 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "move_to_project", true
 	case keymap.SendToPomodoro.Key:
 		return "send_to_pomodoro", true
-	case keymap.CalendarView.Key:
-		return "calendar_view", true
 	case keymap.NewProject.Key:
 		return "new_project", true
 	case "f":
@@ -362,7 +346,7 @@ func (k KeymapData) HelpItems() [][]string {
 		{"", ""},
 
 		{"Calendar View", ""},
-		{k.CalendarView.Key, "Switch layout (Compact/Expanded)"},
+		{"v", "Switch layout (Compact/Expanded)"},
 		{"h/l", "Previous/next day"},
 		{"j/k", "Previous/next week"},
 		{"[/]", "Previous/next month"},

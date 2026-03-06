@@ -17,17 +17,19 @@ func (h *Handler) handleMoveToProject() tea.Cmd {
 	if len(h.SelectedTaskIDs) == 0 && h.SelectedTask == nil {
 		// If no explicit selection, try to use task under cursor
 		if len(h.Tasks) > 0 {
-			var task *api.Task
+			var found *api.Task
 			if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
 				idx := h.TaskOrderedIndices[h.TaskCursor]
 				if idx >= 0 && idx < len(h.Tasks) {
-					task = &h.Tasks[idx]
+					cp := h.Tasks[idx] // copy to avoid stale pointer after slice reallocation
+					found = &cp
 				}
 			} else if h.TaskCursor < len(h.Tasks) {
-				task = &h.Tasks[h.TaskCursor]
+				cp := h.Tasks[h.TaskCursor]
+				found = &cp
 			}
-			if task != nil {
-				h.SelectedTask = task
+			if found != nil {
+				h.SelectedTask = found
 			}
 		}
 	}
@@ -209,8 +211,9 @@ func (h *Handler) executeMoveToProject(target state.MoveTarget) tea.Cmd {
 	// Clear Selection
 	h.clearSelection()
 
-	// Refresh the current view based on updated AllTasks
-	h.handleRefresh(false)
+	// Refresh the current view based on updated AllTasks (synchronous local refilter,
+	// no API call needed since AllTasks is already up to date)
+	h.refilterCurrentView()
 
 	// Update Sidebar Counts
 	h.buildSidebarItems()

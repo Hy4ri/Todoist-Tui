@@ -51,6 +51,7 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case errMsg:
 		h.Loading = false
 		h.Err = msg.err
+		h.StatusMsg = msg.err.Error()
 		return nil
 
 	case statusMsg:
