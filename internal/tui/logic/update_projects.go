@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -700,7 +701,7 @@ func (h *Handler) handleMoveTaskKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		}
 
 		// Clear selection after move
-		h.SelectedTaskIDs = make(map[string]bool)
+		h.clearSelection()
 
 		return tea.Batch(cmds...)
 
@@ -932,27 +933,14 @@ func (h *Handler) refreshSearchResults() tea.Cmd {
 	}
 }
 
-// handlePriority sets task priority.
+// handlePriority sets task priority. When tasks are multi-selected the priority
+// is applied to every selected task concurrently; otherwise it applies to the
+// task under the cursor.
 func (h *Handler) handlePriority(action string) tea.Cmd {
 	if h.FocusedPane != state.PaneMain || len(h.Tasks) == 0 {
 		return nil
 	}
 
-	// Use ordered indices if available
-	taskIndex := h.TaskCursor
-	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
-		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
-	}
-	// Check specifically for section headers (negative indices)
-	if taskIndex < 0 {
-		return nil
-	}
-	if taskIndex >= len(h.Tasks) {
-		return nil
-	}
-
-	// Optimistic update
-	task := &h.Tasks[taskIndex]
 	var priority int
 	switch action {
 	case "priority1":
@@ -965,10 +953,60 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 		priority = 1
 	}
 
-	// Apply change immediately to local state
+	// --- Multi-select branch ---
+	if len(h.SelectedTaskIDs) > 0 {
+		var taskIDs []string
+		for i := range h.Tasks {
+			if h.SelectedTaskIDs[h.Tasks[i].ID] {
+				taskIDs = append(taskIDs, h.Tasks[i].ID)
+				// Optimistic update in Tasks
+				h.Tasks[i].Priority = priority
+			}
+		}
+		// Optimistic update in AllTasks
+		for i := range h.AllTasks {
+			if h.SelectedTaskIDs[h.AllTasks[i].ID] {
+				h.AllTasks[i].Priority = priority
+			}
+		}
+
+		h.clearSelection()
+		h.refilterCurrentView()
+		h.StatusMsg = fmt.Sprintf("Set priority %d on %d tasks", priority, len(taskIDs))
+
+		return func() tea.Msg {
+			type result struct{ err error }
+			results := make(chan result, len(taskIDs))
+			sem := make(chan struct{}, maxConcurrentRequests)
+			p := priority // capture
+			for _, id := range taskIDs {
+				sem <- struct{}{}
+				go func(tid string) {
+					defer func() { <-sem }()
+					_, err := h.Client.UpdateTask(tid, api.UpdateTaskRequest{Priority: &p})
+					results <- result{err: err}
+				}(id)
+			}
+			for range taskIDs {
+				<-results
+			}
+			return taskUpdatedMsg{}
+		}
+	}
+
+	// --- Single-task (cursor) branch ---
+	taskIndex := h.TaskCursor
+	if len(h.TaskOrderedIndices) > 0 && h.TaskCursor < len(h.TaskOrderedIndices) {
+		taskIndex = h.TaskOrderedIndices[h.TaskCursor]
+	}
+	if taskIndex < 0 || taskIndex >= len(h.Tasks) {
+		return nil
+	}
+
+	// Optimistic update
+	task := &h.Tasks[taskIndex]
 	task.Priority = priority
 
-	// Also update in AllTasks to maintain consistency across views/filters
 	for i := range h.AllTasks {
 		if h.AllTasks[i].ID == task.ID {
 			h.AllTasks[i].Priority = priority
@@ -976,10 +1014,8 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 		}
 	}
 
-	// Re-filter visible tasks so the sort order updates immediately
 	h.refilterCurrentView()
 
-	// Perform API update in background without blocking UI
 	taskID := task.ID
 	return func() tea.Msg {
 		_, err := h.Client.UpdateTask(taskID, api.UpdateTaskRequest{
@@ -988,7 +1024,6 @@ func (h *Handler) handlePriority(action string) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		// Trigger silent refresh to sync with server eventually
 		return taskUpdatedMsg{}
 	}
 }

@@ -217,6 +217,9 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 		h.LastSelectedTask = task
 	}
 
+	// Selections are view-local: clear them whenever we switch tabs.
+	h.clearSelection()
+
 	// Reset detail panel state when switching tabs
 	if h.ShowDetailPanel {
 		h.ShowDetailPanel = false
@@ -750,6 +753,9 @@ func (h *Handler) handleSelect() tea.Cmd {
 				h.CurrentProject = &h.Projects[i]
 				h.Sections = nil // Clear sections before loading new ones
 
+				// Selections are project-local: clear them when switching projects.
+				h.clearSelection()
+
 				// Close detail panel when switching projects
 				if h.ShowDetailPanel {
 					h.ShowDetailPanel = false
@@ -859,6 +865,14 @@ func (h *Handler) handleBack() tea.Cmd {
 				h.CurrentView = state.ViewInbox
 			}
 		}
+		return nil
+	}
+
+	// If tasks are multi-selected, Escape cancels the selection before doing
+	// anything else (so users don't accidentally navigate away mid-selection).
+	if len(h.SelectedTaskIDs) > 0 {
+		h.clearSelection()
+		h.StatusMsg = "Selection cleared"
 		return nil
 	}
 

@@ -189,6 +189,9 @@ func (h *Handler) handleFilterSelect() tea.Cmd {
 		return nil
 	}
 
+	// Selections are view-local: clear them when switching to a different filter.
+	h.clearSelection()
+
 	selected := visible[h.FilterCursor]
 	return h.runFilter(&selected)
 }

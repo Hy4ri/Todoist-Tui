@@ -207,8 +207,7 @@ func (h *Handler) executeMoveToProject(target state.MoveTarget) tea.Cmd {
 	}
 
 	// Clear Selection
-	h.SelectedTaskIDs = make(map[string]bool)
-	h.SelectedTask = nil
+	h.clearSelection()
 
 	// Refresh the current view based on updated AllTasks
 	h.handleRefresh(false)

@@ -407,6 +407,17 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 		h.TasksSorted = false // Reset sorted flag since tasks changed
 		h.sortTasks()
 		dataChanged = true
+
+		// Prune any stale selected IDs that no longer exist in the new task list.
+		if len(h.SelectedTaskIDs) > 0 {
+			valid := make(map[string]bool, len(h.SelectedTaskIDs))
+			for _, t := range h.Tasks {
+				if h.SelectedTaskIDs[t.ID] {
+					valid[t.ID] = true
+				}
+			}
+			h.SelectedTaskIDs = valid
+		}
 	}
 	if len(msg.labels) > 0 {
 		h.Labels = msg.labels

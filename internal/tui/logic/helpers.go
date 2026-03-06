@@ -25,6 +25,14 @@ func (h *Handler) reorderSectionsCmd(sections []api.Section) tea.Cmd {
 	}
 }
 
+// clearSelection clears both multi-select (SelectedTaskIDs) and detail-panel
+// selection (SelectedTask) in one call. All bulk operations and navigation
+// transitions should use this instead of zeroing the fields individually.
+func (h *Handler) clearSelection() {
+	h.SelectedTaskIDs = make(map[string]bool)
+	h.SelectedTask = nil
+}
+
 // getSelectedTask returns the currently selected task in the main list.
 func (h *Handler) getSelectedTask() *api.Task {
 	if len(h.Tasks) == 0 {

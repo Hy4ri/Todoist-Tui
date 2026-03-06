@@ -249,7 +249,7 @@ func (h *Handler) handleComplete() tea.Cmd {
 	})
 
 	// Clear Selection
-	h.SelectedTaskIDs = make(map[string]bool)
+	h.clearSelection()
 
 	// Adjust Cursor
 	if h.TaskCursor >= len(h.Tasks) {
@@ -415,7 +415,7 @@ func (h *Handler) handleCopy() tea.Cmd {
 
 		if len(selectedContents) > 0 {
 			// Clear selections after copy
-			h.SelectedTaskIDs = make(map[string]bool)
+			h.clearSelection()
 
 			return func() tea.Msg {
 				// Join all selected task contents with newlines
@@ -599,7 +599,7 @@ func (h *Handler) handleDelete() tea.Cmd {
 	})
 
 	// Clear Selection
-	h.SelectedTaskIDs = make(map[string]bool)
+	h.clearSelection()
 
 	// Adjust Cursor
 	if h.TaskCursor >= len(h.Tasks) {
@@ -758,6 +758,137 @@ func (h *Handler) handleAddTaskFull() tea.Cmd {
 // handleMoveTaskDate moves the task due date by the specified number of days.
 // preciseDate is optional: if provided, it sets the date exactly to this YYYY-MM-DD string.
 func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
+	// --- Multi-select branch ---
+	if len(h.SelectedTaskIDs) > 0 {
+		type taskUpdate struct {
+			task       *api.Task
+			allTaskIdx int
+			newDateStr string
+			updateReq  api.UpdateTaskRequest
+		}
+
+		var updates []taskUpdate
+
+		for i := range h.Tasks {
+			if !h.SelectedTaskIDs[h.Tasks[i].ID] {
+				continue
+			}
+			t := &h.Tasks[i]
+
+			// Compute target date for this task
+			var newDateStr string
+			if preciseDate == "remove" {
+				newDateStr = "remove"
+			} else if preciseDate != "" {
+				newDateStr = preciseDate
+			} else {
+				var currentDateStr string
+				if t.Due != nil {
+					currentDateStr = t.Due.Date
+				}
+				var newDate time.Time
+				if currentDateStr != "" {
+					if parsedDate, err := time.Parse("2006-01-02", currentDateStr); err == nil {
+						newDate = parsedDate.AddDate(0, 0, days)
+					} else {
+						newDate = time.Now().AddDate(0, 0, days)
+					}
+				} else {
+					newDate = time.Now().AddDate(0, 0, days)
+				}
+				newDateStr = newDate.Format("2006-01-02")
+			}
+
+			// Build update request
+			var updateReq api.UpdateTaskRequest
+			if newDateStr == "remove" {
+				noDate := "no date"
+				updateReq.DueString = &noDate
+				// Optimistic: clear due on Tasks slice
+				t.Due = nil
+				t.ParsedDate = nil
+			} else {
+				updateReq.DueDate = &newDateStr
+				if t.Due != nil && t.Due.IsRecurring && t.Due.String != "" {
+					recurrence := t.Due.String
+					updateReq.DueString = &recurrence
+				}
+				// Optimistic: update due on Tasks slice
+				if t.Due == nil {
+					t.Due = &api.Due{}
+				}
+				t.Due.Date = newDateStr
+				t.Due.Datetime = nil
+				if parsed, err := time.ParseInLocation("2006-01-02", newDateStr, time.Local); err == nil {
+					t.ParsedDate = &parsed
+				}
+			}
+
+			// Find index in AllTasks
+			allIdx := -1
+			for j := range h.AllTasks {
+				if h.AllTasks[j].ID == t.ID {
+					allIdx = j
+					break
+				}
+			}
+
+			updates = append(updates, taskUpdate{task: t, allTaskIdx: allIdx, newDateStr: newDateStr, updateReq: updateReq})
+		}
+
+		if len(updates) == 0 {
+			return nil
+		}
+
+		// Optimistic update AllTasks
+		for _, u := range updates {
+			if u.allTaskIdx < 0 {
+				continue
+			}
+			if u.newDateStr == "remove" {
+				h.AllTasks[u.allTaskIdx].Due = nil
+				h.AllTasks[u.allTaskIdx].ParsedDate = nil
+			} else {
+				if h.AllTasks[u.allTaskIdx].Due == nil {
+					h.AllTasks[u.allTaskIdx].Due = &api.Due{}
+				}
+				h.AllTasks[u.allTaskIdx].Due.Date = u.newDateStr
+				h.AllTasks[u.allTaskIdx].Due.Datetime = nil
+				if parsed, err := time.ParseInLocation("2006-01-02", u.newDateStr, time.Local); err == nil {
+					h.AllTasks[u.allTaskIdx].ParsedDate = &parsed
+				}
+			}
+		}
+
+		h.clearSelection()
+		h.refilterCurrentView()
+
+		if preciseDate == "remove" {
+			h.StatusMsg = fmt.Sprintf("Removed due date from %d tasks", len(updates))
+		} else {
+			h.StatusMsg = fmt.Sprintf("Rescheduled %d tasks", len(updates))
+		}
+
+		return func() tea.Msg {
+			type result struct{ err error }
+			results := make(chan result, len(updates))
+			sem := make(chan struct{}, maxConcurrentRequests)
+			for _, u := range updates {
+				sem <- struct{}{}
+				go func(req api.UpdateTaskRequest, tid string) {
+					defer func() { <-sem }()
+					_, err := h.Client.UpdateTask(tid, req)
+					results <- result{err: err}
+				}(u.updateReq, u.task.ID)
+			}
+			for range updates {
+				<-results
+			}
+			return taskUpdatedMsg{}
+		}
+	}
+
+	// --- Single-task (cursor / detail-panel) branch ---
 	var task *api.Task
 
 	// Determine task
