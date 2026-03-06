@@ -812,11 +812,11 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 		task.Due = &api.Due{}
 	}
 	task.Due.Date = newDateStr
-	// If recurring, we might need to be careful, but updating date is fine for display
-	// Note: We don't update task.Due.String here because we don't know the localized string for arbitrary date easily.
-	// But resetting it or leaving it might be ok. Todoist usually updates it.
-	// Let's rely on date for display mostly.
 	task.Due.Datetime = nil
+	// Update ParsedDate so IsDueToday/IsOverdue use the new date for filtering
+	if parsed, err := time.ParseInLocation("2006-01-02", newDateStr, time.Local); err == nil {
+		task.ParsedDate = &parsed
+	}
 
 	// Update AllTasks
 	for i := range h.AllTasks {
@@ -826,6 +826,9 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 			}
 			h.AllTasks[i].Due.Date = newDateStr
 			h.AllTasks[i].Due.Datetime = nil
+			if parsed, err := time.ParseInLocation("2006-01-02", newDateStr, time.Local); err == nil {
+				h.AllTasks[i].ParsedDate = &parsed
+			}
 			break
 		}
 	}
@@ -842,10 +845,12 @@ func (h *Handler) handleMoveTaskDate(days int, preciseDate string) tea.Cmd {
 
 		// Update optimistic
 		task.Due = nil
+		task.ParsedDate = nil
 		// Update AllTasks
 		for i := range h.AllTasks {
 			if h.AllTasks[i].ID == task.ID {
 				h.AllTasks[i].Due = nil
+				h.AllTasks[i].ParsedDate = nil
 				break
 			}
 		}

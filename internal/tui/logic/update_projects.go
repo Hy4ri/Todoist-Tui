@@ -1026,7 +1026,10 @@ func (h *Handler) handleDueToday() tea.Cmd {
 	}
 	task.Due.String = "today"
 	task.Due.Date = dateStr
-	task.Due.Datetime = nil // Clear specific time if moving to "today" broadly
+	task.Due.Datetime = nil
+	// Update ParsedDate so IsDueToday/IsOverdue use the new date for filtering
+	parsedToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	task.ParsedDate = &parsedToday
 
 	// Update AllTasks
 	for i := range h.AllTasks {
@@ -1037,6 +1040,7 @@ func (h *Handler) handleDueToday() tea.Cmd {
 			h.AllTasks[i].Due.String = "today"
 			h.AllTasks[i].Due.Date = dateStr
 			h.AllTasks[i].Due.Datetime = nil
+			h.AllTasks[i].ParsedDate = &parsedToday
 			break
 		}
 	}
@@ -1090,6 +1094,9 @@ func (h *Handler) handleDueTomorrow() tea.Cmd {
 	task.Due.String = "tomorrow"
 	task.Due.Date = dateStr
 	task.Due.Datetime = nil
+	// Update ParsedDate so IsDueToday/IsOverdue use the new date for filtering
+	parsedTomorrow := time.Date(tomorrow.Year(), tomorrow.Month(), tomorrow.Day(), 0, 0, 0, 0, time.Local)
+	task.ParsedDate = &parsedTomorrow
 
 	// Update AllTasks
 	for i := range h.AllTasks {
@@ -1100,6 +1107,7 @@ func (h *Handler) handleDueTomorrow() tea.Cmd {
 			h.AllTasks[i].Due.String = "tomorrow"
 			h.AllTasks[i].Due.Date = dateStr
 			h.AllTasks[i].Due.Datetime = nil
+			h.AllTasks[i].ParsedDate = &parsedTomorrow
 			break
 		}
 	}
