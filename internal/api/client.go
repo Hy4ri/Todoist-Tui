@@ -24,6 +24,10 @@ type Client struct {
 	httpClient  *http.Client
 	baseURL     string
 	accessToken string
+	// MaxRetries is the max number of retry attempts for transient failures (default 3).
+	MaxRetries int
+	// RetryBaseDelay is the initial delay for exponential backoff (default 500ms).
+	RetryBaseDelay time.Duration
 }
 
 // NewClient creates a new Todoist API client with the given access token.
@@ -42,8 +46,10 @@ func NewClient(accessToken string) *Client {
 			Timeout:   DefaultTimeout,
 			Transport: transport,
 		},
-		baseURL:     BaseURL,
-		accessToken: accessToken,
+		baseURL:        BaseURL,
+		accessToken:    accessToken,
+		MaxRetries:     3,
+		RetryBaseDelay: 500 * time.Millisecond,
 	}
 }
 
@@ -110,17 +116,17 @@ func (c *Client) do(method, path string, body interface{}, result interface{}) e
 	return nil
 }
 
-// Get performs a GET request.
+// Get performs a GET request with retry on transient failures.
 func (c *Client) Get(path string, result interface{}) error {
-	return c.do(http.MethodGet, path, nil, result)
+	return c.doWithRetry(http.MethodGet, path, nil, result)
 }
 
-// GetWithQuery performs a GET request with query parameters.
+// GetWithQuery performs a GET request with query parameters and retry on transient failures.
 func (c *Client) GetWithQuery(path string, query url.Values, result interface{}) error {
 	if len(query) > 0 {
 		path = path + "?" + query.Encode()
 	}
-	return c.do(http.MethodGet, path, nil, result)
+	return c.doWithRetry(http.MethodGet, path, nil, result)
 }
 
 // Post performs a POST request.
@@ -128,9 +134,9 @@ func (c *Client) Post(path string, body interface{}, result interface{}) error {
 	return c.do(http.MethodPost, path, body, result)
 }
 
-// Delete performs a DELETE request.
+// Delete performs a DELETE request with retry on transient failures.
 func (c *Client) Delete(path string) error {
-	return c.do(http.MethodDelete, path, nil, nil)
+	return c.doWithRetry(http.MethodDelete, path, nil, nil)
 }
 
 // buildFilterQuery builds query parameters for task filtering.
