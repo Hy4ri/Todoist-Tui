@@ -946,6 +946,13 @@ func (h *Handler) handleQuickAddKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		// Clear input and increment count (stays open)
 		h.QuickAddForm.Clear()
 		h.QuickAddForm.IncrementCount()
+
+		// Re-populate "today " prefix when adding from the Today view
+		if h.CurrentTab == state.TabToday {
+			h.QuickAddForm.Input.SetValue("today ")
+			h.QuickAddForm.Input.SetCursor(6)
+		}
+
 		h.StatusMsg = "Adding task..."
 
 		// Create task in background using Quick Add API
