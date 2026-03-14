@@ -33,6 +33,14 @@ type UIConfig struct {
 	DefaultView         string      `yaml:"default_view,omitempty"`          // "inbox", "today", "upcoming", "projects", "calendar"
 	CalendarDefaultView string      `yaml:"calendar_default_view,omitempty"` // "compact" or "expanded"
 	Theme               ThemeConfig `yaml:"theme,omitempty"`
+	// PomodoroWorkDuration is the preferred work phase duration in minutes (0 = use default 25).
+	PomodoroWorkDuration int `yaml:"pomodoro_work_duration,omitempty"`
+	// PomodoroBreakDuration is the preferred short-break duration in minutes (0 = use default 5).
+	PomodoroBreakDuration int `yaml:"pomodoro_break_duration,omitempty"`
+	// Keybindings allows overriding default key bindings. Map of action name to key string.
+	// Example: { "add_task": "o", "complete": "c" }
+	// Action names match those in KeymapData (snake_case). An empty or missing map keeps all defaults.
+	Keybindings map[string]string `yaml:"keybindings,omitempty"`
 }
 
 // ThemeConfig holds color theme settings.

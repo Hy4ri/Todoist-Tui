@@ -4,6 +4,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 )
@@ -31,9 +32,13 @@ func (v *PomodoroView) Name() string {
 func (v *PomodoroView) OnEnter() tea.Cmd {
 	v.State.FocusedPane = state.PaneMain
 
-	// Initialize timer state if it's the first time
+	// Initialize timer state if it's the first time, using config preferences.
 	if v.State.PomodoroTarget == 0 {
-		v.State.PomodoroTarget = 25 * time.Minute
+		workMins := v.State.Config.UI.PomodoroWorkDuration
+		if workMins <= 0 {
+			workMins = 25 // default
+		}
+		v.State.PomodoroTarget = time.Duration(workMins) * time.Minute
 		v.State.PomodoroMode = state.PomodoroCountdown
 		v.State.PomodoroPhase = state.PomodoroWork
 	}
@@ -102,17 +107,23 @@ func (v *PomodoroView) HandleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, true
 
 	case "+":
-		// Increase work duration
+		// Increase duration and persist only if in work phase
 		if v.State.PomodoroMode == state.PomodoroCountdown {
 			v.State.PomodoroTarget += 5 * time.Minute
+			if v.State.PomodoroPhase == state.PomodoroWork {
+				v.persistWorkDuration(v.State.PomodoroTarget)
+			}
 		}
 		return nil, true
 
 	case "-":
-		// Decrease work duration
+		// Decrease duration and persist only if in work phase
 		if v.State.PomodoroMode == state.PomodoroCountdown {
 			if v.State.PomodoroTarget > 5*time.Minute {
 				v.State.PomodoroTarget -= 5 * time.Minute
+				if v.State.PomodoroPhase == state.PomodoroWork {
+					v.persistWorkDuration(v.State.PomodoroTarget)
+				}
 			}
 		}
 		return nil, true
@@ -180,17 +191,28 @@ func (v *PomodoroView) nextPhase() tea.Cmd {
 		}
 	} else {
 		v.State.PomodoroPhase = state.PomodoroWork
-		// Restore focus target (default 25 or 50)
-		if v.State.PomodoroTarget == 10*time.Minute || v.State.PomodoroTarget == 5*time.Minute || v.State.PomodoroTarget == 15*time.Minute {
-			// Use sessions to guess preference? For now just use 25 or 50 based on what it was before
-			// Actually better to have a stored preference.
-			// For now, default back to 25 or keep the 50 if they changed it.
-			// Let's just default to 25 if unsure.
-			v.State.PomodoroTarget = 25 * time.Minute
+		// Restore the user's preferred work duration from config, falling back to 25m.
+		workMins := v.State.Config.UI.PomodoroWorkDuration
+		if workMins <= 0 {
+			workMins = 25
 		}
+		v.State.PomodoroTarget = time.Duration(workMins) * time.Minute
 	}
 	v.SetStatus("Phase: " + v.phaseName())
 	return nil
+}
+
+// persistWorkDuration saves the current work duration to config so it
+// survives restarts. Saves to the in-memory config; the config is written
+// to disk the next time config.Save is called (or by SaveWorkDuration).
+func (v *PomodoroView) persistWorkDuration(d time.Duration) {
+	if v.State.Config == nil {
+		return
+	}
+	minutes := int(d.Minutes())
+	v.State.Config.UI.PomodoroWorkDuration = minutes
+	// Best-effort disk write; ignore errors to keep the UI responsive.
+	_ = config.Save(v.State.Config)
 }
 
 func (v *PomodoroView) phaseName() string {

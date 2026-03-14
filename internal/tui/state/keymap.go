@@ -1,6 +1,10 @@
 package state
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"fmt"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 // Key represents a key binding.
 type Key struct {
@@ -114,6 +118,89 @@ func DefaultKeymap() KeymapData {
 
 		// Map 'f' generic action logic will handle context
 	}
+}
+
+// ApplyOverrides applies user-defined key binding overrides from the config file.
+// The overrides map is keyed by action name (snake_case) and maps to the
+// replacement key string. Unknown action names are silently ignored.
+// If multiple actions would be bound to the same key, the conflict is
+// skipped and a warning string is returned for each conflict.
+// Example: {"add_task": "o", "complete": "c"}
+func (k *KeymapData) ApplyOverrides(overrides map[string]string) []string {
+	if len(overrides) == 0 {
+		return nil
+	}
+
+	// Explicit action → field pointer map avoids reflection and keeps things type-safe.
+	actions := map[string]*string{
+		"up":               &k.Up.Key,
+		"down":             &k.Down.Key,
+		"top":              &k.Top.Key,
+		"bottom":           &k.Bottom.Key,
+		"half_up":          &k.HalfUp.Key,
+		"half_down":        &k.HalfDown.Key,
+		"left":             &k.Left.Key,
+		"right":            &k.Right.Key,
+		"select":           &k.Select.Key,
+		"back":             &k.Back.Key,
+		"quit":             &k.Quit.Key,
+		"help":             &k.Help.Key,
+		"refresh":          &k.Refresh.Key,
+		"add_task":         &k.AddTask.Key,
+		"add_task_full":    &k.AddTaskFull.Key,
+		"edit_task":        &k.EditTask.Key,
+		"delete_task":      &k.DeleteTask.Key,
+		"complete":         &k.CompleteTask.Key,
+		"priority1":        &k.Priority1.Key,
+		"priority2":        &k.Priority2.Key,
+		"priority3":        &k.Priority3.Key,
+		"priority4":        &k.Priority4.Key,
+		"move_prev_day":    &k.MoveTaskPrevDay.Key,
+		"move_next_day":    &k.MoveTaskNextDay.Key,
+		"add_comment":      &k.AddComment.Key,
+		"reschedule":       &k.RescheduleTask.Key,
+		"indent":           &k.IndentTask.Key,
+		"outdent":          &k.OutdentTask.Key,
+		"switch_pane":      &k.SwitchPane.Key,
+		"search":           &k.Search.Key,
+		"new_project":      &k.NewProject.Key,
+		"new_section":      &k.NewSection.Key,
+		"move_section":     &k.MoveSection.Key,
+		"move_to_project":  &k.MoveToProject.Key,
+		"reminder":         &k.Reminder.Key,
+		"send_to_pomodoro": &k.SendToPomodoro.Key,
+	}
+
+	// Build a reverse map of key → action from the current (default) bindings
+	// so we can detect conflicts when applying overrides.
+	keyOwner := make(map[string]string, len(actions))
+	for action, ptr := range actions {
+		keyOwner[*ptr] = action
+	}
+
+	var warnings []string
+	for action, key := range overrides {
+		ptr, ok := actions[action]
+		if !ok {
+			continue
+		}
+
+		// Check for conflict: is this key already claimed by another action?
+		if existing, conflict := keyOwner[key]; conflict && existing != action {
+			warnings = append(warnings, fmt.Sprintf(
+				"keybinding conflict: %q and %q are both bound to key %q; skipping %q",
+				existing, action, key, action,
+			))
+			continue
+		}
+
+		// Remove old key mapping, assign new one.
+		delete(keyOwner, *ptr)
+		*ptr = key
+		keyOwner[key] = action
+	}
+
+	return warnings
 }
 
 // KeyState tracks multi-key sequences (like 'gg' or 'dd' or 'yy').
