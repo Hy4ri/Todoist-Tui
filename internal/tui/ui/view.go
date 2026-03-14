@@ -128,13 +128,7 @@ func (r *Renderer) renderMainView() string {
 
 		if r.CurrentTab == state.TabProjects {
 			// Three-pane layout: Sidebar | Tasks | Detail
-			sidebarWidth := 30
-			if remainingWidth < 70 {
-				sidebarWidth = 20
-			}
-			if remainingWidth < 50 {
-				sidebarWidth = 15
-			}
+			sidebarWidth := styles.SidebarWidth(remainingWidth)
 
 			// We need 2 spaces for joins
 			taskListWidth := remainingWidth - sidebarWidth - 2

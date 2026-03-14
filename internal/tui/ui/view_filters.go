@@ -12,14 +12,7 @@ import (
 
 // renderFiltersTab renders the filters tab content (Sidebar + Task List).
 func (r *Renderer) renderFiltersTab(width, height int) string {
-	// Sidebar width logic matching Projects tab
-	sidebarWidth := 30
-	if width < 70 {
-		sidebarWidth = 20
-	}
-	if width < 50 {
-		sidebarWidth = 15
-	}
+	sidebarWidth := styles.SidebarWidth(width)
 
 	listWidth := width - sidebarWidth - 4 // Gap/borders
 

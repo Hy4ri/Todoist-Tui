@@ -8,13 +8,7 @@ import (
 
 // renderProjectsTabContent renders content for the Projects tab (sidebar + tasks).
 func (r *Renderer) renderProjectsTabContent(width, height int) string {
-	sidebarWidth := 30 // Wider sidebar for full project names
-	if width < 70 {
-		sidebarWidth = 20
-	}
-	if width < 50 {
-		sidebarWidth = 15
-	}
+	sidebarWidth := styles.SidebarWidth(width)
 	mainWidth := width - sidebarWidth - 4
 	if mainWidth < 20 {
 		mainWidth = 20
