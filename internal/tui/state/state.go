@@ -93,9 +93,76 @@ type Keymap interface {
 	HelpItems() [][]string
 }
 
+// CalendarState holds all calendar-specific view state.
+type CalendarState struct {
+	CalendarDate     time.Time
+	CalendarDay      int
+	CalendarViewMode CalendarViewMode
+}
+
+// PomodoroState holds all Pomodoro timer state.
+type PomodoroState struct {
+	PomodoroMode     PomodoroTimerMode
+	PomodoroPhase    PomodoroPhase
+	PomodoroTarget   time.Duration
+	PomodoroElapsed  time.Duration
+	PomodoroRunning  bool
+	PomodoroSessions int
+	PomodoroTask     *api.Task
+	PomodoroProject  string
+}
+
+// FilterViewState holds state for the Filters tab.
+type FilterViewState struct {
+	Filters           []api.Filter
+	CurrentFilter     *api.Filter
+	FilterCursor      int
+	FilterInput       textinput.Model
+	IsFilterSearch    bool
+	FilterSearchQuery string
+	HiddenFilters     map[string]bool // Track hidden built-in filters by ID
+}
+
+// SelectionState holds multi-task selection state.
+type SelectionState struct {
+	SelectedTaskIDs map[string]bool
+}
+
+// ReminderState holds state for the reminder management UI.
+type ReminderState struct {
+	Reminders             []api.Reminder
+	ReminderCache         map[string][]api.Reminder // task_id -> reminders
+	IsAddingReminder      bool
+	IsEditingReminder     bool
+	EditingReminder       *api.Reminder
+	ConfirmDeleteReminder bool
+	ReminderCursor        int
+	ReminderTypeCursor    int // 0=relative, 1=absolute
+	ReminderMinuteInput   textinput.Model
+	ReminderDateInput     textinput.Model
+	ReminderTimeInput     textinput.Model
+}
+
+// RescheduleState holds state for the reschedule picker.
+type RescheduleState struct {
+	IsRescheduling    bool
+	RescheduleCursor  int
+	RescheduleOptions []string
+}
+
 // State holds the application state.
 // All fields are exported to allow access from logic and ui packages.
+// Domain-specific fields are grouped via embedded sub-structs; Go's field
+// promotion means all existing access (e.g. s.CalendarDay) is unchanged.
 type State struct {
+	// Domain-grouped sub-states (fields promoted to State via embedding)
+	CalendarState
+	PomodoroState
+	FilterViewState
+	SelectionState
+	ReminderState
+	RescheduleState
+
 	// Dependencies
 	Client *api.Client
 	Config *config.Config
@@ -142,19 +209,12 @@ type State struct {
 	ProductivityStats *api.ProductivityStats
 	StatsError        string
 
-	// Sidebar items
-
 	SidebarCursor int
 
 	// List state
 	ProjectCursor int
 	TaskCursor    int
 	ScrollOffset  int
-
-	// Calendar state
-	CalendarDate     time.Time
-	CalendarDay      int
-	CalendarViewMode CalendarViewMode
 
 	// UI state
 	Loading         bool
@@ -217,7 +277,7 @@ type State struct {
 
 	ConfirmDeleteSection bool
 
-	// Filter creation/editing state
+	// Filter creation/editing state (separate from FilterViewState sidebar fields)
 	FilterNameInput     textinput.Model
 	FilterQueryInput    textinput.Model
 	IsCreatingFilter    bool
@@ -252,25 +312,9 @@ type State struct {
 	TaskOrderedIndices []int
 	ViewportSections   []string
 
-	// Selection state
-	SelectedTaskIDs map[string]bool
-
 	// Notification state
 	NotifiedTasks     map[string]bool
 	NotifiedReminders map[string]bool
-
-	// Reminder state
-	Reminders             []api.Reminder
-	ReminderCache         map[string][]api.Reminder // task_id -> reminders
-	IsAddingReminder      bool
-	IsEditingReminder     bool
-	EditingReminder       *api.Reminder
-	ConfirmDeleteReminder bool
-	ReminderCursor        int
-	ReminderTypeCursor    int // 0=relative, 1=absolute
-	ReminderMinuteInput   textinput.Model
-	ReminderDateInput     textinput.Model
-	ReminderTimeInput     textinput.Model
 
 	// Cursor restoration
 	RestoreCursorToTaskID string
@@ -282,20 +326,6 @@ type State struct {
 
 	// Command line state (vim-style :)
 	CommandLine *CommandLine
-
-	// Filter state
-	Filters           []api.Filter
-	CurrentFilter     *api.Filter
-	FilterCursor      int
-	FilterInput       textinput.Model
-	IsFilterSearch    bool
-	FilterSearchQuery string
-	HiddenFilters     map[string]bool // Track hidden built-in filters by ID
-
-	// Reschedule state
-	IsRescheduling    bool
-	RescheduleCursor  int
-	RescheduleOptions []string
 
 	// Specialized section-aware task addition
 	IsAddingToSection bool
@@ -317,16 +347,6 @@ type State struct {
 	IndentFilteredCandidates []api.Task
 	IndentCursor             int
 	IndentInput              textinput.Model
-
-	// Pomodoro state
-	PomodoroMode     PomodoroTimerMode
-	PomodoroPhase    PomodoroPhase
-	PomodoroTarget   time.Duration
-	PomodoroElapsed  time.Duration
-	PomodoroRunning  bool
-	PomodoroSessions int
-	PomodoroTask     *api.Task
-	PomodoroProject  string
 }
 
 // MoveTarget represents a destination for moving tasks (Project or Section)

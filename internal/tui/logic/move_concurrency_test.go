@@ -22,11 +22,13 @@ func TestExecuteMoveToProjectBatch(t *testing.T) {
 	})
 
 	s := &state.State{
-		Client:          client,
-		Tasks:           make([]api.Task, 20),
-		SelectedTaskIDs: make(map[string]bool),
-		AllTasks:        make([]api.Task, 20),
-		SidebarComp:     components.NewSidebar(),
+		Client: client,
+		Tasks:  make([]api.Task, 20),
+		SelectionState: state.SelectionState{
+			SelectedTaskIDs: make(map[string]bool),
+		},
+		AllTasks:    make([]api.Task, 20),
+		SidebarComp: components.NewSidebar(),
 	}
 
 	for i := 0; i < 20; i++ {

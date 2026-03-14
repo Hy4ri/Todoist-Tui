@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,9 +32,11 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 		Client: client,
 		Config: cfg,
 
-		SearchResults:   []api.Task{},
-		SelectedTaskIDs: make(map[string]bool),
-		NotifiedTasks:   make(map[string]bool),
+		SearchResults: []api.Task{},
+		SelectionState: state.SelectionState{
+			SelectedTaskIDs: make(map[string]bool),
+		},
+		NotifiedTasks: make(map[string]bool),
 	}
 
 	// Initialize UI components
@@ -42,6 +48,10 @@ func NewApp(client *api.Client, cfg *config.Config, initialView string) *App {
 	s.HelpComp = components.NewHelp()
 
 	km := state.DefaultKeymap()
+	// Apply any user-configured keybinding overrides from config.
+	if warnings := km.ApplyOverrides(cfg.UI.Keybindings); len(warnings) > 0 {
+		fmt.Fprintf(os.Stderr, "Warning: %s\n", strings.Join(warnings, "; "))
+	}
 	s.Keymap = km
 	s.HelpComp.SetKeymap(km.HelpItems())
 	s.KeyState = &state.KeyState{}

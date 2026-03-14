@@ -55,9 +55,11 @@ func TestHandleCompleteConcurrency(t *testing.T) {
 	})
 
 	s := &state.State{
-		Client:          client,
-		Tasks:           make([]api.Task, 100),
-		SelectedTaskIDs: make(map[string]bool),
+		Client: client,
+		Tasks:  make([]api.Task, 100),
+		SelectionState: state.SelectionState{
+			SelectedTaskIDs: make(map[string]bool),
+		},
 		// Setup necessary state to pass guard clauses
 		CurrentTab:  state.TabInbox, // or any tab that allows completion
 		FocusedPane: state.PaneMain,

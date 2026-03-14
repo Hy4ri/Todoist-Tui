@@ -15,8 +15,10 @@ func TestRenderCalendarCompact_TaskDistribution(t *testing.T) {
 	// Setup state
 	now := time.Now()
 	s := &state.State{
-		Config:       &config.Config{},
-		CalendarDate: now,
+		Config: &config.Config{},
+		CalendarState: state.CalendarState{
+			CalendarDate: now,
+		},
 		TasksByDate: map[string][]api.Task{
 			now.Format("2006-01-02"): {
 				{
@@ -67,8 +69,11 @@ func TestRenderCalendarExpanded_TaskDistribution(t *testing.T) {
 	// or just check for content presence.
 
 	s := &state.State{
-		Config:       &config.Config{},
-		CalendarDate: now,
+		Config: &config.Config{},
+		CalendarState: state.CalendarState{
+			CalendarDate:     now,
+			CalendarViewMode: state.CalendarViewExpanded,
+		},
 		TasksByDate: map[string][]api.Task{
 			now.Format("2006-01-02"): {
 				{
@@ -81,9 +86,8 @@ func TestRenderCalendarExpanded_TaskDistribution(t *testing.T) {
 				},
 			},
 		},
-		Width:            120, // Wide enough for expanded view
-		Height:           40,
-		CalendarViewMode: state.CalendarViewExpanded,
+		Width:  120, // Wide enough for expanded view
+		Height: 40,
 	}
 
 	r := NewRenderer(s)
