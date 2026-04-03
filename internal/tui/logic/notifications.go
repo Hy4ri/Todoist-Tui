@@ -51,7 +51,11 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 		} else if task.Due.Date != "" {
 			// Day-only task: default to 9:00 AM local time
 			// We parse the date (YYYY-MM-DD) and add 9 hours
-			parsedDate, err := time.ParseInLocation("2006-01-02", task.Due.Date[:10], time.Local)
+			dateStr := task.Due.Date
+			if len(dateStr) > 10 {
+				dateStr = dateStr[:10]
+			}
+			parsedDate, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
 			if err != nil {
 				continue
 			}
@@ -127,7 +131,11 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 			if task.Due.Datetime != nil && *task.Due.Datetime != "" {
 				taskDue, err = time.Parse(time.RFC3339, *task.Due.Datetime)
 			} else if task.Due.Date != "" {
-				taskDue, err = time.ParseInLocation("2006-01-02", task.Due.Date[:10], time.Local)
+				dateStr := task.Due.Date
+				if len(dateStr) > 10 {
+					dateStr = dateStr[:10]
+				}
+				taskDue, err = time.ParseInLocation("2006-01-02", dateStr, time.Local)
 				if err == nil {
 					taskDue = taskDue.Add(9 * time.Hour) // Same default as tasks
 				}
