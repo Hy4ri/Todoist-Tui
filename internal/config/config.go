@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"gopkg.in/yaml.v3"
 )
@@ -150,7 +149,7 @@ func (c *Config) HasValidAuth() bool {
 }
 
 // UpdateDefaultView updates the default_view setting in the config file
-// using textual replacement to preserve comments and formatting.
+// using structural YAML updates to avoid clobbering unrelated ui settings.
 func UpdateDefaultView(viewName string) error {
 	path, err := ConfigPath()
 	if err != nil {
@@ -162,25 +161,16 @@ func UpdateDefaultView(viewName string) error {
 		return err
 	}
 
-	text := string(content)
-
-	// Try to find existing key
-	// Looks for "default_view:" optionally followed by value
-	re := regexp.MustCompile(`(?m)^(\s*default_view:\s*).*$`)
-
-	if re.MatchString(text) {
-		text = re.ReplaceAllString(text, fmt.Sprintf("${1}%q", viewName))
-	} else {
-		// Key not found, insert it in ui section or append
-		// If "ui:" exists, try to insert after it
-		uiRe := regexp.MustCompile(`(?m)^ui:\s*$`)
-		if uiRe.MatchString(text) {
-			text = uiRe.ReplaceAllString(text, fmt.Sprintf("ui:\n  default_view: %q", viewName))
-		} else {
-			// Just append to end
-			text += fmt.Sprintf("\n# Default view added by app\nui:\n  default_view: %q\n", viewName)
-		}
+	var cfg Config
+	if err := yaml.Unmarshal(content, &cfg); err != nil {
+		return fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	return os.WriteFile(path, []byte(text), 0600)
+	cfg.UI.DefaultView = viewName
+	data, err := yaml.Marshal(&cfg)
+	if err != nil {
+		return fmt.Errorf("failed to serialize config: %w", err)
+	}
+
+	return os.WriteFile(path, data, 0600)
 }
