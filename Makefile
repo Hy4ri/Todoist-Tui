@@ -23,7 +23,7 @@ build:
 lbuild:
 	$(GOBUILD) -o $(BINARY_PATH) ./cmd/todoist-tui
 	rm -f $(LOCAL_PATH)
-	ln -s ~/Documents/Projects/todoist/$(BINARY_PATH) $(LOCAL_PATH)
+	ln -s ~/Projects/todoist-tui/$(BINARY_PATH) $(LOCAL_PATH)
 
 # Run in development mode
 run:
