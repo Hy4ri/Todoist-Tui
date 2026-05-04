@@ -59,6 +59,10 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		h.StatusMsg = msg.msg
 		return nil
 
+	case configSaveFailedMsg:
+		h.StatusMsg = msg.msg
+		return nil
+
 	case dataLoadedMsg:
 		return h.handleDataLoaded(msg)
 

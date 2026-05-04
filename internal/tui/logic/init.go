@@ -210,5 +210,6 @@ type refreshMsg struct{ Force bool }
 type commentsLoadedMsg struct{ comments []api.Comment }
 
 type reorderCompleteMsg struct{}
+type configSaveFailedMsg struct{ msg string }
 
 // Update implements tea.Model.

@@ -92,7 +92,9 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 			// Add notification command
 			cmds = append(cmds, func() tea.Msg {
-				_ = beeep.Notify(utils.SanitizeSingleLineText(project), "Task Due: "+content, "")
+				if err := beeep.Notify(utils.SanitizeSingleLineText(project), "Task Due: "+content, ""); err != nil {
+					return statusMsg{msg: "Notification failed"}
+				}
 				return nil
 			})
 		}
@@ -189,7 +191,9 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 			h.NotifiedTasks[rem.ID] = true
 
 			cmds = append(cmds, func() tea.Msg {
-				_ = beeep.Notify("Todoist", content, "")
+				if err := beeep.Notify("Todoist", content, ""); err != nil {
+					return statusMsg{msg: "Notification failed"}
+				}
 				return nil
 			})
 		}

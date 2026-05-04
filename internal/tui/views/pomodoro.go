@@ -211,8 +211,10 @@ func (v *PomodoroView) persistWorkDuration(d time.Duration) {
 	}
 	minutes := int(d.Minutes())
 	v.State.Config.UI.PomodoroWorkDuration = minutes
-	// Best-effort disk write; ignore errors to keep the UI responsive.
-	_ = config.Save(v.State.Config)
+	// Best-effort disk write; surface failures through the status message.
+	if err := config.Save(v.State.Config); err != nil {
+		v.SetStatus("Failed to save Pomodoro preference")
+	}
 }
 
 func (v *PomodoroView) phaseName() string {

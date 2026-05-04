@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -282,7 +283,10 @@ func promptForToken() (string, error) {
 	var token string
 	_, err := fmt.Scanln(&token)
 	if err != nil {
-		return "", nil // User cancelled
+		if err == io.EOF {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to read token: %w", err)
 	}
 
 	return strings.TrimSpace(token), nil

@@ -72,7 +72,7 @@ func (h *Handler) rebuildSidebarCounts() {
 }
 
 // taskLess reports whether task ti should sort before task tj.
-// Ordering: time present → chronological time → priority → due date → ChildOrder.
+// Ordering: time present → chronological time → has due date → priority → due date → ChildOrder.
 func taskLess(ti, tj api.Task) bool {
 	// 1. Tasks with a specific time come before date-only or no-due tasks.
 	hasTimeI := ti.Due != nil && ti.Due.Datetime != nil && *ti.Due.Datetime != ""
@@ -87,24 +87,25 @@ func taskLess(ti, tj api.Task) bool {
 		}
 	}
 
-	// 2. Priority (higher value = more urgent).
-	if ti.Priority != tj.Priority {
-		return ti.Priority > tj.Priority
-	}
-
-	// 3. Due date (earlier first) as tiebreaker.
 	hasDueI := ti.Due != nil
 	hasDueJ := tj.Due != nil
 
 	if hasDueI != hasDueJ {
 		return hasDueI
 	}
+
+	// 3. Priority (higher value = more urgent).
+	if ti.Priority != tj.Priority {
+		return ti.Priority > tj.Priority
+	}
+
+	// 4. Due date (earlier first) as tiebreaker.
 	if hasDueI && hasDueJ {
 		if ti.Due.Date != tj.Due.Date {
 			return ti.Due.Date < tj.Due.Date
 		}
 	}
 
-	// 4. Manual order within project/list.
+	// 5. Manual order within project/list.
 	return ti.ChildOrder < tj.ChildOrder
 }

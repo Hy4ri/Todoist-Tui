@@ -104,10 +104,12 @@ func (h *Handler) handleCalendarKeyMsg(msg tea.KeyMsg) tea.Cmd {
 			h.State.CalendarViewMode = state.CalendarViewCompact
 			h.Config.UI.CalendarDefaultView = "compact"
 		}
-		// Save config in background (ignore errors)
-		go func() {
-			_ = config.Save(h.Config)
-		}()
+		return func() tea.Msg {
+			if err := config.Save(h.Config); err != nil {
+				return configSaveFailedMsg{msg: "Failed to save calendar preference"}
+			}
+			return nil
+		}
 	case "enter":
 		// Open day detail view
 		h.PreviousView = h.CurrentView
