@@ -18,7 +18,7 @@ A terminal-based Todoist client written in Go with Vim-style keybindings.
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.25 or higher
 - A Todoist account
 
 ### From Source
@@ -43,7 +43,7 @@ On first launch, the app will:
 1. Automatically create a default configuration file at `~/.config/todoist-tui/config.yaml`.
 2. Prompt you to enter your **Todoist API Token** (find it [here](https://app.todoist.com/app/settings/integrations/developer)).
 
-Your token is stored securely in your system keyring (or `~/.local/share/todoist-tui/.credentials`) and is **never** saved in the plain-text config file.
+Your token is stored securely in your system keyring and is **never** saved in the plain-text config file.
 
 ## Configuration
 
