@@ -28,11 +28,6 @@ func NewCoordinator(s *state.State) *Coordinator {
 	return c
 }
 
-// GetRegistry returns the registry.
-func (c *Coordinator) GetRegistry() *Registry {
-	return c.registry
-}
-
 // GetCurrentView returns the active view.
 func (c *Coordinator) GetCurrentView() ViewHandler {
 	return c.currentView

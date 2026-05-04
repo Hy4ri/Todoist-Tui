@@ -30,25 +30,3 @@ type ViewHandler interface {
 	// Render returns the view's content.
 	Render(width, height int) string
 }
-
-// ViewContext provides access to shared state and common operations.
-// This is passed to each view to avoid tight coupling with the full State.
-type ViewContext interface {
-	// GetTasks returns the current task list.
-	GetTasks() []interface{}
-
-	// GetCursor returns the current cursor position.
-	GetCursor() int
-
-	// SetCursor sets the cursor position.
-	SetCursor(pos int)
-
-	// SetStatusMessage displays a status message.
-	SetStatusMessage(msg string)
-
-	// SetLoading sets the loading state.
-	SetLoading(loading bool)
-
-	// NavigateTo switches to another view.
-	NavigateTo(viewName string) tea.Cmd
-}

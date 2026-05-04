@@ -205,7 +205,6 @@ func (k *KeymapData) ApplyOverrides(overrides map[string]string) []string {
 
 // KeyState tracks multi-key sequences (like 'gg' or 'dd' or 'yy').
 type KeyState struct {
-	LastKey  string
 	WaitingG bool // Waiting for second 'g' in 'gg'
 	WaitingD bool // Waiting for second 'd' in 'dd'
 	WaitingY bool // Waiting for second 'y' in 'yy'
@@ -255,19 +254,16 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 	// Check for multi-key sequence starts
 	if key == "g" {
 		ks.WaitingG = true
-		ks.LastKey = key
 		return "", true // Key consumed, waiting for next
 	}
 
 	if key == "d" {
 		ks.WaitingD = true
-		ks.LastKey = key
 		return "", true // Key consumed, waiting for next
 	}
 
 	if key == "y" {
 		ks.WaitingY = true
-		ks.LastKey = key
 		return "", true // Key consumed, waiting for next
 	}
 
@@ -377,7 +373,6 @@ func (ks *KeyState) Reset() {
 	ks.WaitingG = false
 	ks.WaitingD = false
 	ks.WaitingY = false
-	ks.LastKey = ""
 }
 
 // HelpItems returns a slice of key-description pairs for the help view.
