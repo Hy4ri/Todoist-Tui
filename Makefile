@@ -4,6 +4,7 @@
 BINARY_NAME=todoist-tui
 BINARY_PATH=bin/$(BINARY_NAME)
 LOCAL_PATH=~/.local/bin/$(BINARY_NAME)
+LOCAL_SOURCE_PATH?=$(HOME)/Projects/todoist-tui/$(BINARY_PATH)
 
 # Go parameters
 GOCMD=go
@@ -19,11 +20,10 @@ GOVET=$(GOCMD) vet
 build:
 	$(GOBUILD) -o $(BINARY_PATH) ./cmd/todoist-tui
 
-# local build
 lbuild:
 	$(GOBUILD) -o $(BINARY_PATH) ./cmd/todoist-tui
 	rm -f $(LOCAL_PATH)
-	ln -s ~/Projects/todoist-tui/$(BINARY_PATH) $(LOCAL_PATH)
+	ln -s $(LOCAL_SOURCE_PATH) $(LOCAL_PATH)
 
 # Run in development mode
 run:
