@@ -12,19 +12,7 @@ import (
 
 // Config represents the application configuration.
 type Config struct {
-	Auth AuthConfig `yaml:"auth"`
-	UI   UIConfig   `yaml:"ui"`
-}
-
-// AuthConfig holds authentication-related settings.
-type AuthConfig struct {
-	// OAuth2 credentials
-	ClientID     string `yaml:"client_id,omitempty"`
-	ClientSecret string `yaml:"client_secret,omitempty"`
-
-	// OAuth2 tokens (obtained after successful auth)
-	AccessToken  string `yaml:"access_token,omitempty"`
-	RefreshToken string `yaml:"refresh_token,omitempty"`
+	UI UIConfig `yaml:"ui"`
 }
 
 // UIConfig holds UI-related settings.
@@ -79,7 +67,6 @@ type ThemeConfig struct {
 // DefaultConfig returns a new Config with default values.
 func DefaultConfig() *Config {
 	return &Config{
-		Auth: AuthConfig{},
 		UI: UIConfig{
 			VimMode: true,
 		},
@@ -159,12 +146,7 @@ func Save(cfg *Config) error {
 // HasValidAuth returns true if authentication is available.
 // Checks secure credential storage and OAuth access token.
 func (c *Config) HasValidAuth() bool {
-	return HasToken() || c.Auth.AccessToken != ""
-}
-
-// HasOAuthCredentials returns true if OAuth client credentials are configured.
-func (c *Config) HasOAuthCredentials() bool {
-	return c.Auth.ClientID != "" && c.Auth.ClientSecret != ""
+	return HasToken()
 }
 
 // UpdateDefaultView updates the default_view setting in the config file
