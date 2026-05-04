@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"time"
+
+	"github.com/google/uuid"
 )
 
 // GetSections returns all sections, optionally filtered by project.
@@ -72,69 +74,39 @@ func (c *Client) DeleteSection(id string) error {
 
 // ReorderSections updates the order of sections using the Sync API.
 func (c *Client) ReorderSections(sections []Section) error {
-	type sectionArg struct {
-		ID           string `json:"id"`
-		SectionOrder int    `json:"section_order"`
-	}
-
-	type commandArgs struct {
-		Sections []sectionArg `json:"sections"`
-	}
-
-	type syncCommand struct {
-		Type string      `json:"type"`
-		UUID string      `json:"uuid"`
-		Args commandArgs `json:"args"`
-	}
-
-	type syncRequest struct {
-		Commands []syncCommand `json:"commands"`
-	}
-
-	var args []sectionArg
+	var args []map[string]interface{}
 	for _, s := range sections {
-		args = append(args, sectionArg{
-			ID:           s.ID,
-			SectionOrder: s.SectionOrder,
+		args = append(args, map[string]interface{}{
+			"id":            s.ID,
+			"section_order": s.SectionOrder,
 		})
 	}
 
-	cmd := syncCommand{
-		Type: "section_reorder",
-		UUID: fmt.Sprintf("%d", time.Now().UnixNano()), // Simple UUID generation
-		Args: commandArgs{
-			Sections: args,
+	cmdUUID := uuid.NewString()
+	command := map[string]interface{}{
+		"type": "section_reorder",
+		"uuid": cmdUUID,
+		"args": map[string]interface{}{
+			"sections": args,
 		},
 	}
 
-	reqBody := syncRequest{
-		Commands: []syncCommand{cmd},
-	}
-
-	// Sync API URL
 	syncURL := c.baseURL + "/sync"
-
-	// We need to use valid Authorization header, which c.do handles if we pass relative path?
-	// But BaseURL is v1. We need absolute URL support or override.
-	// However, c.do prepends BaseURL.
-	// So we must manually create request or modify c.do?
-	// Let's modify usage.
-
-	// Actually, simpler: define a helper or just do it here using http.NewRequest.
-	// Accessing c.httpClient and c.accessToken.
-
-	jsonBody, err := json.Marshal(reqBody)
+	commands, err := json.Marshal([]interface{}{command})
 	if err != nil {
 		return fmt.Errorf("failed to marshal sync request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", syncURL, bytes.NewReader(jsonBody))
+	formData := url.Values{}
+	formData.Set("commands", string(commands))
+
+	req, err := http.NewRequest("POST", syncURL, bytes.NewBufferString(formData.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create sync request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+c.accessToken)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -142,10 +114,26 @@ func (c *Client) ReorderSections(sections []Section) error {
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read sync response: %w", err)
+	}
+
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
-	// Sync API returns JSON with status of commands. We assume success if 200 for now.
+	if len(body) > 0 {
+		var result struct {
+			SyncStatus map[string]string `json:"sync_status"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return fmt.Errorf("failed to decode sync response: %w", err)
+		}
+		if status, ok := result.SyncStatus[cmdUUID]; ok && status != "ok" {
+			return fmt.Errorf("section reorder failed: %s", status)
+		}
+	}
+
 	return nil
 }

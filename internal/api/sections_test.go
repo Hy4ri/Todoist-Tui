@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 )
 
@@ -96,7 +98,17 @@ func TestReorderSections(t *testing.T) {
 			t.Errorf("expected /sync path, got %s", r.URL.Path)
 		}
 
-		// We could decode body and verify commands structure...
+		if ct := r.Header.Get("Content-Type"); ct != "application/x-www-form-urlencoded" {
+			t.Errorf("expected form-encoded sync request, got content-type %q", ct)
+		}
+
+		bodyVals, err := url.ParseQuery(readBody(t, r))
+		if err != nil {
+			t.Fatalf("failed to parse body: %v", err)
+		}
+		if bodyVals.Get("commands") == "" {
+			t.Fatal("expected commands form field to be set")
+		}
 
 		w.WriteHeader(http.StatusOK)
 		// Return basic sync response
@@ -111,4 +123,13 @@ func TestReorderSections(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
+}
+
+func readBody(t *testing.T, r *http.Request) string {
+	t.Helper()
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("failed to read body: %v", err)
+	}
+	return string(body)
 }
