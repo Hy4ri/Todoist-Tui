@@ -318,9 +318,6 @@ var (
 			Faint(true).
 			Strikethrough(true)
 
-	// TaskContent is for the task name/content
-	TaskContent = lipgloss.NewStyle()
-
 	// TaskDue is for due date display
 	TaskDue = lipgloss.NewStyle().
 		Foreground(Subtle).
@@ -388,11 +385,7 @@ var (
 			Bold(true).
 			Background(lipgloss.AdaptiveColor{Light: "#EEEEEE", Dark: "#333333"})
 
-	// ProjectInbox is for the Inbox project
-	ProjectInbox = lipgloss.NewStyle().
-			PaddingLeft(1).
-			Bold(true)
-)
+	)
 
 // Sidebar styles
 var (
@@ -577,10 +570,7 @@ var (
 	CalendarDayWithTasks = lipgloss.NewStyle().
 				Foreground(WarningColor)
 
-	// CalendarDayOtherMonth is for days from other months
-	CalendarDayOtherMonth = lipgloss.NewStyle().
-				Faint(true)
-)
+	)
 
 // Label styles
 var (
@@ -642,16 +632,7 @@ var (
 				PaddingLeft(2).
 				MarginTop(1)
 
-	// SubtaskItem is for subtask display
-	SubtaskItem = lipgloss.NewStyle().
-			PaddingLeft(4)
-
-	// SubtaskSelected is for selected subtask
-	SubtaskSelected = lipgloss.NewStyle().
-			PaddingLeft(4).
-			Bold(true).
-			Background(lipgloss.AdaptiveColor{Light: "#EEEEEE", Dark: "#333333"})
-)
+	)
 
 // Tab bar styles
 var (
@@ -683,11 +664,6 @@ var (
 
 // Comment styles
 var (
-	// CommentItem is for individual comments
-	CommentItem = lipgloss.NewStyle().
-			PaddingLeft(2).
-			MarginBottom(1)
-
 	// CommentAuthor is for comment author/timestamp
 	CommentAuthor = lipgloss.NewStyle().
 			Foreground(Subtle).
@@ -722,10 +698,6 @@ var (
 	// CalendarDayWeekend is for weekend days (Friday/Saturday in Jordan)
 	CalendarDayWeekend = lipgloss.NewStyle().
 				Foreground(Subtle)
-
-	// CalendarTaskPreview is for task names in expanded calendar cells
-	CalendarTaskPreview = lipgloss.NewStyle().
-				Foreground(lipgloss.AdaptiveColor{Light: "#444444", Dark: "#BBBBBB"})
 
 	// CalendarMoreTasks is for "+N more" indicator in cells
 	CalendarMoreTasks = lipgloss.NewStyle().

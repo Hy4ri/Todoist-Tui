@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // handleMoveToProject initializes the move to project view.
@@ -170,7 +171,7 @@ func (h *Handler) handleMoveToProjectInput(msg tea.KeyMsg) tea.Cmd {
 func (h *Handler) executeMoveToProject(target state.MoveTarget) tea.Cmd {
 	h.IsMovingToProject = false
 	h.MoveProjectInput.Reset()
-	h.StatusMsg = fmt.Sprintf("Moving to %s...", target.Name)
+	h.StatusMsg = fmt.Sprintf("Moving to %s...", utils.SanitizeSingleLineText(target.Name))
 
 	// Collect tasks to move
 	var tasksToMove []api.Task
@@ -240,6 +241,6 @@ func (h *Handler) executeMoveToProject(target state.MoveTarget) tea.Cmd {
 		}
 
 		// Success - everything already updated optimistically
-		return statusMsg{msg: fmt.Sprintf("Moved %d tasks to %s", len(tasksToMove), target.Name)}
+		return statusMsg{msg: fmt.Sprintf("Moved %d tasks to %s", len(tasksToMove), utils.SanitizeSingleLineText(target.Name))}
 	}
 }

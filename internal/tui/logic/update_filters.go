@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // loadFilters loads filters from API.
@@ -28,7 +29,7 @@ type filtersLoadedMsg struct {
 func (h *Handler) runFilter(filter *api.Filter) tea.Cmd {
 	h.CurrentFilter = filter
 	h.Loading = true
-	h.StatusMsg = fmt.Sprintf("Running filter: %s", filter.Name)
+	h.StatusMsg = fmt.Sprintf("Running filter: %s", utils.SanitizeSingleLineText(filter.Name))
 	h.Tasks = nil // Clear current tasks
 
 	return func() tea.Msg {
@@ -48,7 +49,7 @@ func (h *Handler) runAdHocFilter(query string) tea.Cmd {
 		Query: query,
 	}
 	h.Loading = true
-	h.StatusMsg = fmt.Sprintf("Running query: %s", query)
+	h.StatusMsg = fmt.Sprintf("Running query: %s", utils.SanitizeSingleLineText(query))
 	h.Tasks = nil
 
 	return func() tea.Msg {
@@ -114,6 +115,10 @@ func (h *Handler) handleNewFilter() tea.Cmd {
 	h.FilterQueryInput = textinput.New()
 	h.FilterQueryInput.Placeholder = "e.g., today | overdue | p1"
 	h.FilterQueryInput.CharLimit = 200
+	if h.IsEditingFilter && h.EditingFilter != nil {
+		h.FilterNameInput.SetValue(utils.SanitizeSingleLineText(h.EditingFilter.Name))
+		h.FilterQueryInput.SetValue(utils.SanitizeSingleLineText(h.EditingFilter.Query))
+	}
 	h.SelectedColor = "charcoal" // Default color
 	h.ColorCursor = 0
 	return textinput.Blink

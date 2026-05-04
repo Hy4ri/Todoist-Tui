@@ -8,6 +8,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderPomodoro renders the Pomodoro view.
@@ -94,9 +95,9 @@ func (r *Renderer) renderPomodoroTask(width int) string {
 	prioLabel := fmt.Sprintf("P%d", 5-task.Priority)
 
 	taskContent := lipgloss.JoinVertical(lipgloss.Left,
-		styles.Title.Render(task.Content),
+		styles.Title.Render(utils.SanitizeSingleLineText(task.Content)),
 		lipgloss.JoinHorizontal(lipgloss.Left,
-			lipgloss.NewStyle().Foreground(styles.Subtle).Render("Project: "+project),
+			lipgloss.NewStyle().Foreground(styles.Subtle).Render("Project: "+utils.SanitizeSingleLineText(project)),
 			lipgloss.NewStyle().Foreground(styles.Subtle).Render(" • "),
 			priorityStyle.Render("Priority: "+prioLabel),
 		),

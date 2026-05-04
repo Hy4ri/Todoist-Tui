@@ -14,6 +14,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 func (h *Handler) handleNewProject() tea.Cmd {
@@ -570,7 +571,7 @@ func (h *Handler) handleSectionsKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		if h.TaskCursor >= 0 && h.TaskCursor < len(h.Sections) {
 			h.EditingSection = &h.Sections[h.TaskCursor]
 			h.SectionInput = textinput.New()
-			h.SectionInput.SetValue(h.EditingSection.Name)
+			h.SectionInput.SetValue(utils.SanitizeSingleLineText(h.EditingSection.Name))
 			h.SectionInput.CharLimit = 100
 			h.SectionInput.Width = 40
 			h.SectionInput.Focus()

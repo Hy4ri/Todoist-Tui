@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // FormField constants for focus management
@@ -267,8 +268,8 @@ func NewTaskForm(projects []api.Project, labels []api.Label) *TaskForm {
 func NewEditTaskForm(t *api.Task, projects []api.Project, labels []api.Label) *TaskForm {
 	f := NewTaskForm(projects, labels)
 	f.Original = t
-	f.Content.SetValue(t.Content)
-	f.Description.SetValue(t.Description)
+	f.Content.SetValue(utils.SanitizeTerminalText(t.Content))
+	f.Description.SetValue(utils.SanitizeTerminalText(t.Description))
 	f.Priority = t.Priority
 	if t.Due != nil {
 		if t.Due.Datetime != nil {
@@ -289,14 +290,14 @@ func NewEditTaskForm(t *api.Task, projects []api.Project, labels []api.Label) *T
 				f.DueTime.SetValue(dt.Local().Format("15:04"))
 
 				// Use the ISO date for the date field to avoid duplication
-				f.DueString.SetValue(t.Due.Date)
+				f.DueString.SetValue(utils.SanitizeSingleLineText(t.Due.Date))
 			} else {
 				// Fallback
-				f.DueString.SetValue(t.Due.String)
+				f.DueString.SetValue(utils.SanitizeSingleLineText(t.Due.String))
 			}
 		} else {
 			// No specific time, just use the string (e.g. "Tomorrow")
-			f.DueString.SetValue(t.Due.String)
+			f.DueString.SetValue(utils.SanitizeSingleLineText(t.Due.String))
 		}
 	}
 	f.ProjectID = t.ProjectID
@@ -391,6 +392,21 @@ func (f *TaskForm) FocusedField() int {
 	return f.FocusIndex
 }
 
+// IsTextEntryFocused returns true if the currently focused field accepts
+// free-form text input (content, description, due date, or due time).
+// Priority, project, label, and submit fields are not text-entry fields.
+func (f *TaskForm) IsTextEntryFocused() bool {
+	if f == nil {
+		return false
+	}
+	switch f.FocusIndex {
+	case FormFieldContent, FormFieldDescription, FormFieldDue, FormFieldDueTime:
+		return true
+	default:
+		return false
+	}
+}
+
 // Helper to set focus
 func (f *TaskForm) Focus(index int) {
 	f.FocusIndex = index
@@ -413,7 +429,7 @@ func (f *TaskForm) Focus(index int) {
 
 // SetDue sets the due date string.
 func (f *TaskForm) SetDue(due string) {
-	f.DueString.SetValue(due)
+	f.DueString.SetValue(utils.SanitizeSingleLineText(due))
 }
 
 // SetProjectSection sets the project and section IDs.

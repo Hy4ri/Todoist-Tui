@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderTaskList renders the task list for Today/Upcoming/Labels views.
@@ -73,7 +74,7 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 		title = "Inbox"
 	case state.ViewProject:
 		if r.CurrentProject != nil {
-			title = r.CurrentProject.Name
+			title = utils.SanitizeSingleLineText(r.CurrentProject.Name)
 		}
 	case state.ViewCompleted:
 		title = "Completed Tasks"
@@ -96,7 +97,7 @@ func (r *Renderer) renderDefaultTaskList(width, maxHeight int) string {
 		b.WriteString(r.Spinner.View())
 		b.WriteString(" Loading...")
 	} else if r.Err != nil {
-		b.WriteString(styles.StatusBarError.Render(fmt.Sprintf("Error: %v", r.Err)))
+		b.WriteString(styles.StatusBarError.Render("Error: " + utils.SanitizeSingleLineText(r.Err.Error())))
 	} else if len(r.Tasks) == 0 && (len(r.Sections) == 0 || (r.CurrentView != state.ViewProject && r.CurrentView != state.ViewInbox)) {
 		msg := "No tasks found"
 		if r.CurrentView == state.ViewToday {
@@ -181,13 +182,13 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 
 			if len(taskIndices) == 0 {
 				lines = append(lines, lineInfo{
-					content:   r.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
+					content:   r.renderSectionHeaderByIndex(utils.SanitizeSingleLineText(section.Name), headerIndex, orderedIndices),
 					taskIndex: headerIndex,
 					sectionID: section.ID,
 				})
 			} else {
 				lines = append(lines, lineInfo{
-					content:   r.renderSectionHeaderByIndex(section.Name, headerIndex, orderedIndices),
+					content:   r.renderSectionHeaderByIndex(utils.SanitizeSingleLineText(section.Name), headerIndex, orderedIndices),
 					taskIndex: headerIndex,
 					sectionID: section.ID,
 				})
@@ -409,7 +410,7 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width
 	dueStr := ""
 	dueWidth := 0
 	if t.Due != nil {
-		dueStr = "| " + t.DueDisplay()
+		dueStr = "| " + utils.SanitizeSingleLineText(t.DueDisplay())
 		dueWidth = lipgloss.Width(dueStr) + 1
 	}
 
@@ -418,7 +419,7 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width
 	if len(t.Labels) > 0 {
 		var lStrs []string
 		for _, l := range t.Labels {
-			lStr := "@" + l
+			lStr := "@" + utils.SanitizeSingleLineText(l)
 			// Lookup color
 			if color := r.getLabelColor(l); color != "" {
 				lStr = lipgloss.NewStyle().Foreground(styles.GetColor(color)).Render(lStr)
@@ -439,7 +440,7 @@ func (r *Renderer) renderTaskByDisplayIndex(taskIndex int, displayPos int, width
 	overhead := 7 + len(indent) + dueWidth + labelWidth + 6
 
 	// Truncate content if needed
-	content := t.Content
+	content := utils.SanitizeSingleLineText(t.Content)
 	maxContentWidth := width - overhead
 	if maxContentWidth < 5 {
 		maxContentWidth = 5
@@ -542,7 +543,7 @@ func (r *Renderer) renderTaskDescription(desc string, width int) string {
 	}
 
 	// Descriptions can have multiple lines, take just the first one for the list view
-	firstLine := strings.Split(desc, "\n")[0]
+	firstLine := utils.SanitizeSingleLineText(strings.Split(desc, "\n")[0])
 
 	// Strip markdown links [text](url) -> text
 	if start := strings.Index(firstLine, "["); start >= 0 {
@@ -823,7 +824,7 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 
 	if r.CurrentLabel != nil {
 		// Show tasks for selected label
-		labelTitle := "@" + r.CurrentLabel.Name
+		labelTitle := "@" + utils.SanitizeSingleLineText(r.CurrentLabel.Name)
 		if r.CurrentLabel.Color != "" {
 			labelTitle = lipgloss.NewStyle().Foreground(styles.GetColor(r.CurrentLabel.Color)).Render(labelTitle)
 		}
@@ -910,7 +911,7 @@ func (r *Renderer) renderLabelsView(width, maxHeight int) string {
 				}
 
 				// Label name with optional color
-				name := "@" + label.Name
+				name := "@" + utils.SanitizeSingleLineText(label.Name)
 				if label.Color != "" {
 					name = lipgloss.NewStyle().Foreground(styles.GetColor(label.Color)).Render(name)
 				}

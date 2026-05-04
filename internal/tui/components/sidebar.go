@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // SidebarModel manages the project sidebar navigation.
@@ -70,6 +71,8 @@ func (s *SidebarModel) handleKeyMsg(msg tea.KeyMsg) (Component, tea.Cmd) {
 
 // truncateString truncates a string to a given width and adds an ellipsis if truncated.
 func truncateString(s string, width int) string {
+	s = utils.SanitizeSingleLineText(s)
+
 	if lipgloss.Width(s) <= width {
 		return s
 	}
@@ -309,7 +312,6 @@ func (s *SidebarModel) SetProjects(projects []api.Project, counts map[string]int
 			icon := "❤︎"
 			if p.InboxProject {
 				icon = "📥"
-				_ = icon
 			}
 			s.items = append(s.items, SidebarItem{
 				Type:       "project",

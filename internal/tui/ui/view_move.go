@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderMoveToProject renders the move to project modal.
@@ -68,7 +69,7 @@ func (r *Renderer) renderMoveToProject(width, height int) string {
 				prefix = "# "
 			}
 
-			line := fmt.Sprintf("%s%s%s", cursor, prefix, target.Name)
+			line := fmt.Sprintf("%s%s%s", cursor, prefix, utils.SanitizeSingleLineText(target.Name))
 			b.WriteString(itemStyle.Render(line))
 			b.WriteString("\n")
 		}

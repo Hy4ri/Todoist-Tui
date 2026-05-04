@@ -14,6 +14,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 	"github.com/hy4ri/todoist-tui/internal/tui/views"
 )
 
@@ -51,7 +52,7 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 	case errMsg:
 		h.Loading = false
 		h.Err = msg.err
-		h.StatusMsg = msg.err.Error()
+		h.StatusMsg = sanitizeStatusError(msg.err)
 		return nil
 
 	case statusMsg:
@@ -75,7 +76,7 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 
 	case filterCreatedMsg:
 		h.Loading = false
-		h.StatusMsg = "Filter created: " + msg.filter.Name
+		h.StatusMsg = "Filter created: " + utils.SanitizeSingleLineText(msg.filter.Name)
 		return h.loadFilters() // Refresh list
 
 	case filterDeletedMsg:
@@ -136,7 +137,7 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		h.IsEditingComment = true
 		h.EditingComment = msg.Comment
 		h.CommentInput = textarea.New()
-		h.CommentInput.SetValue(msg.Comment.Content)
+		h.CommentInput.SetValue(utils.SanitizeTerminalText(msg.Comment.Content))
 		h.CommentInput.Focus()
 		h.CommentInput.SetWidth(50)
 		h.CommentInput.SetHeight(3)
@@ -432,7 +433,7 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 		h.ProductivityStats = msg.stats
 	}
 	if msg.statsErr != nil {
-		h.StatsError = msg.statsErr.Error()
+		h.StatsError = sanitizeStatusError(msg.statsErr)
 	} else {
 		h.StatsError = ""
 	}
@@ -459,6 +460,21 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	return nil
 }
 
+func sanitizeStatusError(err error) string {
+	if err == nil {
+		return ""
+	}
+
+	msg := utils.SanitizeSingleLineText(err.Error())
+	if msg == "" {
+		return "Error"
+	}
+	if len(msg) > 200 {
+		msg = msg[:200] + "…"
+	}
+	return msg
+}
+
 func (h *Handler) handleTaskMsgs(msg tea.Msg) tea.Cmd {
 	h.Loading = false
 	switch msg.(type) {
@@ -479,9 +495,9 @@ func (h *Handler) handleProjectMsgs(msg tea.Msg) tea.Cmd {
 	h.Loading = false
 	switch m := msg.(type) {
 	case projectCreatedMsg:
-		h.StatusMsg = fmt.Sprintf("Created project: %s", m.project.Name)
+		h.StatusMsg = fmt.Sprintf("Created project: %s", utils.SanitizeSingleLineText(m.project.Name))
 	case projectUpdatedMsg:
-		h.StatusMsg = fmt.Sprintf("Updated project: %s", m.project.Name)
+		h.StatusMsg = fmt.Sprintf("Updated project: %s", utils.SanitizeSingleLineText(m.project.Name))
 	case projectDeletedMsg:
 		h.StatusMsg = "Project deleted"
 		h.SidebarCursor = 0
@@ -493,9 +509,9 @@ func (h *Handler) handleLabelMsgs(msg tea.Msg) tea.Cmd {
 	h.Loading = false
 	switch m := msg.(type) {
 	case labelCreatedMsg:
-		h.StatusMsg = fmt.Sprintf("Created label: %s", m.label.Name)
+		h.StatusMsg = fmt.Sprintf("Created label: %s", utils.SanitizeSingleLineText(m.label.Name))
 	case labelUpdatedMsg:
-		h.StatusMsg = fmt.Sprintf("Updated label: %s", m.label.Name)
+		h.StatusMsg = fmt.Sprintf("Updated label: %s", utils.SanitizeSingleLineText(m.label.Name))
 	case labelDeletedMsg:
 		h.StatusMsg = "Label deleted"
 		h.TaskCursor = 0
@@ -507,9 +523,9 @@ func (h *Handler) handleSectionMsgs(msg tea.Msg) tea.Cmd {
 	h.Loading = false
 	switch m := msg.(type) {
 	case sectionCreatedMsg:
-		h.StatusMsg = fmt.Sprintf("Created section: %s", m.section.Name)
+		h.StatusMsg = fmt.Sprintf("Created section: %s", utils.SanitizeSingleLineText(m.section.Name))
 	case sectionUpdatedMsg:
-		h.StatusMsg = fmt.Sprintf("Updated section: %s", m.section.Name)
+		h.StatusMsg = fmt.Sprintf("Updated section: %s", utils.SanitizeSingleLineText(m.section.Name))
 	case sectionDeletedMsg:
 		h.StatusMsg = "Section deleted"
 	}

@@ -13,6 +13,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 const version = "2.0.0"
@@ -80,7 +81,7 @@ ui:
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %s\n", utils.SanitizeSingleLineText(err.Error()))
 		os.Exit(1)
 	}
 }

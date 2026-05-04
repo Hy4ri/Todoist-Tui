@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderSections renders the sections management view.
@@ -33,7 +34,7 @@ func (r *Renderer) renderSections() string {
 			style = lipgloss.NewStyle().Foreground(styles.Highlight)
 		}
 
-		b.WriteString(style.Render(cursor+section.Name) + "\n")
+		b.WriteString(style.Render(cursor+utils.SanitizeSingleLineText(section.Name)) + "\n")
 	}
 
 	b.WriteString("\n")

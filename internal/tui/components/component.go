@@ -20,16 +20,7 @@ type Component interface {
 	SetSize(width, height int)
 }
 
-// Focusable is an optional interface for components that can receive focus.
-type Focusable interface {
-	Component
-	// Focus sets the component as focused.
-	Focus()
-	// Blur removes focus from the component.
-	Blur()
-	// Focused returns whether the component is focused.
-	Focused() bool
-}
+
 
 // DataReceiver is an optional interface for components that receive external data.
 type DataReceiver[T any] interface {

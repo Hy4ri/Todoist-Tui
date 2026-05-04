@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderTaskForm renders the add/edit task form.
@@ -314,14 +315,14 @@ func (r *Renderer) renderSearch() string {
 				checkbox = styles.CheckboxChecked
 			}
 
-			content := task.Content
+			content := utils.SanitizeSingleLineText(task.Content)
 			priorityStyle := styles.GetPriorityStyle(task.Priority)
 			content = priorityStyle.Render(content)
 
 			// Due date
 			due := ""
 			if task.Due != nil {
-				dueStr := task.DueDisplay()
+				dueStr := utils.SanitizeSingleLineText(task.DueDisplay())
 				if task.IsOverdue() {
 					due = styles.TaskDueOverdue.Render(" | " + dueStr)
 				} else if task.IsDueToday() {
@@ -453,7 +454,7 @@ func (r *Renderer) renderProjectDeleteDialog() string {
 		return ""
 	}
 	content := styles.StatusBarError.Render("⚠️ Delete Project?") + "\n\n" +
-		fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", r.EditingProject.Name) +
+		fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", utils.SanitizeSingleLineText(r.EditingProject.Name)) +
 		styles.HelpDesc.Render("This will delete all tasks in this project.") + "\n\n" +
 		styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
 
@@ -519,7 +520,7 @@ func (r *Renderer) renderLabelDeleteDialog() string {
 		return ""
 	}
 	content := styles.StatusBarError.Render("⚠️ Delete Label?") + "\n\n" +
-		fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", r.EditingLabel.Name) +
+		fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", utils.SanitizeSingleLineText(r.EditingLabel.Name)) +
 		styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
 
 	return r.renderCenteredDialog(content, 50)
@@ -560,7 +561,7 @@ func (r *Renderer) renderSectionDeleteDialog() string {
 		return ""
 	}
 	content := styles.StatusBarError.Render("⚠️ Delete Section?") + "\n\n" +
-		fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", r.EditingSection.Name) +
+		fmt.Sprintf("Are you sure you want to delete \"%s\"?\n", utils.SanitizeSingleLineText(r.EditingSection.Name)) +
 		styles.HelpDesc.Render("This will likely delete/move tasks inside.") + "\n\n" +
 		styles.HelpDesc.Render("y: confirm • n/Esc: cancel")
 
@@ -584,7 +585,7 @@ func (r *Renderer) renderMoveTaskDialog() string {
 				cursor = "✓ "
 				style = lipgloss.NewStyle().Foreground(styles.Highlight)
 			}
-			b.WriteString(style.Render(cursor+section.Name) + "\n")
+			b.WriteString(style.Render(cursor+utils.SanitizeSingleLineText(section.Name)) + "\n")
 		}
 	}
 
@@ -688,7 +689,7 @@ func (r *Renderer) renderRescheduleDialog() string {
 // renderSectionAddTaskDialog renders the specialized section-aware add dialog.
 func (r *Renderer) renderSectionAddTaskDialog() string {
 	var b strings.Builder
-	title := fmt.Sprintf("➕ Add Task to [%s]", r.TargetSectionName)
+	title := fmt.Sprintf("➕ Add Task to [%s]", utils.SanitizeSingleLineText(r.TargetSectionName))
 	b.WriteString(styles.Title.Render(title) + "\n\n")
 
 	b.WriteString(styles.InputLabel.Foreground(styles.Highlight).Underline(true).Render("TASK NAME") + "\n")
@@ -745,7 +746,7 @@ func (r *Renderer) renderIndentDialog() string {
 				style = styles.TaskSelected
 			}
 
-			content := task.Content
+			content := utils.SanitizeSingleLineText(task.Content)
 			// Truncate if too long (rough check)
 			if len(content) > 50 {
 				content = content[:47] + "..."

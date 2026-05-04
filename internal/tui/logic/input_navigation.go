@@ -9,6 +9,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/config"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // switchToTab switches to a specific tab using the view coordinator.
@@ -278,9 +279,9 @@ func (h *Handler) setDefaultView() tea.Cmd {
 
 		// Update on disk (preserving comments)
 		if err := config.UpdateDefaultView(viewName); err != nil {
-			h.StatusMsg = fmt.Sprintf("Failed to save config: %v", err)
+			h.StatusMsg = "Failed to save config"
 		} else {
-			h.StatusMsg = fmt.Sprintf("Default view set to: %s", viewName)
+			h.StatusMsg = fmt.Sprintf("Default view set to: %s", utils.SanitizeSingleLineText(viewName))
 		}
 	}
 	return nil

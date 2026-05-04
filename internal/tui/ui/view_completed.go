@@ -8,6 +8,7 @@ import (
 
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderCompletedTaskList renders the completed tasks view grouped by completion date.
@@ -181,7 +182,7 @@ func (r *Renderer) renderCompletedTaskItem(taskIndex int, displayPos int, width 
 	styledTime := styles.HelpDesc.Render(timeStr) // Dim style
 
 	// Content - Strikethrough style
-	content := t.Content
+	content := utils.SanitizeSingleLineText(t.Content)
 
 	// Calculate overhead
 	// cursor(2) + box(4) + time(5+1) + label overhead

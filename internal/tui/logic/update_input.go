@@ -19,8 +19,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return tea.Quit
 	}
 
-	// Activate command line
-	if msg.String() == ":" && h.CurrentView != state.ViewTaskForm && h.CurrentView != state.ViewQuickAdd && h.CurrentView != state.ViewSearch && !h.IsEditingComment && !h.IsCreatingProject && !h.IsCreatingLabel && !h.IsCreatingSection && !h.IsCreatingSubtask {
+	// Activate command line — only when no text input is active.
+	if msg.String() == ":" && !h.isTextEntryActive() {
 		return h.activateCommandLine()
 	}
 

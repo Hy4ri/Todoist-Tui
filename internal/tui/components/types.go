@@ -1,53 +1,52 @@
 package components
 
-// View represents the current view/screen.
+// View represents the available views in the application.
 type View int
 
 const (
-	ViewToday View = iota
+	ViewInbox View = iota
+	ViewToday
 	ViewUpcoming
-	ViewLabels
+	ViewProjects
 	ViewCalendar
-	ViewCalendarDay // Day detail view from calendar
-	ViewProject
-	ViewTaskDetail
-	ViewTaskForm
-	ViewSearch
-	ViewHelp
-	ViewSections
+	ViewLabels
+	ViewCompleted
 )
 
-// Tab represents a top-level tab.
+// Tab represents the available tabs in the application.
 type Tab int
 
 const (
-	TabToday Tab = iota
+	TabInbox Tab = iota
+	TabToday
 	TabUpcoming
-	TabLabels
-	TabCalendar
 	TabProjects
+	TabCalendar
+	TabLabels
+	TabCompleted
 )
 
-// Pane represents which pane is currently focused.
+// Pane represents a UI pane that can be focused.
 type Pane int
 
 const (
-	PaneSidebar Pane = iota
-	PaneMain
+	SidebarPane Pane = iota
+	MainPane
+	DetailPane
 )
 
 // CalendarViewMode represents the calendar display mode.
 type CalendarViewMode int
 
 const (
-	CalendarViewCompact  CalendarViewMode = iota // Small grid view
-	CalendarViewExpanded                         // Grid with task names in cells
+	CalendarViewCompact CalendarViewMode = iota
+	CalendarViewExpanded
 )
 
-// SidebarItem represents an item in the sidebar (special views or projects).
+// SidebarItem represents an item in the sidebar (project, label, etc.).
 type SidebarItem struct {
-	Type       string // "special", "separator", "project"
-	ID         string // View name for special, project ID for projects
+	Type       string // "project", "label", "separator"
+	ID         string
 	Name       string
 	Icon       string
 	Count      int
@@ -56,14 +55,16 @@ type SidebarItem struct {
 	Color      string
 }
 
-// LastAction represents an undoable action.
+// LastAction tracks the last performed action for undo support.
 type LastAction struct {
-	Type   string // "complete", "uncomplete"
+	Action string
 	TaskID string
+	Task   string
 }
 
-// lineInfo represents a display line with optional task reference.
+// LineInfo holds information about a rendered line.
 type LineInfo struct {
-	Content   string
-	TaskIndex int // -1 for non-task lines (headers, separators)
+	Offset int
+	Length int
+	ItemID string
 }

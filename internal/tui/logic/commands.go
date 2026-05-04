@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // CommandHandlerFunc handles a command execution.
@@ -147,7 +148,7 @@ func handleGoto(h *Handler, args []string) tea.Cmd {
 	case "calendar", "c", "cal":
 		return h.switchToTab(state.TabCalendar)
 	default:
-		h.StatusMsg = fmt.Sprintf("Unknown view: %s", target)
+		h.StatusMsg = fmt.Sprintf("Unknown view: %s", utils.SanitizeSingleLineText(target))
 		return nil
 	}
 }
@@ -241,7 +242,7 @@ func handleProjectCommand(h *Handler, args []string) tea.Cmd {
 		return h.loadProjectTasks(bestMatch.ID)
 	}
 
-	h.StatusMsg = fmt.Sprintf("Project not found: %s", query)
+	h.StatusMsg = fmt.Sprintf("Project not found: %s", utils.SanitizeSingleLineText(query))
 	return nil
 }
 
@@ -269,7 +270,7 @@ func handleLabelCommand(h *Handler, args []string) tea.Cmd {
 		return h.loadLabelTasks(bestMatch.Name)
 	}
 
-	h.StatusMsg = fmt.Sprintf("Label not found: %s", query)
+	h.StatusMsg = fmt.Sprintf("Label not found: %s", utils.SanitizeSingleLineText(query))
 	return nil
 }
 
@@ -378,7 +379,7 @@ func (h *Handler) executeCommand(input string) tea.Cmd {
 		return cmdDef.Handler(h, args)
 	}
 
-	h.StatusMsg = fmt.Sprintf("Unknown command: %s", cmdName)
+	h.StatusMsg = fmt.Sprintf("Unknown command: %s", utils.SanitizeSingleLineText(cmdName))
 	return nil
 }
 

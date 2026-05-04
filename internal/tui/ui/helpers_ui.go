@@ -1,10 +1,15 @@
 package ui
 
-import "github.com/mattn/go-runewidth"
+import (
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
+	"github.com/mattn/go-runewidth"
+)
 
 // truncateString truncates a string to the given width, appending "…" if truncated.
 // It handles wide characters correctly using runewidth.
 func truncateString(s string, maxLen int) string {
+	s = utils.SanitizeSingleLineText(s)
+
 	if maxLen <= 0 {
 		return ""
 	}

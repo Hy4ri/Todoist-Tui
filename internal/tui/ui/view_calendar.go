@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderCalendar renders the calendar view (dispatches based on view mode).
@@ -300,7 +301,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 				if taskLine < len(tasks) && taskLine < maxTasksPerCell-1 {
 					// Show task name with priority color (truncated to fit cell)
 					task := tasks[taskLine]
-					taskName := task.Content
+					taskName := utils.SanitizeSingleLineText(task.Content)
 					maxLen := cellWidth - 2 // Leave space for " " prefix and margin
 					if len(taskName) > maxLen && maxLen > 1 {
 						taskName = taskName[:maxLen-1] + "…"
@@ -318,7 +319,7 @@ func (r *Renderer) renderCalendarExpanded(maxHeight int) string {
 				} else if taskLine < len(tasks) {
 					// This handles the case where we're on the last allowed line but it's a task
 					task := tasks[taskLine]
-					taskName := task.Content
+					taskName := utils.SanitizeSingleLineText(task.Content)
 					maxLen := cellWidth - 2
 					if len(taskName) > maxLen && maxLen > 1 {
 						taskName = taskName[:maxLen-1] + "…"
@@ -445,10 +446,10 @@ func (r *Renderer) renderStatusBar() string {
 	// Left side: status message or error, followed by goals
 	left := ""
 	if r.Err != nil {
-		errStr := strings.ReplaceAll(r.Err.Error(), "\n", " ")
+		errStr := utils.SanitizeSingleLineText(r.Err.Error())
 		left = styles.StatusBarError.Render("Error: " + errStr)
 	} else if r.StatusMsg != "" {
-		msgStr := strings.ReplaceAll(r.StatusMsg, "\n", " ")
+		msgStr := utils.SanitizeSingleLineText(r.StatusMsg)
 		left = styles.StatusBarSuccess.Render(msgStr)
 	}
 	var rightParts []string
@@ -460,7 +461,7 @@ func (r *Renderer) renderStatusBar() string {
 	} else if r.StatsError != "" {
 		// Show the error in red
 		errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-		rightParts = append(rightParts, errStyle.Render("Stats Err: "+r.StatsError))
+		rightParts = append(rightParts, errStyle.Render("Stats Err: "+utils.SanitizeSingleLineText(r.StatsError)))
 	} else if r.ProductivityStats == nil {
 		// Debug: show if stats are missing
 		// rightParts = append(rightParts, styles.StatusBarText.Render("[No Stats]"))

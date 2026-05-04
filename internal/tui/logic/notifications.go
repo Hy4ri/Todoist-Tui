@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gen2brain/beeep"
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
-
 
 type checkDueMsg time.Time
 
@@ -23,7 +23,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 	// Always schedule the next check
 	cmds = append(cmds, checkDueCmd())
-
 
 	// Check for due tasks
 	for _, task := range h.AllTasks {
@@ -65,7 +64,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 			continue
 		}
 
-
 		// Check if due time has passed
 		if t.After(dueTime) || t.Equal(dueTime) {
 			// For notifications, we want to be reasonably timely.
@@ -82,12 +80,11 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 				continue
 			}
 
-
 			// Mark as notified
 			h.NotifiedTasks[task.ID] = true
 
 			// Capture task content for closure
-			content := task.Content
+			content := utils.SanitizeSingleLineText(task.Content)
 			project := "Todoist"
 			if p, ok := h.getProjectName(task.ProjectID); ok {
 				project = p
@@ -95,7 +92,7 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 			// Add notification command
 			cmds = append(cmds, func() tea.Msg {
-				_ = beeep.Notify(project, "Task Due: "+content, "")
+				_ = beeep.Notify(utils.SanitizeSingleLineText(project), "Task Due: "+content, "")
 				return nil
 			})
 		}
@@ -149,7 +146,7 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 
 			// Apply offset (minutes before)
 			triggerTime = taskDue.Add(-time.Duration(rem.MinuteOffset) * time.Minute)
-			content = fmt.Sprintf("Reminder: %s (%d min before)", task.Content, rem.MinuteOffset)
+			content = fmt.Sprintf("Reminder: %s (%d min before)", utils.SanitizeSingleLineText(task.Content), rem.MinuteOffset)
 
 		} else if rem.Type == "absolute" && rem.Due != nil {
 			// Absolute reminder
@@ -188,7 +185,6 @@ func (h *Handler) handleCheckDue(t time.Time) tea.Cmd {
 				h.NotifiedTasks[rem.ID] = true
 				continue
 			}
-
 
 			h.NotifiedTasks[rem.ID] = true
 

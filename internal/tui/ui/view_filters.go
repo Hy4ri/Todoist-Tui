@@ -8,6 +8,7 @@ import (
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // renderFiltersTab renders the filters tab content (Sidebar + Task List).
@@ -26,7 +27,7 @@ func (r *Renderer) renderFiltersTab(width, height int) string {
 		content = lipgloss.NewStyle().Foreground(styles.Subtle).Render(content)
 	} else if len(r.Tasks) == 0 {
 		if r.CurrentFilter != nil {
-			content = fmt.Sprintf("No tasks match filter: %s", r.CurrentFilter.Name)
+			content = fmt.Sprintf("No tasks match filter: %s", utils.SanitizeSingleLineText(r.CurrentFilter.Name))
 		} else {
 			content = "Select a filter to view tasks."
 		}
@@ -181,7 +182,7 @@ func (r *Renderer) renderFilterDeleteDialog() string {
 
 	var content strings.Builder
 	content.WriteString(styles.Title.Render("Delete Filter?") + "\n\n")
-	content.WriteString(fmt.Sprintf("Are you sure you want to delete '%s'?\n\n", r.EditingFilter.Name))
+	content.WriteString(fmt.Sprintf("Are you sure you want to delete '%s'?\n\n", utils.SanitizeSingleLineText(r.EditingFilter.Name)))
 	content.WriteString(styles.HelpDesc.Render("y: yes • n: no"))
 
 	dialogStyle := lipgloss.NewStyle().

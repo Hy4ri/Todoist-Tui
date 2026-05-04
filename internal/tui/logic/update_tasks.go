@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 const maxConcurrentRequests = 5
@@ -326,7 +327,7 @@ func (h *Handler) handleCopy() tea.Cmd {
 				content := strings.Join(selectedContents, "\n")
 				err := clipboard.WriteAll(content)
 				if err != nil {
-					return statusMsg{msg: "Failed to copy: " + err.Error()}
+					return statusMsg{msg: "Failed to copy"}
 				}
 				return statusMsg{msg: fmt.Sprintf("Copied %d tasks", len(selectedContents))}
 			}
@@ -375,9 +376,9 @@ func (h *Handler) handleCopy() tea.Cmd {
 					}
 					err := clipboard.WriteAll(content)
 					if err != nil {
-						return statusMsg{msg: "Failed to copy section: " + err.Error()}
+						return statusMsg{msg: "Failed to copy section"}
 					}
-					return statusMsg{msg: "Copied section: " + sectionName}
+					return statusMsg{msg: "Copied section: " + utils.SanitizeSingleLineText(sectionName)}
 				}
 			}
 		}
@@ -392,9 +393,9 @@ func (h *Handler) handleCopy() tea.Cmd {
 				}
 				err := clipboard.WriteAll(content)
 				if err != nil {
-					return statusMsg{msg: "Failed to copy: " + err.Error()}
+					return statusMsg{msg: "Failed to copy"}
 				}
-				return statusMsg{msg: "Copied: " + task.Content}
+				return statusMsg{msg: "Copied: " + utils.SanitizeSingleLineText(task.Content)}
 			}
 		}
 	} else if h.TaskCursor < len(h.Tasks) {
@@ -407,9 +408,9 @@ func (h *Handler) handleCopy() tea.Cmd {
 			}
 			err := clipboard.WriteAll(content)
 			if err != nil {
-				return statusMsg{msg: "Failed to copy: " + err.Error()}
+				return statusMsg{msg: "Failed to copy"}
 			}
-			return statusMsg{msg: "Copied: " + task.Content}
+			return statusMsg{msg: "Copied: " + utils.SanitizeSingleLineText(task.Content)}
 		}
 	}
 
@@ -956,7 +957,7 @@ func (h *Handler) handleEdit() tea.Cmd {
 			if h.Projects[i].ID == item.ID {
 				h.EditingProject = &h.Projects[i]
 				h.ProjectInput = textinput.New()
-				h.ProjectInput.SetValue(h.Projects[i].Name)
+				h.ProjectInput.SetValue(utils.SanitizeSingleLineText(h.Projects[i].Name))
 				h.ProjectInput.CharLimit = 100
 				h.ProjectInput.Width = 40
 				h.ProjectInput.Focus()
@@ -974,7 +975,7 @@ func (h *Handler) handleEdit() tea.Cmd {
 			if h.TaskCursor < len(h.Labels) {
 				h.EditingLabel = &h.Labels[h.TaskCursor]
 				h.LabelInput = textinput.New()
-				h.LabelInput.SetValue(h.Labels[h.TaskCursor].Name)
+				h.LabelInput.SetValue(utils.SanitizeSingleLineText(h.Labels[h.TaskCursor].Name))
 				h.LabelInput.CharLimit = 100
 				h.LabelInput.Width = 40
 				h.LabelInput.Focus()
@@ -1400,7 +1401,7 @@ func (h *Handler) handleIndentSelect() tea.Cmd {
 	h.IsIndentingTask = false
 	h.IndentCandidates = nil
 	h.IndentFilteredCandidates = nil
-	h.StatusMsg = fmt.Sprintf("Indented under '%s'", parentTask.Content)
+	h.StatusMsg = fmt.Sprintf("Indented under '%s'", utils.SanitizeSingleLineText(parentTask.Content))
 
 	return func() tea.Msg {
 		err := h.Client.MoveTask(currentTask.ID, nil, nil, parentIDPtr)

@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/styles"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // DetailModel displays task details in a side panel or full view.
@@ -108,12 +109,12 @@ func (d *DetailModel) ViewPanel() string {
 	var content strings.Builder
 
 	// Title
-	content.WriteString(styles.Title.Render(t.Content) + "\n\n")
+	content.WriteString(styles.Title.Render(utils.SanitizeSingleLineText(t.Content)) + "\n\n")
 
 	// Due date
 	if t.Due != nil {
 		content.WriteString(styles.StatusBarKey.Render("Due: "))
-		content.WriteString(t.Due.String + "\n")
+		content.WriteString(utils.SanitizeSingleLineText(t.Due.String) + "\n")
 	}
 
 	// Priority
@@ -130,7 +131,7 @@ func (d *DetailModel) ViewPanel() string {
 		if descWidth < 10 {
 			descWidth = 10
 		}
-		content.WriteString(styles.DetailDescription.Width(descWidth).Render(t.Description) + "\n")
+		content.WriteString(styles.DetailDescription.Width(descWidth).Render(utils.SanitizeTerminalText(t.Description)) + "\n")
 	}
 
 	// Reminders
@@ -141,7 +142,7 @@ func (d *DetailModel) ViewPanel() string {
 			if r.Type == "absolute" && r.Due != nil {
 				desc = r.Due.Date
 			}
-			content.WriteString(styles.DetailValue.Render("• "+desc) + "\n")
+			content.WriteString(styles.DetailValue.Render("• "+utils.SanitizeSingleLineText(desc)) + "\n")
 		}
 	}
 
@@ -154,7 +155,7 @@ func (d *DetailModel) ViewPanel() string {
 			commentWidth = 10
 		}
 		for _, c := range d.comments {
-			content.WriteString("• " + styles.CommentContent.Width(commentWidth).Render(c.Content) + "\n")
+			content.WriteString("• " + styles.CommentContent.Width(commentWidth).Render(utils.SanitizeTerminalText(c.Content)) + "\n")
 		}
 	}
 
@@ -192,7 +193,7 @@ func (d *DetailModel) renderPanel() string {
 
 	// Task content (main title)
 	priorityStyle := styles.GetPriorityStyle(t.Priority)
-	b.WriteString(fmt.Sprintf("  %s %s\n\n", checkbox, priorityStyle.Render(t.Content)))
+	b.WriteString(fmt.Sprintf("  %s %s\n\n", checkbox, priorityStyle.Render(utils.SanitizeSingleLineText(t.Content))))
 
 	// Horizontal divider
 	b.WriteString(styles.DetailSection.Render("  " + strings.Repeat("─", contentWidth)))
@@ -205,7 +206,7 @@ func (d *DetailModel) renderPanel() string {
 		b.WriteString("\n")
 		// Apply wrapping to description
 		// DetailDescription has PaddingLeft(2), so subtract that from contentWidth
-		b.WriteString(styles.DetailDescription.Width(contentWidth - 2).Render(t.Description))
+		b.WriteString(styles.DetailDescription.Width(contentWidth - 2).Render(utils.SanitizeTerminalText(t.Description)))
 		b.WriteString("\n\n")
 	}
 
@@ -222,7 +223,7 @@ func (d *DetailModel) renderPanel() string {
 		}
 		b.WriteString(styles.DetailIcon.Render("  " + dueIcon))
 		b.WriteString(styles.DetailLabel.Render("Due"))
-		b.WriteString(dueStyle.Render(t.Due.String))
+		b.WriteString(dueStyle.Render(utils.SanitizeSingleLineText(t.Due.String)))
 		if t.Due.IsRecurring {
 			b.WriteString(styles.HelpDesc.Render(" (recurring)"))
 		}
@@ -289,7 +290,7 @@ func (d *DetailModel) renderPanel() string {
 		}
 		b.WriteString(styles.DetailIcon.Render("  📁"))
 		b.WriteString(styles.DetailLabel.Render("Project"))
-		b.WriteString(styles.DetailValue.Render(projectName))
+		b.WriteString(styles.DetailValue.Render(utils.SanitizeSingleLineText(projectName)))
 		b.WriteString("\n")
 	}
 
@@ -320,7 +321,7 @@ func (d *DetailModel) renderPanel() string {
 			b.WriteString("\n")
 
 			// Apply wrapping to comment content
-			b.WriteString(styles.CommentContent.Width(contentWidth - 2).Render(c.Content))
+			b.WriteString(styles.CommentContent.Width(contentWidth - 2).Render(utils.SanitizeTerminalText(c.Content)))
 
 			// Render attachment if present
 			if c.FileAttachment != nil {
