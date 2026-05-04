@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -39,13 +38,6 @@ type CreateReminderRequest struct {
 	MinuteOffset int          `json:"minute_offset,omitempty"`
 }
 
-// UpdateReminderRequest represents the request body for updating a reminder.
-type UpdateReminderRequest struct {
-	ID           string       `json:"id"`
-	Due          *ReminderDue `json:"due,omitempty"`
-	MinuteOffset int          `json:"minute_offset,omitempty"`
-}
-
 // GetReminders fetches all reminders via the Sync API.
 func (c *Client) GetReminders() ([]Reminder, error) {
 	syncURL := c.baseURL + "/sync"
@@ -69,8 +61,7 @@ func (c *Client) GetReminders() ([]Reminder, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	var result struct {
@@ -155,10 +146,8 @@ func (c *Client) CreateReminder(req CreateReminderRequest) (*Reminder, error) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	// Parse sync response
@@ -167,7 +156,7 @@ func (c *Client) CreateReminder(req CreateReminderRequest) (*Reminder, error) {
 		SyncStatus    map[string]interface{} `json:"sync_status"`
 	}
 
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode sync response: %w", err)
 	}
 
@@ -236,68 +225,9 @@ func (c *Client) DeleteReminder(id string) error {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	return nil
-}
-
-// UpdateReminder updates a reminder via Sync API.
-func (c *Client) UpdateReminder(req UpdateReminderRequest) (*Reminder, error) {
-	syncURL := c.baseURL + "/sync"
-
-	cmdUUID := uuid.New().String()
-
-	args := map[string]interface{}{
-		"id": req.ID,
-	}
-	if req.MinuteOffset != 0 {
-		args["minute_offset"] = req.MinuteOffset
-	}
-	if req.Due != nil {
-		args["due"] = req.Due
-	}
-
-	command := map[string]interface{}{
-		"type": "reminder_update",
-		"uuid": cmdUUID,
-		"args": args,
-	}
-
-	commands, err := json.Marshal([]interface{}{command})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal sync commands: %w", err)
-	}
-
-	formData := url.Values{}
-	formData.Set("commands", string(commands))
-
-	httpReq, err := http.NewRequest("POST", syncURL, bytes.NewBufferString(formData.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sync request: %w", err)
-	}
-
-	httpReq.Header.Set("Authorization", "Bearer "+c.accessToken)
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("sync request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
-	}
-
-	return &Reminder{
-		ID:           req.ID,
-		MinuteOffset: req.MinuteOffset,
-		Due:          req.Due,
-	}, nil
 }

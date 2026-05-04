@@ -5,12 +5,11 @@ import "fmt"
 // APIError represents an error returned by the Todoist API.
 type APIError struct {
 	StatusCode int
-	Message    string
 }
 
 // Error implements the error interface.
 func (e *APIError) Error() string {
-	return fmt.Sprintf("API error (status %d): %s", e.StatusCode, e.Message)
+	return fmt.Sprintf("API error (status %d)", e.StatusCode)
 }
 
 // IsNotFound returns true if the error is a 404 Not Found error.

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -144,8 +143,7 @@ func (c *Client) ReorderSections(sections []Section) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	// Sync API returns JSON with status of commands. We assume success if 200 for now.

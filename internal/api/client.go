@@ -102,7 +102,6 @@ func (c *Client) do(method, path string, body interface{}, result interface{}) e
 	if resp.StatusCode >= 400 {
 		return &APIError{
 			StatusCode: resp.StatusCode,
-			Message:    string(respBody),
 		}
 	}
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -264,8 +263,7 @@ func (c *Client) MoveTasksBatch(ids []string, targetProjectID string, targetSect
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	return nil

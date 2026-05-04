@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -45,8 +44,7 @@ func (c *Client) GetFilters() ([]Filter, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	var result struct {
@@ -111,10 +109,8 @@ func (c *Client) CreateFilter(name, query, color string) (*Filter, error) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	// Parse response to get the real ID
@@ -123,7 +119,7 @@ func (c *Client) CreateFilter(name, query, color string) (*Filter, error) {
 		SyncStatus    map[string]string `json:"sync_status"`
 	}
 
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode sync response: %w", err)
 	}
 
@@ -176,66 +172,9 @@ func (c *Client) DeleteFilter(id string) error {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
-
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("sync API error %d", resp.StatusCode)
 	}
 
 	return nil
-}
-
-// UpdateFilter updates a filter via Sync API.
-func (c *Client) UpdateFilter(id, name, query string) (*Filter, error) {
-	syncURL := c.baseURL + "/sync"
-
-	cmdUUID := uuid.New().String()
-
-	args := map[string]string{"id": id}
-	if name != "" {
-		args["name"] = name
-	}
-	if query != "" {
-		args["query"] = query
-	}
-
-	command := map[string]interface{}{
-		"type": "filter_update",
-		"uuid": cmdUUID,
-		"args": args,
-	}
-
-	commands, err := json.Marshal([]interface{}{command})
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal sync commands: %w", err)
-	}
-
-	formData := url.Values{}
-	formData.Set("commands", string(commands))
-
-	req, err := http.NewRequest("POST", syncURL, bytes.NewBufferString(formData.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create sync request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+c.accessToken)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sync request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("sync API error %d: %s", resp.StatusCode, string(body))
-	}
-
-	return &Filter{
-		ID:    id,
-		Name:  name,
-		Query: query,
-	}, nil
 }

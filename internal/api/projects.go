@@ -63,11 +63,4 @@ func (c *Client) DeleteProject(id string) error {
 	return nil
 }
 
-// GetProjectCollaborators returns all collaborators for a shared project.
-func (c *Client) GetProjectCollaborators(projectID string) ([]Collaborator, error) {
-	var collaborators []Collaborator
-	if err := c.Get("/projects/"+projectID+"/collaborators", &collaborators); err != nil {
-		return nil, fmt.Errorf("failed to get collaborators for project %s: %w", projectID, err)
-	}
-	return collaborators, nil
-}
+
