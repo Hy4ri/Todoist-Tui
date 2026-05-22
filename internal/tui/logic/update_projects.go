@@ -1158,8 +1158,9 @@ func (h *Handler) loadProjectTasks(projectID string) tea.Cmd {
 		}
 
 		return dataLoadedMsg{
-			tasks:    tasks,
-			sections: sections,
+			tasks:     tasks,
+			sections:  sections,
+			projectID: projectID,
 		}
 	}
 }
@@ -1410,7 +1411,10 @@ func (h *Handler) loadLabelTasks(labelName string) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return dataLoadedMsg{tasks: tasks}
+		return dataLoadedMsg{
+			tasks:     tasks,
+			labelName: labelName,
+		}
 	}
 }
 

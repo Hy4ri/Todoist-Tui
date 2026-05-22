@@ -181,6 +181,8 @@ type dataLoadedMsg struct {
 	stats       *api.ProductivityStats
 	statsErr    error
 	reminders   []api.Reminder
+	projectID   string
+	labelName   string
 }
 type taskUpdatedMsg struct{ task *api.Task }
 type taskDeletedMsg struct{ id string }

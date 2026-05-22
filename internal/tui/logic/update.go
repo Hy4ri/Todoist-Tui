@@ -2,6 +2,7 @@ package logic
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -360,13 +361,40 @@ func (h *Handler) handleDataLoaded(msg dataLoadedMsg) tea.Cmd {
 	h.Loading = false
 
 	dataChanged := false
+	allTasksChanged := false
 
 	if len(msg.allTasks) > 0 {
 		h.AllTasks = msg.allTasks
 		dataChanged = true
-		h.TasksByDate = make(map[string][]api.Task)
+		allTasksChanged = true
 		h.LastDataFetch = time.Now() // Track when data was fetched
+	}
 
+	if msg.projectID != "" {
+		h.AllTasks = slices.DeleteFunc(h.AllTasks, func(t api.Task) bool {
+			return t.ProjectID == msg.projectID
+		})
+		h.AllTasks = append(h.AllTasks, msg.tasks...)
+		dataChanged = true
+		allTasksChanged = true
+	}
+
+	if msg.labelName != "" {
+		h.AllTasks = slices.DeleteFunc(h.AllTasks, func(t api.Task) bool {
+			for _, l := range t.Labels {
+				if l == msg.labelName {
+					return true
+				}
+			}
+			return false
+		})
+		h.AllTasks = append(h.AllTasks, msg.tasks...)
+		dataChanged = true
+		allTasksChanged = true
+	}
+
+	if allTasksChanged && len(h.AllTasks) > 0 {
+		h.TasksByDate = make(map[string][]api.Task)
 		// Optimization: Pre-parse task dates and group by date
 		for i := range h.AllTasks {
 			t := &h.AllTasks[i]
