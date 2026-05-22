@@ -108,6 +108,22 @@ func (h *Handler) sortTasksHierarchically() {
 	h.Tasks = sorted
 }
 
+// addDescendantIDs recursively adds all descendant subtask IDs of the tasks in the map to the map.
+func (h *Handler) addDescendantIDs(ids map[string]bool) {
+	for {
+		added := false
+		for _, t := range h.AllTasks {
+			if t.ParentID != nil && ids[*t.ParentID] && !ids[t.ID] {
+				ids[t.ID] = true
+				added = true
+			}
+		}
+		if !added {
+			break
+		}
+	}
+}
+
 // handleComplete handles the task completion with optimistic updates.
 func (h *Handler) handleComplete() tea.Cmd {
 	// In Projects tab, only allow in main pane
@@ -161,6 +177,7 @@ func (h *Handler) handleComplete() tea.Cmd {
 	for _, t := range tasksToComplete {
 		idsToRemove[t.ID] = true
 	}
+	h.addDescendantIDs(idsToRemove)
 
 	// Update AllTasks (Source of Truth)
 	h.AllTasks = slices.DeleteFunc(h.AllTasks, func(t api.Task) bool {
@@ -492,6 +509,7 @@ func (h *Handler) handleDelete() tea.Cmd {
 	for _, t := range tasksToDelete {
 		idsToRemove[t.ID] = true
 	}
+	h.addDescendantIDs(idsToRemove)
 
 	// Update AllTasks
 	h.AllTasks = slices.DeleteFunc(h.AllTasks, func(t api.Task) bool {

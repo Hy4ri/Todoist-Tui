@@ -194,6 +194,7 @@ func (h *Handler) executeMoveToProject(target state.MoveTarget) tea.Cmd {
 	for _, t := range tasksToMove {
 		idsToRemove[t.ID] = true
 	}
+	h.addDescendantIDs(idsToRemove)
 
 	// Update AllTasks (Source of Truth)
 	for i := range h.AllTasks {

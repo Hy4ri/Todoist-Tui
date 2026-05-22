@@ -164,13 +164,13 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 		h.Loading = false
 		h.StatusMsg = "Subtask created"
 		// Reload current view to show subtask
-		return func() tea.Msg { return refreshMsg{} }
+		return func() tea.Msg { return refreshMsg{Force: true} }
 
 	case undoCompletedMsg:
 		h.Loading = false
 		h.StatusMsg = "Undo successful"
 		// Reload current view
-		return func() tea.Msg { return refreshMsg{} }
+		return func() tea.Msg { return refreshMsg{Force: true} }
 
 	case searchRefreshMsg:
 		h.Loading = false
@@ -492,7 +492,7 @@ func (h *Handler) handleTaskMsgs(msg tea.Msg) tea.Cmd {
 		h.StatusMsg = "Task completed"
 		h.updateStatsOnCompletion()
 	}
-	return h.handleRefresh(false)
+	return h.handleRefresh(true)
 }
 
 func (h *Handler) handleProjectMsgs(msg tea.Msg) tea.Cmd {
@@ -604,13 +604,13 @@ func (h *Handler) handleRefresh(force bool) tea.Cmd {
 			return h.filterTodayTasks()
 		}
 		h.Loading = true
-		return h.loadTodayTasks()
+		return h.refreshTasks()
 	default:
 		if dataIsFresh {
 			return h.filterTodayTasks()
 		}
 		h.Loading = true
-		return h.loadTodayTasks()
+		return h.refreshTasks()
 	}
 }
 
