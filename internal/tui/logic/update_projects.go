@@ -1235,18 +1235,10 @@ func (h *Handler) refreshTasks() tea.Cmd {
 				}
 			}
 		case state.ViewToday:
-			for _, t := range allTasks {
-				if t.IsDueToday() || t.IsOverdue() {
-					filteredTasks = append(filteredTasks, t)
-				}
-			}
+			filteredTasks = utils.FilterTodayTasksWithHierarchy(allTasks)
 		default:
 			// Default to today | overdue for other views if appropriate
-			for _, t := range allTasks {
-				if t.IsDueToday() || t.IsOverdue() {
-					filteredTasks = append(filteredTasks, t)
-				}
-			}
+			filteredTasks = utils.FilterTodayTasksWithHierarchy(allTasks)
 		}
 
 		return dataLoadedMsg{
@@ -1337,13 +1329,7 @@ func (h *Handler) refilterCurrentView() {
 
 // filterTodayTasks filters cached tasks for today/overdue.
 func (h *Handler) filterTodayTasks() tea.Cmd {
-	var tasks []api.Task
-	for _, t := range h.AllTasks {
-		if t.IsOverdue() || t.IsDueToday() {
-			tasks = append(tasks, t)
-		}
-	}
-	h.Tasks = tasks
+	h.Tasks = utils.FilterTodayTasksWithHierarchy(h.AllTasks)
 	h.sortTasks()
 	return nil
 }

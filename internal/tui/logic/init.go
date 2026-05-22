@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // Init implements tea.Model.
@@ -151,11 +152,7 @@ func (h *Handler) LoadInitialData() tea.Cmd {
 			}
 		default:
 			// TabToday or fallback
-			for _, t := range allTasks {
-				if t.IsOverdue() || t.IsDueToday() {
-					initialTasks = append(initialTasks, t)
-				}
-			}
+			initialTasks = utils.FilterTodayTasksWithHierarchy(allTasks)
 		}
 
 		return dataLoadedMsg{

@@ -20,8 +20,8 @@ const maxConcurrentRequests = 5
 
 func (h *Handler) sortTasks() {
 
-	// Use hierarchical sorting for Project/Inbox views to respect ChildOrder and Tree structure
-	if h.CurrentView == state.ViewProject || h.CurrentView == state.ViewInbox {
+	// Use hierarchical sorting for Project/Inbox/Today views to respect ChildOrder and Tree structure
+	if h.CurrentView == state.ViewProject || h.CurrentView == state.ViewInbox || h.CurrentView == state.ViewToday {
 		h.sortTasksHierarchically()
 	} else {
 		sort.SliceStable(h.Tasks, func(i, j int) bool {

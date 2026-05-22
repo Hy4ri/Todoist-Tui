@@ -4,6 +4,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
+	"github.com/hy4ri/todoist-tui/internal/tui/utils"
 )
 
 // TodayView handles the Today tab displaying today's and overdue tasks.
@@ -86,13 +87,7 @@ func (v *TodayView) Render(width, height int) string {
 
 // filterTodayTasks filters cached tasks for today/overdue.
 func (v *TodayView) filterTodayTasks() tea.Cmd {
-	var tasks []api.Task
-	for _, t := range v.State.AllTasks {
-		if t.IsOverdue() || t.IsDueToday() {
-			tasks = append(tasks, t)
-		}
-	}
-	v.State.Tasks = tasks
+	v.State.Tasks = utils.FilterTodayTasksWithHierarchy(v.State.AllTasks)
 	return nil
 }
 

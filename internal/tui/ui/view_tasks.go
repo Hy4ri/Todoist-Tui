@@ -220,14 +220,61 @@ func (r *Renderer) renderProjectTasks(width, maxHeight int) string {
 func (r *Renderer) renderGroupedTasks(width, maxHeight int) string {
 	var overdue, today, other []int
 
-	// Group tasks
+	// Build map of present task IDs to identify roots in the current list
+	presentIDs := make(map[string]bool)
+	for _, t := range r.Tasks {
+		presentIDs[t.ID] = true
+	}
+
+	type family struct {
+		indices []int
+	}
+
+	var families []family
+	var currentFamily *family
+
 	for i, t := range r.Tasks {
-		if t.IsOverdue() {
-			overdue = append(overdue, i)
-		} else if t.IsDueToday() {
-			today = append(today, i)
+		isRoot := t.ParentID == nil || !presentIDs[*t.ParentID]
+		if isRoot {
+			if currentFamily != nil {
+				families = append(families, *currentFamily)
+			}
+			currentFamily = &family{
+				indices: []int{i},
+			}
 		} else {
-			other = append(other, i)
+			if currentFamily != nil {
+				currentFamily.indices = append(currentFamily.indices, i)
+			} else {
+				currentFamily = &family{
+					indices: []int{i},
+				}
+			}
+		}
+	}
+	if currentFamily != nil {
+		families = append(families, *currentFamily)
+	}
+
+	// For each family, determine its due status (Overdue, Today, or Other)
+	for _, fam := range families {
+		hasOverdue := false
+		hasToday := false
+		for _, idx := range fam.indices {
+			t := r.Tasks[idx]
+			if t.IsOverdue() {
+				hasOverdue = true
+			} else if t.IsDueToday() {
+				hasToday = true
+			}
+		}
+
+		if hasOverdue {
+			overdue = append(overdue, fam.indices...)
+		} else if hasToday {
+			today = append(today, fam.indices...)
+		} else {
+			other = append(other, fam.indices...)
 		}
 	}
 
