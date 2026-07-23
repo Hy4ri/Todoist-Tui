@@ -169,18 +169,8 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.switchToTab(state.TabProjects)
 	case "8":
 		return h.switchToTab(state.TabCompleted)
-	case "9":
-		return h.switchToTab(state.TabPomodoro)
 	case "D": // Shift+d
 		return h.setDefaultView()
-	}
-
-	// Pomodoro view — handle keys BEFORE global keymap steals them
-	if h.CurrentView == state.ViewPomodoro {
-		cmd, consumed := h.coordinator.HandleKey(msg)
-		if consumed {
-			return cmd
-		}
 	}
 
 	// Sections view routing
@@ -333,8 +323,6 @@ func (h *Handler) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
 		return h.handleOutdent()
 	case "move_to_project":
 		return h.handleMoveToProject()
-	case "send_to_pomodoro":
-		return h.handleSendTaskToPomodoro()
 	case "new_project":
 		// 'n' key creates project or label depending on current tab
 		if h.CurrentTab == state.TabProjects {

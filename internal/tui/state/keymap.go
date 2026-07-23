@@ -63,7 +63,6 @@ type KeymapData struct {
 	MoveSection    Key
 	MoveToProject  Key
 	Reminder       Key
-	SendToPomodoro Key
 }
 
 // DefaultKeymap returns the default Vim-style key bindings.
@@ -114,7 +113,6 @@ func DefaultKeymap() KeymapData {
 
 		MoveToProject:  Key{Key: "v", Help: "move to project"},
 		Reminder:       Key{Key: "R", Help: "manage reminders"},
-		SendToPomodoro: Key{Key: "p", Help: "send to pomodoro"},
 
 		// Map 'f' generic action logic will handle context
 	}
@@ -133,42 +131,41 @@ func (k *KeymapData) ApplyOverrides(overrides map[string]string) []string {
 
 	// Explicit action → field pointer map avoids reflection and keeps things type-safe.
 	actions := map[string]*string{
-		"up":               &k.Up.Key,
-		"down":             &k.Down.Key,
-		"top":              &k.Top.Key,
-		"bottom":           &k.Bottom.Key,
-		"half_up":          &k.HalfUp.Key,
-		"half_down":        &k.HalfDown.Key,
-		"left":             &k.Left.Key,
-		"right":            &k.Right.Key,
-		"select":           &k.Select.Key,
-		"back":             &k.Back.Key,
-		"quit":             &k.Quit.Key,
-		"help":             &k.Help.Key,
-		"refresh":          &k.Refresh.Key,
-		"add_task":         &k.AddTask.Key,
-		"add_task_full":    &k.AddTaskFull.Key,
-		"edit_task":        &k.EditTask.Key,
-		"delete_task":      &k.DeleteTask.Key,
-		"complete":         &k.CompleteTask.Key,
-		"priority1":        &k.Priority1.Key,
-		"priority2":        &k.Priority2.Key,
-		"priority3":        &k.Priority3.Key,
-		"priority4":        &k.Priority4.Key,
-		"move_prev_day":    &k.MoveTaskPrevDay.Key,
-		"move_next_day":    &k.MoveTaskNextDay.Key,
-		"add_comment":      &k.AddComment.Key,
-		"reschedule":       &k.RescheduleTask.Key,
-		"indent":           &k.IndentTask.Key,
-		"outdent":          &k.OutdentTask.Key,
-		"switch_pane":      &k.SwitchPane.Key,
-		"search":           &k.Search.Key,
-		"new_project":      &k.NewProject.Key,
-		"new_section":      &k.NewSection.Key,
-		"move_section":     &k.MoveSection.Key,
-		"move_to_project":  &k.MoveToProject.Key,
-		"reminder":         &k.Reminder.Key,
-		"send_to_pomodoro": &k.SendToPomodoro.Key,
+		"up":              &k.Up.Key,
+		"down":            &k.Down.Key,
+		"top":             &k.Top.Key,
+		"bottom":          &k.Bottom.Key,
+		"half_up":         &k.HalfUp.Key,
+		"half_down":       &k.HalfDown.Key,
+		"left":            &k.Left.Key,
+		"right":           &k.Right.Key,
+		"select":          &k.Select.Key,
+		"back":            &k.Back.Key,
+		"quit":            &k.Quit.Key,
+		"help":            &k.Help.Key,
+		"refresh":         &k.Refresh.Key,
+		"add_task":        &k.AddTask.Key,
+		"add_task_full":   &k.AddTaskFull.Key,
+		"edit_task":       &k.EditTask.Key,
+		"delete_task":     &k.DeleteTask.Key,
+		"complete":        &k.CompleteTask.Key,
+		"priority1":       &k.Priority1.Key,
+		"priority2":       &k.Priority2.Key,
+		"priority3":       &k.Priority3.Key,
+		"priority4":       &k.Priority4.Key,
+		"move_prev_day":   &k.MoveTaskPrevDay.Key,
+		"move_next_day":   &k.MoveTaskNextDay.Key,
+		"add_comment":     &k.AddComment.Key,
+		"reschedule":      &k.RescheduleTask.Key,
+		"indent":          &k.IndentTask.Key,
+		"outdent":         &k.OutdentTask.Key,
+		"switch_pane":     &k.SwitchPane.Key,
+		"search":          &k.Search.Key,
+		"new_project":     &k.NewProject.Key,
+		"new_section":     &k.NewSection.Key,
+		"move_section":    &k.MoveSection.Key,
+		"move_to_project": &k.MoveToProject.Key,
+		"reminder":        &k.Reminder.Key,
 	}
 
 	// Build a reverse map of key → action from the current (default) bindings
@@ -341,8 +338,6 @@ func (ks *KeyState) HandleKey(msg tea.KeyMsg, km interface{}) (string, bool) {
 		return "search", true
 	case keymap.MoveToProject.Key:
 		return "move_to_project", true
-	case keymap.SendToPomodoro.Key:
-		return "send_to_pomodoro", true
 	case keymap.NewProject.Key:
 		return "new_project", true
 	case "f":
@@ -443,17 +438,5 @@ func (k KeymapData) HelpItems() [][]string {
 		{"f1", "Toggle key hints bar"},
 		{k.Quit.Key, "Quit the application"},
 		{"t", "Smart Reschedule"},
-
-		{"", ""},
-		{"Pomodoro Timer", ""},
-		{"9", "Switch to Pomodoro View"},
-		{"Space", "Start/Pause timer"},
-		{"r", "Reset timer"},
-		{"m", "Toggle Countdown/Stopwatch"},
-		{"Tab", "Cycle preset (25/5 ↔ 50/10)"},
-		{"+/-", "Adjust work duration"},
-		{"n", "Next Pomodoro phase"},
-		{"x", "Complete associated task"},
-		{"c", "Clear associated task"},
 	}
 }

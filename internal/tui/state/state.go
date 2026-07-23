@@ -31,7 +31,6 @@ const (
 	ViewSections
 	ViewFilters
 	ViewCompleted
-	ViewPomodoro
 )
 
 // Tab represents a top-level tab.
@@ -46,7 +45,6 @@ const (
 	TabProjects
 	TabCompleted
 	TabFilters
-	TabPomodoro
 )
 
 // Pane represents which pane is currently focused (only used in Projects tab).
@@ -63,23 +61,6 @@ type CalendarViewMode int
 const (
 	CalendarViewCompact  CalendarViewMode = iota // Small grid view
 	CalendarViewExpanded                         // Grid with task names in cells
-)
-
-// PomodoroTimerMode controls countdown vs stopwatch.
-type PomodoroTimerMode int
-
-const (
-	PomodoroCountdown PomodoroTimerMode = iota
-	PomodoroStopwatch
-)
-
-// PomodoroPhase represents the current phase of the Pomodoro cycle.
-type PomodoroPhase int
-
-const (
-	PomodoroWork PomodoroPhase = iota
-	PomodoroShortBreak
-	PomodoroLongBreak
 )
 
 // LastAction represents an undoable action.
@@ -100,17 +81,7 @@ type CalendarState struct {
 	CalendarViewMode CalendarViewMode
 }
 
-// PomodoroState holds all Pomodoro timer state.
-type PomodoroState struct {
-	PomodoroMode     PomodoroTimerMode
-	PomodoroPhase    PomodoroPhase
-	PomodoroTarget   time.Duration
-	PomodoroElapsed  time.Duration
-	PomodoroRunning  bool
-	PomodoroSessions int
-	PomodoroTask     *api.Task
-	PomodoroProject  string
-}
+
 
 // FilterViewState holds state for the Filters tab.
 type FilterViewState struct {
@@ -157,7 +128,6 @@ type RescheduleState struct {
 type State struct {
 	// Domain-grouped sub-states (fields promoted to State via embedding)
 	CalendarState
-	PomodoroState
 	FilterViewState
 	SelectionState
 	ReminderState
@@ -377,6 +347,5 @@ func GetTabDefinitions() []TabInfo {
 		{TabCalendar, "🗓️", "Calendar", "Cal"},
 		{TabProjects, "📂", "Projects", "Prj"},
 		{TabCompleted, "✅", "Completed", "Cmp"},
-		{TabPomodoro, "🍅", "Pomodoro", "Pom"},
 	}
 }

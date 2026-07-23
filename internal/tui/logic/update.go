@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/gen2brain/beeep"
 	"github.com/hy4ri/todoist-tui/internal/api"
 	"github.com/hy4ri/todoist-tui/internal/tui/components"
 	"github.com/hy4ri/todoist-tui/internal/tui/state"
@@ -231,27 +230,6 @@ func (h *Handler) Update(msg tea.Msg) tea.Cmd {
 			return h.fetchReminders(h.SelectedTask.ID)
 		}
 		return nil
-
-	case components.TimerTickMsg:
-		if !h.PomodoroRunning {
-			return nil
-		}
-		h.PomodoroElapsed += time.Second
-
-		if h.PomodoroMode == state.PomodoroCountdown {
-			if h.PomodoroElapsed >= h.PomodoroTarget {
-				h.PomodoroRunning = false
-				// Trigger phase complete
-				return func() tea.Msg { return components.TimerPhaseCompleteMsg{} }
-			}
-		}
-		// Continue ticking
-		return tea.Tick(time.Second, func(t time.Time) tea.Msg {
-			return components.TimerTickMsg{ID: msg.ID}
-		})
-
-	case components.TimerPhaseCompleteMsg:
-		return h.handlePomodoroPhaseComplete()
 	}
 
 	// Reminder inputs
@@ -694,51 +672,7 @@ func (h *Handler) updateStatsOnCompletion() {
 	}
 }
 
-// handlePomodoroPhaseComplete transitions to the next Pomodoro phase.
-func (h *Handler) handlePomodoroPhaseComplete() tea.Cmd {
-	h.PomodoroElapsed = 0
-	if h.PomodoroPhase == state.PomodoroWork {
-		h.PomodoroSessions++
-		// Determine break length (every 4 sessions long break)
-		if h.PomodoroSessions%4 == 0 {
-			h.PomodoroPhase = state.PomodoroLongBreak
-			h.PomodoroTarget = 15 * time.Minute
-		} else {
-			h.PomodoroPhase = state.PomodoroShortBreak
-			// Scale break based on work duration (50m -> 10m break, 25m -> 5m break)
-			if h.PomodoroTarget >= 50*time.Minute {
-				h.PomodoroTarget = 10 * time.Minute
-			} else {
-				h.PomodoroTarget = 5 * time.Minute
-			}
-		}
-	} else {
-		h.PomodoroPhase = state.PomodoroWork
-		// Restore focus target (default 25 or 50)
-		if h.PomodoroTarget == 10*time.Minute || h.PomodoroTarget == 5*time.Minute || h.PomodoroTarget == 15*time.Minute {
-			h.PomodoroTarget = 25 * time.Minute
-		}
-	}
 
-	h.StatusMsg = "🍅 Pomodoro phase complete!"
-
-	// Try to send desktop notification
-	_ = h.notifyPhaseComplete()
-
-	return nil
-}
-
-func (h *Handler) notifyPhaseComplete() error {
-	title := "🍅 Pomodoro"
-	message := "Phase complete!"
-	if h.PomodoroPhase == state.PomodoroWork {
-		message = "Time to focus!"
-	} else {
-		message = "Take a break!"
-	}
-
-	return beeep.Notify(title, message, "")
-}
 
 type completedTasksLoadedMsg []api.Task
 

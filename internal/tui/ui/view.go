@@ -50,8 +50,6 @@ func (r *Renderer) View() string {
 		content = r.renderSearch()
 	case state.ViewCalendarDay:
 		content = r.renderCalendarDay()
-	case state.ViewPomodoro:
-		content = r.renderMainView()
 	case state.ViewSections:
 		content = r.renderSections()
 	default:
@@ -202,9 +200,6 @@ func (r *Renderer) renderMainView() string {
 		} else if r.CurrentTab == state.TabFilters {
 			// Filters tab showing sidebar with fuzzy search + content
 			mainContent = r.renderFiltersTab(r.Width, contentHeight)
-		} else if r.CurrentTab == state.TabPomodoro {
-			// Pomodoro tab content - pass full width/height
-			mainContent = r.renderPomodoro(r.Width, contentHeight)
 		} else {
 			// Other tabs show content only (full width)
 			mainContent = r.renderTaskList(r.Width-2, contentHeight)

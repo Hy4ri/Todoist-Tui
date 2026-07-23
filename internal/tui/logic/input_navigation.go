@@ -97,10 +97,6 @@ func (h *Handler) switchToTab(tab state.Tab) tea.Cmd {
 		h.Tasks = nil // Clear tasks
 		h.TaskCursor = 0
 		return h.loadCompletedTasks()
-	case state.TabPomodoro:
-		h.CurrentView = state.ViewPomodoro
-		h.FocusedPane = state.PaneMain
-		return nil
 	}
 
 	return nil
@@ -287,32 +283,4 @@ func (h *Handler) setDefaultView() tea.Cmd {
 	return nil
 }
 
-// handleSendTaskToPomodoro copies the currently selected task to the Pomodoro state.
-func (h *Handler) handleSendTaskToPomodoro() tea.Cmd {
-	task := h.getSelectedTask()
 
-	// If in Pomodoro view, always try to use the last selected task from another view
-	if h.CurrentView == state.ViewPomodoro && h.LastSelectedTask != nil {
-		task = h.LastSelectedTask
-	}
-
-	if task == nil {
-		h.StatusMsg = "No task selected to send to Pomodoro"
-		return nil
-	}
-
-	taskCopy := new(api.Task)
-	*taskCopy = *task
-	h.PomodoroTask = taskCopy
-
-	// Find project name for display
-	for _, p := range h.Projects {
-		if p.ID == task.ProjectID {
-			h.PomodoroProject = p.Name
-			break
-		}
-	}
-
-	h.StatusMsg = "Task sent to Pomodoro 🍅"
-	return nil
-}

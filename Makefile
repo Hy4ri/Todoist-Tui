@@ -1,14 +1,14 @@
-.PHONY: build run test test-one test-cover lint fmt vet clean install check
+.PHONY: build lbuild run test test-one test-pkg test-cover lint fmt vet clean install deps check build-all help
 
 # Binary name
 BINARY_NAME=todoist-tui
-BINARY_PATH=bin/$(BINARY_NAME)
-LOCAL_PATH=~/.local/bin/$(BINARY_NAME)
-LOCAL_SOURCE_PATH?=$(HOME)/Projects/todoist-tui/$(BINARY_PATH)
+BINARY_PATH=$(CURDIR)/bin/$(BINARY_NAME)
+LOCAL_PATH?=$(HOME)/.local/bin/$(BINARY_NAME)
+LOCAL_SOURCE_PATH?=$(BINARY_PATH)
 
 # Go parameters
 GOCMD=go
-GOBUILD=$(GOCMD) build
+GOBUILD=CGO_ENABLED=0 $(GOCMD) build
 GORUN=$(GOCMD) run
 GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
@@ -20,8 +20,8 @@ GOVET=$(GOCMD) vet
 build:
 	$(GOBUILD) -o $(BINARY_PATH) ./cmd/todoist-tui
 
-lbuild:
-	$(GOBUILD) -o $(BINARY_PATH) ./cmd/todoist-tui
+lbuild: build
+	mkdir -p $(HOME)/.local/bin
 	rm -f $(LOCAL_PATH)
 	ln -s $(LOCAL_SOURCE_PATH) $(LOCAL_PATH)
 

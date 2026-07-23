@@ -202,19 +202,6 @@ func rebuildStyles() {
 	CalendarDayWeekend = lipgloss.NewStyle().Foreground(Subtle)
 	CalendarMoreTasks = lipgloss.NewStyle().Foreground(Subtle).Italic(true)
 
-	// Pomodoro
-	PomodoroTimer = lipgloss.NewStyle().Bold(true).Foreground(Highlight)
-	PomodoroBreakTimer = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00AAAA"))
-	PomodoroProgressBar = lipgloss.NewStyle().Foreground(Highlight)
-	PomodoroCard = lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(Subtle).
-		Padding(1, 2).
-		Align(lipgloss.Center)
-	PomodoroPhaseLabel = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(Subtle).
-		Align(lipgloss.Center)
 }
 
 // Terminal-adaptive colors that work in both light and dark terminals.
@@ -289,12 +276,6 @@ var (
 			Bold(true).
 			Foreground(Subtle)
 
-	// Pomodoro styles
-	PomodoroTimer       lipgloss.Style
-	PomodoroBreakTimer  lipgloss.Style
-	PomodoroProgressBar lipgloss.Style
-	PomodoroCard        lipgloss.Style
-	PomodoroPhaseLabel  lipgloss.Style
 )
 
 // Task styles
@@ -487,6 +468,17 @@ var (
 	// HelpSeparator is the separator between key and description
 	HelpSeparator = lipgloss.NewStyle().
 			Foreground(Subtle)
+
+	// HelpBox is the style for section cards in the help view
+	HelpBox = lipgloss.NewStyle().
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(Highlight).
+		Padding(0, 1)
+
+	// HelpBoxTitle is for section box titles in help
+	HelpBoxTitle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(Highlight)
 )
 
 // Input styles

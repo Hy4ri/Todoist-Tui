@@ -63,8 +63,6 @@ func (c *Coordinator) SwitchToTab(tab state.Tab) tea.Cmd {
 		c.state.CurrentView = state.ViewCalendar
 	case state.TabProjects:
 		c.state.CurrentView = state.ViewProject
-	case state.TabPomodoro:
-		c.state.CurrentView = state.ViewPomodoro
 	}
 
 	return c.currentView.OnEnter()
